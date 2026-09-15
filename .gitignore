@@ -1,0 +1,10 @@
+.deps/
+.build/
+dist/
+bridge/__pycache__/
+bridge/.venv/
+src/extension/*.o
+src/extension/*.elf
+src/extension/*.tns
+*.pyc
+.DS_Store

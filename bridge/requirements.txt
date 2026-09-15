@@ -1,0 +1,2 @@
+# Installed only for --backend openai. Echo mode uses the Python standard library.
+openai>=3.14.0,<4
