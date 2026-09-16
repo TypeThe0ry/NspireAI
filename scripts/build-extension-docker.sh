@@ -34,5 +34,5 @@ docker run --rm \
   '
 
 mkdir -p "$ROOT/dist"
-cp "$ROOT/src/extension/nspire_ai.luax.tns" "$ROOT/dist/nspire_ai.luax.tns"
-printf 'built %s\n' "$ROOT/dist/nspire_ai.luax.tns"
+cp "$ROOT/src/extension/nspire_ai_nav.luax.tns" "$ROOT/dist/nspire_ai_nav.luax.tns"
+printf 'built %s\n' "$ROOT/dist/nspire_ai_nav.luax.tns"

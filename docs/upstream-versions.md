@@ -10,6 +10,7 @@ same repositories into `.deps/` and verifies the recorded revisions.
 | N-Link | [lights0123/n-link](https://github.com/lights0123/n-link) | `0472908ef4961e7eec92cc0b97376420a71e5bc7` (`main`) | GPL-3.0 | Existing CLI syntax and device/file-transfer behavior |
 | libnspire-rs | [lights0123/libnspire-rs](https://github.com/lights0123/libnspire-rs) | `098b3f5fdc09a5b5b0d97688672c10d34365786c` (`main`) | GPL-3.0 | `Handle::read_file`, `write_file`, `list_dir`, CX II VID/PID |
 | Luna | [ndless-nspire/Luna](https://github.com/ndless-nspire/Luna) | `a9924a9a968954eba9adcc161a58ac607f97ce8c` (`master`) | MPL 1.1 | Lua-to-TNS packaging (`luna INPUT.lua OUTPUT.tns`) |
+| nsocket reference | [compujuckel/nsocket](https://github.com/compujuckel/nsocket) | `6e90b2cccdb3b51f72a2dc03a85a1c9325339cbe` (`master`) | GPL-3.0 | Ndless custom service pattern; this project uses Mac-valid `0x5001` instead of the example's `0x8001` |
 
 The N-Link and libnspire-rs licenses are copyleft licenses. Do not copy their
 implementation into a differently licensed binary without preserving the
@@ -28,5 +29,6 @@ Python program.
   SDK `3.14.0` in `bridge/.venv`.
 * The checked Ndless SDK wrappers, libraries, `genzehn`, and Zehn loader were
   built under Docker; the host shell does not globally install `nspire-tools`.
-* No CX II was connected during this inspection. USB and page-open transfer are
-  therefore explicitly **not yet verified**.
+* A CX II was later visible to the helper on 2026-09-16 (`cx2=true ready=true`);
+  page-open transfer is still explicitly **not yet verified** because no
+  calculator frame has been observed.

@@ -1,0 +1,9 @@
+[package]
+name = "nspireai-usb-helper"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libnspire = { path = "../../.deps/libnspire-rs/libnspire" }
+rusb = "0.6.4"
+

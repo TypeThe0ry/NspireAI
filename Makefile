@@ -8,7 +8,7 @@ ui:
 extension:
 	$(MAKE) -C src/extension
 	mkdir -p dist
-	cp src/extension/nspire_ai.luax.tns dist/nspire_ai.luax.tns
+	cp src/extension/nspire_ai_nav.luax.tns dist/nspire_ai_nav.luax.tns
 
 extension-docker:
 	./scripts/build-extension-docker.sh

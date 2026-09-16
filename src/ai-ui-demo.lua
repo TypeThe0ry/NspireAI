@@ -75,7 +75,7 @@ end
 
 -- Register once, outside paint. TI owns the actual menu rendering.
 toolpalette.register({
-    {"AI", {{"Send", menu_action}, {"New conversation", menu_action}}}
+    {"AI", {"Send", menu_action}, {"New conversation", menu_action}}
 })
 
 function on.construction()

@@ -9,11 +9,15 @@ if [ ! -x "$N_LINK_BIN" ]; then
   echo "N-Link CLI not found: $N_LINK_BIN (run scripts/build-n-link.sh)" >&2
   exit 2
 fi
-for artifact in "$ROOT/dist/AI-ui-demo.tns" "$ROOT/dist/AI.tns" "$ROOT/dist/nspire_ai.luax.tns"; do
+for artifact in "$ROOT/dist/AI-ui-demo.tns" "$ROOT/dist/AI.tns" "$ROOT/dist/nspire_ai_nav.luax.tns"; do
   if [ ! -f "$artifact" ]; then
     echo "Missing $artifact (build UI/extension first)" >&2
     exit 2
   fi
 done
 
-"$N_LINK_BIN" upload "$ROOT/dist/AI.tns" "$ROOT/dist/nspire_ai.luax.tns" "$REMOTE_DEST"
+"$N_LINK_BIN" upload \
+  "$ROOT/dist/AI-ui-demo.tns" \
+  "$ROOT/dist/AI.tns" \
+  "$ROOT/dist/nspire_ai_nav.luax.tns" \
+  "$REMOTE_DEST"

@@ -5,7 +5,8 @@ LD = nspire-ld
 GENZEHN = genzehn
 LUNA ?= $(shell nspire-tools path 2>/dev/null)/tools/luna/luna
 
-GCCFLAGS = -Wall -W -marm
+NAVNET_INCLUDE ?= /sdk/NavNet/include
+GCCFLAGS = -Wall -W -marm -I$(NAVNET_INCLUDE)
 ifeq ($(DEBUG),FALSE)
 GCCFLAGS += -Os
 else
@@ -13,8 +14,8 @@ GCCFLAGS += -O0 -g
 endif
 
 OBJS = nspire_ai.o
-EXE = nspire_ai.luax
-ZEHNFLAGS = --name "nspire_ai" --240x320-support true
+EXE = nspire_ai_nav.luax
+ZEHNFLAGS = --name "nspire_ai_nav" --240x320-support true
 
 .PHONY: all clean
 all: $(EXE).tns

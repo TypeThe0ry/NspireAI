@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import fcntl
 import subprocess
 import tempfile
 from pathlib import Path
@@ -51,6 +52,14 @@ class NLinkTransport:
         self.remote_dir = remote_dir.rstrip("/")
         self.timeout = timeout
         self.stage = Path(tempfile.mkdtemp(prefix="nspireai-nlink-"))
+        # N-Link opens the calculator exclusively.  A second bridge instance
+        # must not start another CLI operation while the first one is active.
+        self._lock_file = Path(tempfile.gettempdir()) / "nspireai-nlink.lock"
+        self._lock_handle = self._lock_file.open("w")
+        try:
+            fcntl.flock(self._lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise TransportError("another N-Link bridge instance already owns the USB session") from exc
 
     def _run(self, args: list[str]) -> subprocess.CompletedProcess[str]:
         try:
