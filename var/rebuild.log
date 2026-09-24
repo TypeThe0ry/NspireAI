@@ -1,0 +1,130 @@
+HEAD is now at 9484d8d ndless: Use absolute path on stage0
+M	ndless-sdk/libsyscalls/Makefile
+M	ndless-sdk/system/ldscript
+ndless         9484d8da7c7a4dde9766138c2e42e1d1e3acfcd4
+HEAD is now at 0472908 Fix csp causing blank screen in release mode
+n-link         0472908ef4961e7eec92cc0b97376420a71e5bc7
+HEAD is now at 098b3f5 Fix CX II compatibility
+M	libnspire-sys/libnspire/src/cx2.cpp
+M	libnspire-sys/libnspire/src/cx2.h
+M	libnspire-sys/libnspire/src/data.c
+M	libnspire-sys/libnspire/src/data.h
+M	libnspire-sys/libnspire/src/handle.h
+M	libnspire-sys/libnspire/src/init.c
+M	libnspire-sys/libnspire/src/packet.c
+M	libnspire-sys/libnspire/src/packet.h
+M	libnspire-sys/libnspire/src/usb.c
+M	libnspire-sys/libnspire/src/usb.h
+M	libnspire/Cargo.toml
+M	libnspire/src/error.rs
+M	libnspire/src/lib.rs
+libnspire-rs   098b3f5fdc09a5b5b0d97688672c10d34365786c
+HEAD is now at a9924a9 Simplify new function
+luna           a9924a9a968954eba9adcc161a58ac607f97ce8c
+Upstreams are ready in /Users/hahatt/Documents/GitHub/NspireAI/.deps
+debconf: delaying package configuration, since apt-utils is not installed
+make: Entering directory '/sdk/thirdparty'
+make -C nspire-io lib
+make[1]: Entering directory '/sdk/thirdparty/nspire-io'
+make[1]: Nothing to be done for 'lib'.
+make[1]: Leaving directory '/sdk/thirdparty/nspire-io'
+make ../lib/libnspireio.a ../include/nspireio2.h  ../include/nspireio/console.hpp  ../include/nspireio/file.hpp  ../include/nspireio/ios_base.hpp  ../include/nspireio/ios_base.ipp  ../include/nspireio/nspireio.h  ../include/nspireio/platform-nspire.h  ../include/nspireio/platform-prizm.h  ../include/nspireio/platform.h  ../include/nspireio/queue.h  ../include/nspireio/uart.hpp
+make[1]: Entering directory '/sdk/thirdparty'
+make[1]: '../lib/libnspireio.a' is up to date.
+make[1]: '../include/nspireio2.h' is up to date.
+make[1]: '../include/nspireio/console.hpp' is up to date.
+make[1]: '../include/nspireio/file.hpp' is up to date.
+make[1]: '../include/nspireio/ios_base.hpp' is up to date.
+make[1]: '../include/nspireio/ios_base.ipp' is up to date.
+make[1]: '../include/nspireio/nspireio.h' is up to date.
+make[1]: '../include/nspireio/platform-nspire.h' is up to date.
+make[1]: '../include/nspireio/platform-prizm.h' is up to date.
+make[1]: '../include/nspireio/platform.h' is up to date.
+make[1]: '../include/nspireio/queue.h' is up to date.
+make[1]: '../include/nspireio/uart.hpp' is up to date.
+make[1]: Leaving directory '/sdk/thirdparty'
+cd zlib && (make libz.a || (CC=nspire-gcc CHOST=arm-none-eabi CFLAGS="-O3 -c" ./configure --static && make libz.a))
+make[1]: Entering directory '/sdk/thirdparty/zlib'
+make[1]: 'libz.a' is up to date.
+make[1]: Leaving directory '/sdk/thirdparty/zlib'
+make ../lib/libz.a ../include/zlib.h ../include/zconf.h
+make[1]: Entering directory '/sdk/thirdparty'
+make[1]: '../lib/libz.a' is up to date.
+make[1]: '../include/zlib.h' is up to date.
+make[1]: '../include/zconf.h' is up to date.
+make[1]: Leaving directory '/sdk/thirdparty'
+make -C freetype2 CC=nspire-gcc ANSIFLAGS="-O2 -Wall -Wextra -DFT_CONFIG_OPTION_SYSTEM_ZLIB" AR="/usr/bin/arm-none-eabi-ar" SYSTEM_ZLIB=yes library
+make[1]: Entering directory '/sdk/thirdparty/freetype2'
+make[1]: Nothing to be done for 'library'.
+make[1]: Leaving directory '/sdk/thirdparty/freetype2'
+make ../lib/libfreetype.a ../include/freetype2/ft2build.h ../include/freetype2/freetype/freetype.h ../include/freetype2/freetype/ftadvanc.h ../include/freetype2/freetype/ftautoh.h ../include/freetype2/freetype/ftbbox.h ../include/freetype2/freetype/ftbdf.h ../include/freetype2/freetype/ftbitmap.h ../include/freetype2/freetype/ftbzip2.h ../include/freetype2/freetype/ftcache.h ../include/freetype2/freetype/ftcffdrv.h ../include/freetype2/freetype/ftchapters.h ../include/freetype2/freetype/ftcid.h ../include/freetype2/freetype/fterrdef.h ../include/freetype2/freetype/fterrors.h ../include/freetype2/freetype/ftfntfmt.h ../include/freetype2/freetype/ftgasp.h ../include/freetype2/freetype/ftglyph.h ../include/freetype2/freetype/ftgxval.h ../include/freetype2/freetype/ftgzip.h ../include/freetype2/freetype/ftimage.h ../include/freetype2/freetype/ftincrem.h ../include/freetype2/freetype/ftlcdfil.h ../include/freetype2/freetype/ftlist.h ../include/freetype2/freetype/ftlzw.h ../include/freetype2/freetype/ftmac.h ../include/freetype2/freetype/ftmm.h ../include/freetype2/freetype/ftmodapi.h ../include/freetype2/freetype/ftmoderr.h ../include/freetype2/freetype/ftotval.h ../include/freetype2/freetype/ftoutln.h ../include/freetype2/freetype/ftpfr.h ../include/freetype2/freetype/ftrender.h ../include/freetype2/freetype/ftsizes.h ../include/freetype2/freetype/ftsnames.h ../include/freetype2/freetype/ftstroke.h ../include/freetype2/freetype/ftsynth.h ../include/freetype2/freetype/ftsystem.h ../include/freetype2/freetype/fttrigon.h ../include/freetype2/freetype/ftttdrv.h ../include/freetype2/freetype/fttypes.h ../include/freetype2/freetype/ftwinfnt.h ../include/freetype2/freetype/t1tables.h ../include/freetype2/freetype/ttnameid.h ../include/freetype2/freetype/tttables.h ../include/freetype2/freetype/tttags.h ../include/freetype2/freetype/ttunpat.h ../include/freetype2/freetype/config/ftconfig.h ../include/freetype2/freetype/config/ftheader.h ../include/freetype2/freetype/config/ftmodule.h ../include/freetype2/freetype/config/ftoption.h ../include/freetype2/freetype/config/ftstdlib.h
+make[1]: Entering directory '/sdk/thirdparty'
+make[1]: '../lib/libfreetype.a' is up to date.
+make[1]: '../include/freetype2/ft2build.h' is up to date.
+make[1]: '../include/freetype2/freetype/freetype.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftadvanc.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftautoh.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftbbox.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftbdf.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftbitmap.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftbzip2.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftcache.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftcffdrv.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftchapters.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftcid.h' is up to date.
+make[1]: '../include/freetype2/freetype/fterrdef.h' is up to date.
+make[1]: '../include/freetype2/freetype/fterrors.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftfntfmt.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftgasp.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftglyph.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftgxval.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftgzip.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftimage.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftincrem.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftlcdfil.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftlist.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftlzw.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftmac.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftmm.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftmodapi.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftmoderr.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftotval.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftoutln.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftpfr.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftrender.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftsizes.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftsnames.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftstroke.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftsynth.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftsystem.h' is up to date.
+make[1]: '../include/freetype2/freetype/fttrigon.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftttdrv.h' is up to date.
+make[1]: '../include/freetype2/freetype/fttypes.h' is up to date.
+make[1]: '../include/freetype2/freetype/ftwinfnt.h' is up to date.
+make[1]: '../include/freetype2/freetype/t1tables.h' is up to date.
+make[1]: '../include/freetype2/freetype/ttnameid.h' is up to date.
+make[1]: '../include/freetype2/freetype/tttables.h' is up to date.
+make[1]: '../include/freetype2/freetype/tttags.h' is up to date.
+make[1]: '../include/freetype2/freetype/ttunpat.h' is up to date.
+make[1]: '../include/freetype2/freetype/config/ftconfig.h' is up to date.
+make[1]: '../include/freetype2/freetype/config/ftheader.h' is up to date.
+make[1]: '../include/freetype2/freetype/config/ftmodule.h' is up to date.
+make[1]: '../include/freetype2/freetype/config/ftoption.h' is up to date.
+make[1]: '../include/freetype2/freetype/config/ftstdlib.h' is up to date.
+make[1]: Leaving directory '/sdk/thirdparty'
+make: Leaving directory '/sdk/thirdparty'
+make: Entering directory '/sdk/libsyscalls'
+make: Nothing to be done for 'all'.
+make: Leaving directory '/sdk/libsyscalls'
+make: Entering directory '/sdk/libndls'
+make: Leaving directory '/sdk/libndls'
+make: Entering directory '/sdk/tools/genzehn'
+make: Nothing to be done for 'all'.
+make: Leaving directory '/sdk/tools/genzehn'
+make: Entering directory '/sdk/tools/zehn_loader'
+make: Nothing to be done for 'all'.
+make: Leaving directory '/sdk/tools/zehn_loader'
+make: Entering directory '/work/src/program'
+make: Nothing to be done for 'all'.
+make: Leaving directory '/work/src/program'
+built /Users/hahatt/Documents/GitHub/NspireAI/dist/nspire_ai.tns

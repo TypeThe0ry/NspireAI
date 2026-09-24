@@ -18,16 +18,75 @@ import java.nio.charset.StandardCharsets;
 /**
  * Small stdin/stdout adapter around TI's own macOS NavNet host library.
  *
- * The calculator-side Ndless extension is a NavNet client (TI_NN_Connect),
- * while this process exposes service 0x5001 and keeps the connection alive.
+ * The calculator-side standalone Ndless program is a NavNet client
+ * (TI_NN_Connect), while this process exposes the project's private service
+ * 0x5001 and keeps the connection alive.  The TI Java host accepts this
+ * custom service; 0x8001 is rejected by the same host with -281.
  * stdout is deliberately line-oriented because bridge/navnet_bridge.py owns
  * framing and backend state.
  */
 public final class NspireNavnetHelper {
     private static final Object IO_LOCK = new Object();
+    // TI_NN_ERR_INVALID_CONNECTION.  During a handheld-side service startup
+    // the Java host can report this transiently before the connection handle
+    // is usable; the reader must keep the bridge alive and let a later
+    // callback replace the handle instead of terminating on the first read.
+    private static final int ERR_INVALID_CONNECTION = -257;
     private static volatile ConnectionHandle connection;
     private static volatile boolean stopping;
     private static volatile Thread reader;
+    private static volatile Thread connectionWatcher;
+
+    /*
+     * TI's macOS NavNet 6.2 native server has a reproducible teardown crash:
+     * RemoteNavnetServer.stopService(0x5001) can dereference a null service
+     * slot after the USB connection has gone away.  The shell wrapper removes
+     * a server created by this invocation, so the safe default is to release
+     * the connection and leave stopService untouched.  Set this only for a
+     * controlled TI-runtime experiment; normal bridge shutdown must not call
+     * the crashing native path.
+     */
+    private static boolean shouldStopService() {
+        return "1".equals(System.getenv().getOrDefault(
+                "NSPIRE_NAVNET_STOP_SERVICE", "0"));
+    }
+
+    private static void armShutdownWatchdog() {
+        Thread watchdog = new Thread(() -> {
+            try {
+                Thread.sleep(8000L);
+            } catch (InterruptedException ignored) {
+                return;
+            }
+            // TI's RMI/native shutdown occasionally logs success but leaves
+            // non-daemon threads alive.  The shell wrapper separately removes
+            // only a RemoteNavnetServer created by this invocation.
+            Runtime.getRuntime().halt(124);
+        }, "nspire-navnet-shutdown-watchdog");
+        watchdog.setDaemon(true);
+        watchdog.start();
+    }
+
+    private static void shutdownProxyBestEffort(NavNetCommProxy proxy) {
+        Thread shutdown = new Thread(() -> {
+            try {
+                proxy.shutdown();
+            } catch (RuntimeException ignored) {
+                // The shell wrapper owns the detached RemoteNavnetServer and
+                // removes only the child created by this invocation.
+            }
+        }, "nspire-navnet-proxy-shutdown");
+        shutdown.setDaemon(true);
+        shutdown.start();
+        try {
+            // TI's native/RMI shutdown can block indefinitely after a USB
+            // connector has been loaded. Give it a small grace period, then
+            // let the hard halt below keep the helper lifecycle bounded.
+            shutdown.join(500L);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
 
     private static String hex(byte[] data, int length) {
         StringBuilder out = new StringBuilder(length * 2);
@@ -65,27 +124,83 @@ public final class NspireNavnetHelper {
         if (reader != null && reader.isAlive()) return;
         reader = new Thread(() -> {
             byte[] buffer = new byte[4096];
-            while (!stopping && connection == handle) {
-                IntegerBox received = new IntegerBox();
-                int status;
-                synchronized (IO_LOCK) {
-                    status = NavNet.read(handle, 200L, buffer, received);
+            try {
+                boolean invalidReported = false;
+                while (!stopping && connection == handle) {
+                    IntegerBox received = new IntegerBox();
+                    int status;
+                    synchronized (IO_LOCK) {
+                        status = NavNet.read(handle, 200L, buffer, received);
+                    }
+                    if (status < 0) {
+                        if (stopping || connection != handle) break;
+                        if (status == ERR_INVALID_CONNECTION) {
+                            if (!invalidReported) {
+                                emit("ERR NavNet.read=" + status + "; retrying");
+                                invalidReported = true;
+                            }
+                            try {
+                                Thread.sleep(100L);
+                            } catch (InterruptedException interrupted) {
+                                Thread.currentThread().interrupt();
+                                break;
+                            }
+                            continue;
+                        }
+                        emit("ERR NavNet.read=" + status);
+                        break;
+                    }
+                    invalidReported = false;
+                    int length = received.getValue();
+                    if (length > 0) emit("RX " + hex(buffer, Math.min(length, buffer.length)));
                 }
-                if (status < 0) {
-                    if (!stopping) emit("ERR NavNet.read=" + status);
-                    break;
-                }
-                int length = received.getValue();
-                if (length > 0) emit("RX " + hex(buffer, Math.min(length, buffer.length)));
+            } finally {
+                // Let the watcher start a fresh reader if the service callback
+                // replaced this handle while the old read was unwinding.
+                if (Thread.currentThread() == reader) reader = null;
             }
         }, "nspire-navnet-reader");
         reader.setDaemon(true);
         reader.start();
     }
 
+    private static void startConnectionWatcher() {
+        if (connectionWatcher != null && connectionWatcher.isAlive()) return;
+        connectionWatcher = new Thread(() -> {
+            ConnectionHandle observed = null;
+            while (!stopping) {
+                ConnectionHandle handle = connection;
+                boolean readerMissing = reader == null || !reader.isAlive();
+                if (handle != null && (handle != observed || readerMissing)) {
+                    observed = handle;
+                    try {
+                        // The service callback may run just before
+                        // startService() returns, or concurrently with this
+                        // watcher on a later reconnect. Never enter TI's read
+                        // path until the callback has had time to unwind.
+                        Thread.sleep(readerMissing ? 150L : 50L);
+                    } catch (InterruptedException ignored) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    if (!stopping && connection == handle &&
+                            (reader == null || !reader.isAlive())) startReader(handle);
+                }
+                try {
+                    Thread.sleep(50L);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }, "nspire-navnet-connection-watcher");
+        connectionWatcher.setDaemon(true);
+        connectionWatcher.start();
+    }
+
     public static void main(String[] args) throws Exception {
         final int serviceId = Integer.decode(System.getenv().getOrDefault(
-                "NSPIRE_SERVICE_ID", "0x4051"));
+                "NSPIRE_SERVICE_ID", "0x5001"));
         String tmp = System.getProperty("java.io.tmpdir");
         String javaHome = System.getProperty("java.home") + "/bin";
         NavNetCommProxy proxy;
@@ -94,7 +209,12 @@ public final class NspireNavnetHelper {
              * setup that TI's Student Software expects.  Calling NavNet.init
              * with only "-c/-d" leaves the connector directory unset and
              * makes startService return -281. */
-            proxy = NavNetCommProxy.init("NspireAI", tmp, 0, 0, javaHome, "");
+            int logLevel = Integer.parseInt(System.getenv().getOrDefault(
+                    "NSPIRE_NAVNET_LOG_LEVEL", "0"));
+            if (logLevel < 0 || logLevel > 3) {
+                throw new IllegalArgumentException("NSPIRE_NAVNET_LOG_LEVEL must be 0..3");
+            }
+            proxy = NavNetCommProxy.init("NspireAI", tmp, logLevel, logLevel, javaHome, "");
         } catch (Exception error) {
             emit("ERR NavNetCommProxy.init=" + error);
             return;
@@ -109,11 +229,12 @@ public final class NspireNavnetHelper {
             status = NavNet.startService(serviceId, new Context(), new ServiceCallbackListener() {
                 @Override public void serviceCallback(ConnectionHandle handle, Context context) {
                     connection = handle;
-                    emit("CONNECTED");
-                    // Request a harmless bootstrap packet.  The Lua page
-                    // answers it with PONG after its native timer runs.
-                    write(handle, new byte[] {'N','S','A','I',1,1,0,0,0,0,0,0,0,5,'H','E','L','L','O'});
-                    startReader(handle);
+                    emit(handle == null
+                            ? "CONNECTED handle=null"
+                            : "CONNECTED handle=0x" + Long.toHexString(handle.getCPtr()));
+                    // No NavNet call is allowed from this callback. In
+                    // particular, read/write here can re-enter TI's callback
+                    // path and deadlock before startService() returns.
                 }
             });
             if (status < 0) {
@@ -121,6 +242,7 @@ public final class NspireNavnetHelper {
                 return;
             }
             emit(String.format("READY service=0x%04x", serviceId));
+            startConnectionWatcher();
             BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
             String line;
             while (!stopping && (line = input.readLine()) != null) {
@@ -141,13 +263,24 @@ public final class NspireNavnetHelper {
             }
         } finally {
             stopping = true;
+            armShutdownWatchdog();
             ConnectionHandle handle = connection;
             if (handle != null) {
                 try { NavNet.disconnect(handle); } catch (RuntimeException ignored) { }
             }
-            try { NavNet.stopService(serviceId); } catch (RuntimeException ignored) { }
+            if (shouldStopService()) {
+                try { NavNet.stopService(serviceId); } catch (RuntimeException ignored) { }
+            }
             try { NavNet.unregisterNotifyCallback(); } catch (RuntimeException ignored) { }
-            try { proxy.shutdown(); } catch (RuntimeException ignored) { }
+            // Report the protocol endpoint as stopped before entering TI's
+            // potentially blocking native teardown. The wrapper's EXIT trap
+            // still removes the detached server if the best-effort thread is
+            // cut short by the bounded halt.
+            emit("STOPPED");
+            shutdownProxyBestEffort(proxy);
+            // Avoid running TI's shutdown hook a second time and guarantee
+            // that no RMI client thread keeps the helper alive after cleanup.
+            Runtime.getRuntime().halt(0);
         }
     }
 }

@@ -1,0 +1,88 @@
+navnet bridge starting: service=0x4051; waiting for helper and calculator
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+warning: /Applications/TI-Nspire CX CAS Student Software.app/Contents/Java/navnet.jar(/com/ti/eps/navnet/ConnectionHandle.class): major version 66 is newer than 65, the highest major version supported by this compiler.
+  It is recommended that the compiler be upgraded.
+warning: /Applications/TI-Nspire CX CAS Student Software.app/Contents/Java/navnet.jar(/com/ti/eps/navnet/Context.class): major version 66 is newer than 65, the highest major version supported by this compiler.
+  It is recommended that the compiler be upgraded.
+warning: /Applications/TI-Nspire CX CAS Student Software.app/Contents/Java/navnet.jar(/com/ti/eps/navnet/IntegerBox.class): major version 66 is newer than 65, the highest major version supported by this compiler.
+  It is recommended that the compiler be upgraded.
+warning: /Applications/TI-Nspire CX CAS Student Software.app/Contents/Java/navnet.jar(/com/ti/eps/navnet/NodeHandle.class): major version 66 is newer than 65, the highest major version supported by this compiler.
+  It is recommended that the compiler be upgraded.
+warning: /Applications/TI-Nspire CX CAS Student Software.app/Contents/Java/navnet.jar(/com/ti/eps/navnet/NodeNotificationListener.class): major version 66 is newer than 65, the highest major version supported by this compiler.
+  It is recommended that the compiler be upgraded.
+warning: /Applications/TI-Nspire CX CAS Student Software.app/Contents/Java/navnet.jar(/com/ti/eps/navnet/ServiceCallbackListener.class): major version 66 is newer than 65, the highest major version supported by this compiler.
+  It is recommended that the compiler be upgraded.
+warning: /Applications/TI-Nspire CX CAS Student Software.app/Contents/Java/navnet.jar(/com/ti/eps/navnet/NavNet.class): major version 66 is newer than 65, the highest major version supported by this compiler.
+  It is recommended that the compiler be upgraded.
+warning: /Applications/TI-Nspire CX CAS Student Software.app/Contents/Java/navnetcommproxy.jar(/com/ti/et/navnetcommproxy/NavNetCommProxy.class): major version 66 is newer than 65, the highest major version supported by this compiler.
+  It is recommended that the compiler be upgraded.
+warning: /Applications/TI-Nspire CX CAS Student Software.app/Contents/Java/navnet.jar(/com/ti/eps/navnet/ClientListener.class): major version 66 is newer than 65, the highest major version supported by this compiler.
+  It is recommended that the compiler be upgraded.
+warning: /Applications/TI-Nspire CX CAS Student Software.app/Contents/Java/commproxy.jar(/com/ti/et/education/commproxy/CommProxy.class): major version 66 is newer than 65, the highest major version supported by this compiler.
+  It is recommended that the compiler be upgraded.
+warning: /Applications/TI-Nspire CX CAS Student Software.app/Contents/Java/commproxy.jar(/com/ti/et/education/commproxy/ICommProxy.class): major version 66 is newer than 65, the highest major version supported by this compiler.
+  It is recommended that the compiler be upgraded.
+warning: /Applications/TI-Nspire CX CAS Student Software.app/Contents/Java/commproxy.jar(/com/ti/et/education/commproxy/IDummyActions.class): major version 66 is newer than 65, the highest major version supported by this compiler.
+  It is recommended that the compiler be upgraded.
+warning: /Applications/TI-Nspire CX CAS Student Software.app/Contents/Java/navnetcommproxy.jar(/com/ti/et/navnetcommproxy/NavNetInitException.class): major version 66 is newer than 65, the highest major version supported by this compiler.
+  It is recommended that the compiler be upgraded.
+16 warnings
+Sep 19, 2026 8:04:47 PM com.ti.et.navnetcommproxy.NavNetCommProxy <init>
+INFO: Calling NavNet.init( -c 0 -d 0 -l "/var/folders/by/fbqy30350j38685w4wh42mzw0000gn/T/navnetlog.log" -r "/Applications/TI-Nspire CX CAS Student Software.app/Contents/PlugIns/Java.runtime/Contents/Home/bin" )
+Sep 19, 2026 8:04:48 PM com.ti.eps.navnet.NavNet init
+INFO: ClientID9465: Navnet Client Init: Args = -c 0 -d 0 -l "/var/folders/by/fbqy30350j38685w4wh42mzw0000gn/T/navnetlog.log" -r "/Applications/TI-Nspire CX CAS Student Software.app/Contents/PlugIns/Java.runtime/Contents/Home/bin"
+Sep 19, 2026 8:04:48 PM com.ti.eps.navnet.NavNet init
+INFO: ClientID9465: Navnet Client init: logpath = /var/folders/by/fbqy30350j38685w4wh42mzw0000gn/T/
+Sep 19, 2026 8:04:48 PM com.ti.eps.navnet.NavNet init
+INFO: ClientID9465: Client init: shutdown hook initiated.
+Sep 19, 2026 8:04:48 PM com.ti.eps.navnet.NavNet ConnectRMIServer
+INFO: ClientID9465: AppMux Client Trying to connect to Remote Navnet Server: //localhost:1099/RemoteNavnetServer
+Sep 19, 2026 8:04:48 PM com.ti.eps.navnet.NavNet ConnectRMIServer
+INFO: ClientID9465: Client: We got registry!
+Sep 19, 2026 8:04:50 PM com.ti.eps.navnet.NavNet ConnectRMIServer
+INFO: ClientID9465: ConnectionException, server is not started
+Sep 19, 2026 8:04:50 PM com.ti.eps.navnet.NavNet startRmiServerToConnect
+INFO: ClientID9465: Try to execute the server launcher...
+Sep 19, 2026 8:04:50 PM com.ti.eps.navnet.NavNet startRmiServerToConnect
+INFO: ClientID9465: THIS IS Mac OS!!!
+Sep 19, 2026 8:04:50 PM com.ti.eps.navnet.NavNet startRmiServerToConnect
+INFO: ClientID9465: -> Java.exe Path = /Applications/TI-Nspire CX CAS Student Software.app/Contents/PlugIns/Java.runtime/Contents/Home/bin/java
+Sep 19, 2026 8:04:50 PM com.ti.eps.navnet.NavNet startRmiServerToConnect
+INFO: ClientID9465: -> Navnet Jar Path = /Applications/TI-Nspire CX CAS Student Software.app/Contents/Java/navnet.jar
+Sep 19, 2026 8:04:50 PM com.ti.eps.navnet.NavNet getExecArray
+INFO: ClientID9465:  Client init: exec[16]: [0]=/Applications/TI-Nspire CX CAS Student Software.app/Contents/PlugIns/Java.runtime/Contents/Home/bin/java [1]=-XX:ErrorFile=/var/folders/by/fbqy30350j38685w4wh42mzw0000gn/T/NN-crash-20260919-200450.log [2]=-XX:OnError=ProcessCrash.bat [3]=-Djava.rmi.server.hostname=localhost [4]=-Djava.rmi.server.useLocalHostname=true [5]=-cp [6]=/Applications/TI-Nspire CX CAS Student Software.app/Contents/Java/navnet.jar [7]=com.ti.eps.navnet.server.RemoteNavnetServer [8]=-c [9]=0 [10]=-d [11]=0 [12]=-l [13]=/var/folders/by/fbqy30350j38685w4wh42mzw0000gn/t/navnetlog.log [14]=-r [15]=/applications/ti-nspire cx cas student software.app/contents/plugins/java.runtime/contents/home/bin
+Sep 19, 2026 8:04:50 PM com.ti.eps.navnet.NavNet startRmiServerToConnect
+INFO: ClientID9465:  AppMux Server has been launched on Mac
+Sep 19, 2026 8:04:50 PM com.ti.eps.navnet.NavNet startRmiServerToConnect
+INFO: ClientID9465: Start threads to read Stdout and Stderr
+Sep 19, 2026 8:04:51 PM com.ti.eps.navnet.NavNet startRmiServerToConnect
+INFO: ClientID9465: Attempting to connect to server: //localhost:1099/RemoteNavnetServer
+Sep 19, 2026 8:04:51 PM com.ti.eps.navnet.NavNet startRmiServerToConnect
+INFO: ClientID9465: Client Lookup Success.  Client connected to Server: //localhost:1099/RemoteNavnetServer
+Sep 19, 2026 8:04:51 PM com.ti.eps.navnet.NavNet ConnectRMIServer
+INFO: ClientID9465: RMI Client successfully connected to RMI Navnet server
+Sep 19, 2026 8:04:51 PM com.ti.eps.navnet.NavNet init
+INFO: ClientID9465: Client init: calling remoteNavnetServer.init
+Sep 19, 2026 8:04:52 PM com.ti.eps.navnet.NavNet registerNotifyCallback
+INFO: ClientID9465: Client registerNotifyCallback: calling navnet register notify callback.
+Sep 19, 2026 8:04:52 PM com.ti.eps.navnet.NavNet registerNotifyCallback
+INFO: ClientID9465: Client registerNotifyCallback: register success.
+Sep 19, 2026 8:04:52 PM com.ti.eps.navnet.NavNet registerNotifyCallback
+INFO: ClientID9465: Client registerNotifyCallback: calling navnet register notify callback.
+Sep 19, 2026 8:04:52 PM com.ti.eps.navnet.NavNet registerNotifyCallback
+INFO: ClientID9465: Client registerNotifyCallback: register success.
+Sep 19, 2026 8:04:52 PM com.ti.eps.navnet.NavNet startService
+INFO: ClientID9465: Client startService: Starting message service.
+helper: READY service=0x4051
+Sep 19, 2026 8:04:55 PM com.ti.eps.navnet.NavNet NodeNotifyCallback
+INFO: ClientID9465: Client NodeNotifyCallback: received notify event. ADD node handle = 105553125294112
+Sep 19, 2026 8:04:55 PM com.ti.eps.navnet.NavNet NodeNotifyCallback
+INFO: ClientID9465: Client NodeNotifyCallback: Calling application notify callback.
+helper: NODE 1
+Sep 19, 2026 8:11:35 PM com.ti.eps.navnet.NavNet NodeNotifyCallback
+INFO: ClientID9465: Client NodeNotifyCallback: received notify event. REMOVE node handle = 105553125294112
+Sep 19, 2026 8:11:35 PM com.ti.eps.navnet.NavNet NodeNotifyCallback
+INFO: ClientID9465: Client NodeNotifyCallback: Calling application notify callback.
+helper: NODE 2

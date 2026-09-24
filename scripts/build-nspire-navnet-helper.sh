@@ -16,5 +16,7 @@ fi
 mkdir -p "$OUT_DIR"
 CP="$(printf '%s:' "$JAR_DIR"/*.jar)"
 "$JAVAC_BIN" --release 8 -encoding UTF-8 -cp "$CP" \
-  -d "$OUT_DIR" "$ROOT/bridge/nspire-navnet-helper/NspireNavnetHelper.java"
+  -d "$OUT_DIR" \
+  "$ROOT/bridge/nspire-navnet-helper/NspireNavnetHelper.java" \
+  "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java"
 printf '%s\n' "$OUT_DIR"

@@ -2,10 +2,10 @@ use libnspire::{Handle, PID, PID_CX2, VID};
 use rusb::{Context, UsbContext};
 use std::{env, fs, io::{self, BufRead, Write}, sync::mpsc, thread, time::{Duration, Instant}};
 
-// 0x5001 is a private service in the valid Mac NavNet range.  The older
-// nsocket example used 0x8001, but the Mac NavNet implementation treats IDs
-// with bit 15 set as invalid signed service numbers.
-const SERVICE_AI: u16 = 0x4051;
+// Project-private service accepted by TI's macOS NavNet host. The raw helper
+// keeps one persistent CX II USB handle and routes application packets through
+// it; 0x4051 is TI's built-in Message service and is not used for NSAI frames.
+const SERVICE_AI: u16 = 0x5001;
 const MAGIC: &[u8; 4] = b"NSAI";
 
 fn frame(opcode: u8, request_id: u32, conversation_id: u16, payload: &[u8]) -> Vec<u8> {
@@ -83,6 +83,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let handle = Handle::new(device.open()?)?;
     eprintln!("persistent USB handle open; cx2={} ready={}", handle.is_cx_ii()?, handle.cx2_ready());
 
+    if env::args().any(|arg| arg == "--info") {
+        println!("{:?}", handle.info()?);
+        return Ok(());
+    }
+
+    if let Some(index) = env::args().position(|arg| arg == "--download") {
+        let remote = env::args().nth(index + 1).ok_or("missing remote path")?;
+        let local = env::args().nth(index + 2).ok_or("missing local path")?;
+        let mut bytes = vec![0u8; 32 * 1024 * 1024];
+        let size = handle.read_file(&remote, &mut bytes, &mut |_| {})?;
+        if size >= bytes.len() { return Err("download limit reached".into()); }
+        fs::write(local, &bytes[..size])?;
+        println!("Downloaded {remote}: {size} bytes");
+        return Ok(());
+    }
+    if let Some(index) = env::args().position(|arg| arg == "--upload") {
+        let local = env::args().nth(index + 1).ok_or("missing local path")?;
+        let remote = env::args().nth(index + 2).ok_or("missing remote path")?;
+        handle.write_file(&remote, &fs::read(local)?, &mut |_| {})?;
+        println!("Uploaded {remote}");
+        return Ok(());
+    }
+
+    if let Some(index) = env::args().position(|arg| arg == "--delete-file") {
+        let path = env::args().nth(index + 1).ok_or("--delete-file needs a path")?;
+        handle.delete_file(&path)?;
+        println!("Deleted {path}");
+        return Ok(());
+    }
+
     if let Some(index) = env::args().position(|arg| arg == "--screenshot") {
         let path = env::args().nth(index + 1).ok_or("--screenshot needs a path")?;
         let image = handle.screenshot()?;
@@ -148,6 +178,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             match handle.read_service_timeout(&mut rx, 100) {
                 Ok(size) if size > 0 => {
+                    if rx[..size] == bootstrap[..] {
+                        // A built-in echo endpoint can reflect the probe even
+                        // when our Ndless application is not connected.
+                        eprintln!("RX reflected bootstrap; application handshake not verified");
+                        continue;
+                    }
                     saw_device_frame = true;
                     println!("RX {}", hex_encode(&rx[..size]));
                     io::stdout().flush().ok();

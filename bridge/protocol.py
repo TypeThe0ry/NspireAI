@@ -7,10 +7,10 @@ from typing import Iterable
 MAGIC = b"NSAI"
 VERSION = 1
 HEADER = struct.Struct(">4sBBIHI")  # magic, version, opcode, request, conversation, payload length
-# CX II's NNSE data packet is smaller than the old 4096-byte application
-# buffer. Keep a conservative frame payload so the NSAI header and NavNet
-# packet headers always fit in one CX II packet.
-MAX_PAYLOAD = 1200
+# TI's NavNet API documents a maximum service payload of 254 bytes.  Keep
+# enough room for the NSAI header and the NavNet framing rather than relying
+# on the larger buffers exposed by one particular CX II host connector.
+MAX_PAYLOAD = 224
 MAX_MESSAGE_PAYLOAD = 64 * 1024
 OP_FRAGMENT = 8
 FRAGMENT_HEADER = struct.Struct(">BBII")  # original opcode, reserved, total, offset

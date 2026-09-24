@@ -10,7 +10,7 @@ same repositories into `.deps/` and verifies the recorded revisions.
 | N-Link | [lights0123/n-link](https://github.com/lights0123/n-link) | `0472908ef4961e7eec92cc0b97376420a71e5bc7` (`main`) | GPL-3.0 | Existing CLI syntax and device/file-transfer behavior |
 | libnspire-rs | [lights0123/libnspire-rs](https://github.com/lights0123/libnspire-rs) | `098b3f5fdc09a5b5b0d97688672c10d34365786c` (`main`) | GPL-3.0 | `Handle::read_file`, `write_file`, `list_dir`, CX II VID/PID |
 | Luna | [ndless-nspire/Luna](https://github.com/ndless-nspire/Luna) | `a9924a9a968954eba9adcc161a58ac607f97ce8c` (`master`) | MPL 1.1 | Lua-to-TNS packaging (`luna INPUT.lua OUTPUT.tns`) |
-| nsocket reference | [compujuckel/nsocket](https://github.com/compujuckel/nsocket) | `6e90b2cccdb3b51f72a2dc03a85a1c9325339cbe` (`master`) | GPL-3.0 | Ndless custom service pattern; this project uses Mac-valid `0x5001` instead of the example's `0x8001` |
+| nsocket reference | [compujuckel/nsocket](https://github.com/compujuckel/nsocket) | `6e90b2cccdb3b51f72a2dc03a85a1c9325339cbe` (`master`) | GPL-3.0 | Reference for Ndless NavNet connection direction; runtime uses project-private service `0x5001` on macOS |
 
 The N-Link and libnspire-rs licenses are copyleft licenses. Do not copy their
 implementation into a differently licensed binary without preserving the

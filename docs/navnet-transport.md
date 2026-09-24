@@ -1,10 +1,46 @@
 # Persistent CX II transport
 
+## Freeze prevention
+
+The standalone SDL loop uses `NAV_READ_TIMEOUT=1` for `TI_NN_Read`. This is
+the smallest finite timeout accepted by the TI API and prevents a missing or
+invalid host channel from blocking keyboard/event processing. A 2.5-second
+handshake watchdog still disconnects and retries a channel that never answers.
+The local rebuilt artifact currently hashes to
+`7a6c5d9c97b0e52d6cb34cc1368ab4eff76de8c251cec13442d2bc2ebb3fec13`; it must
+be uploaded and retested on the calculator before replacing the deployed
+artifact evidence below.
+The deployment wrapper also bounds `n-link upload` to 45 seconds by default,
+so a stale USB session exits and can release its process instead of hanging.
+
+The current runtime path is the standalone Ndless program
+`dist/nspire_ai.tns`. It keeps one SDL page open and communicates with the
+Mac bridge over project-private NavNet service `0x5001`. The Lua document and file
+exchange path below is legacy compatibility only.
+
 The file exchange bridge is retained only as a fallback. It cannot provide the
 requested UX because every response upload is a TI document transfer and may
 show an “accept new file” prompt.
 
-The CX II path will reuse the existing `libnspire` NavNet SE implementation:
+The default host path uses TI's Java NavNet helper and `startService(0x5001)`.
+A direct host probe on 2026-09-20 returned `READY service=0x5001` without a
+calculator connection. Neither event proves an application connection:
+`CONNECTED` and an NSAI request/response round trip are still required. The TI
+JVM also remained alive after logging shutdown success, so the helper now has a
+shutdown watchdog and its shell wrapper removes only a server created by that
+invocation. Earlier runs crashed in TI's Intel connector, so stability remains
+unverified.
+
+Before deployment, `scripts/check-nspire-usb-state.sh` performs a read-only
+USB gate. The current USB topology shows `TPS DMC Family` as a child of a
+CalDigit TS4 hub; the checker classifies it as a non-Nspire dock controller and
+does not permit that state to be mistaken for a usable CX II NavNet device.
+TI's [TPS257xx-Q1 USB firmware-update guide](https://www.ti.com/lit/ug/slvubx5c/slvubx5c.pdf)
+uses the same `TPS DMC Family` identity for that controller, while
+[Hackspire's USB protocol notes](https://www.hackspire.org/USB_Protocol/)
+list `0xE022` as the Nspire CX II product ID.
+
+The experimental `NSPIRE_NAVNET_TRANSPORT=raw` path uses `libnspire-rs`:
 
 * `packet_send_cx2_nowait()` and `packet_recv_cx2_timeout()` perform the CX II
   NavNet SE framing on the persistent path. The helper's single event loop
@@ -15,31 +51,103 @@ The CX II path will reuse the existing `libnspire` NavNet SE implementation:
   it will not invoke `n-link upload` or `n-link download` per message.
 * Application frames will be length-prefixed and carry a request id, opcode,
   and UTF-8 payload. Responses use the same request id and are delivered to
-  the Lua extension in memory.
+  the standalone Ndless program in memory.
 
-The Ndless side connects to a custom host service (`0x5001`; the older
-Ndless `nsocket` example) with
-`TI_NN_StartService`; the Mac helper opens that service directly after the
-existing `libnspire` address handshake. We intentionally do not call
-`TI_NN_NodeEnumInit` from the Lua page: that API requires the full TI/Windows
-NavNet host stack (and returns status 1 with a lightweight raw helper).
+The calculator calls `TI_NN_Connect(node, 0x5001, ...)`, a project-private
+service accepted by the TI macOS NavNet host. The raw helper supplies USB
+framing but has not demonstrated host-side service acceptance; local writes
+must not be reported as a registered host service or an application connection.
 
-The service callback stores the channel and emits one fixed bootstrap PONG; the
-Lua timer then performs short, non-blocking reads and answers subsequent PINGs.
+The Java service callback stores the host channel; the standalone program performs short,
+non-blocking reads and answers subsequent PINGs.
+The standalone page waits 2 seconds before its first node enumeration, retries
+failed enumeration every 3 seconds, and retries a dropped channel every 2
+seconds. This is deliberately conservative backoff while the USB/host state
+settles; it is not evidence that enumeration caused the earlier USB loss.
 The remaining physical gate is still explicit: opening the page, sending a
 request, receiving the response, and keeping the page visible throughout. The
 file transport is retained only as legacy compatibility code and is not used
-by `AI.tns`.
+by the standalone `nspire_ai.tns` program.
 
 ## Verification log
 
-* 2026-09-16: Ndless extension, Luna UI, Rust helper, and 14 Python tests
-  build/pass. The remote `AI.tns` and `nspire_ai_nav.luax.tns` SHA-256 values
-  matched the local artifacts after upload.
-* 2026-09-16: Mac helper opened the attached CX II (`cx2=true ready=true`) and
-  sent repeated `0x8001` bootstrap frames. No calculator `RX` frame has yet
-  been observed because the latest page instance has not completed the
-  page-open/Enter physical test. This is not recorded as a transport pass.
-* 2026-09-16: NSAI frames were reduced to a 1200-byte CX II-safe payload and
-  long logical messages gained ordered in-memory fragmentation/reassembly;
-  Python tests cover a multi-frame 5000+ byte response.
+* 2026-09-16: Standalone Ndless program, TI Java helper, and 14 Python tests
+  build/pass. Earlier legacy Lua artifacts also matched their remote uploads.
+* 2026-09-19: Raw helper reached `persistent USB handle open; cx2=true ready=true`
+  and opened service `0x5000`; TI Java fallback crashed in
+  `nwb_nspire_connector.dylib!UsbIoMac::readAsync()` on this Apple Silicon host.
+  No calculator `RX`/`CONNECTED` event has yet been observed. The physical
+  standalone-program launch and Enter test remains open, so transport is not a
+  pass.
+* 2026-09-20: With the Java helper running, `READY service=0x4051` and
+  `NODE 1` were reproduced on the earlier built-in-service trial. A separate
+  direct probe then returned `READY service=0x5001`; this proves host
+  registration only, not calculator `CONNECTED`/`RX`. The
+  deployed standalone page was not visibly open, and a raw screenshot
+  diagnostic opened the CX II handle but did not return before timeout.
+* 2026-09-20: The Java lifecycle regression passed with
+  `READY service=0x5001`, `STOPPED`, and no new helper/RMI processes. The
+  standalone artifact was rebuilt after adding conservative NavNet enumeration
+  backoff; local SHA-256 is
+  `ed952ba9e836aab410f64902c036fe8151bfb3b141ddd8da804a3a4914b2f783`.
+* 2026-09-21: The physical gate passed with `TI-Nspire(tm) CX II Handheld`
+  (`0xE022`); the artifact uploaded successfully and the Java bridge stayed at
+  `READY service=0x5001`. Launching the received document produced one real
+  `CONNECTED`, followed by TI error `-257` (`TI_NN_ERR_INVALID_CONNECTION`)
+  before an application `RX`. The Java reader now retries that status and
+  replaces stale readers on a later callback; the watcher also restarts a
+  reader that dies on another negative read status, and the callback logs the
+  native handle value for the next live diagnosis. Same-page request/response
+  is still unverified.
+* 2026-09-21 18:58: A fresh Java bridge again reached `READY service=0x5001`
+  and remained live while the USB gate was polled for 24 seconds. The handheld
+  interface did not reappear; every sample was the TS4 `0xACE1` DMC controller.
+  The bridge was stopped cleanly, so this host-ready observation is not counted
+  as a calculator connection or an application round trip.
+* 2026-09-21 19:08: The full Python-to-Java `run-navnet-bridge.sh echo`
+  entrypoint reached `READY service=0x5001` and shut down through Ctrl-C with
+  `STOPPED`; no helper or detached RMI process remained. The USB gate was still
+  `0xACE1` only, so this is host lifecycle evidence and not a page-open round
+  trip.
+* 2026-09-21: `scripts/test-navnet-bridge-lifecycle.sh` now automates that
+  host-only gate with an open FIFO, `READY` assertion, SIGTERM, `STOPPED`
+  assertion, and PID-scoped child/RMI leak check. It passed with the expected
+  outer status `143`; it does not substitute for a calculator page test.
+* 2026-09-21 19:56-19:59: A controlled `0x4051` service-ID run on the same
+  unchanged TS4 topology also reached `READY` but no `NODE`, so the absence is
+  not caused by the project-private `0x5001` ID. The raw `libnspire` transport
+  was then tested and returned `Error: NoDevice` while `ioreg` still listed the
+  `0x0451:0xE022` handheld below `TS4 USB2.0 HUB@02112000`. The normal Java
+  `0x5001` bridge was restored; the page-open `CONNECTED`/request/response gate
+  remains unverified.
+* 2026-09-21 20:38-20:40: The page displayed `NavNet enum init=-274`.
+  The installed TI `navnet.jar` identifies `-274` as
+  `TI_NN_ERR_ENUM_DONE`. During the same audit the usable `0xE022` handheld
+  interface disappeared again: the USB gate saw only the TS4/TPS controller
+  `0x0451:0xACE1`, and the raw helper reported `no TI-Nspire USB device`.
+  The Java bridge reached `READY service=0x5001` but no `NODE`, `CONNECTED`, or
+  `RX`; it was stopped cleanly. No application round trip is claimed.
+* 2026-09-21 20:08: After the AI page was exited, restarting the Java
+  `0x5001` bridge reached `READY` and produced a real `NODE 1` once the
+  `0xE022` handheld reappeared below the TS4 hub. This is recovery of host-side
+  node discovery only; the page was closed, so `CONNECTED`, calculator `RX`,
+  and same-page request/response remain unverified.
+* 2026-09-21 20:55-20:58: Ten consecutive USB polls remained the TS4/TPS
+  controller (`0x0451:0xACE1`) and the raw helper returned `no TI-Nspire USB
+  device`; no bridge instance was started for a false physical pass. The
+  standalone artifact hash was recomputed as
+  `46065900de89efb12a56b7b2b2e464c87e8b02132cbd2806c8b71f25478c5`. The
+  diagnostic NavNet client now has a bounded timeout and PID-scoped child/RMI
+  cleanup, preventing a failed `waitForNode()` from leaving a competing client
+  behind. Standard protocol and lifecycle tests pass.
+* 2026-09-21 21:20-21:35: After restarting TI Student Software, macOS kept a
+  direct `0x0451:0xE022` handheld visible, while the official UI stayed at
+  `No handheld selected`. The fresh Java bridge reached `READY` but no
+  `NODE`; the bounded node probe, raw helper, and N-Link upload each failed to
+  complete USB/NavNet initialization. All temporary clients were stopped and
+  no application round trip is claimed.
+* 2026-09-16: NSAI frames gained ordered in-memory fragmentation/reassembly;
+  the current frame payload is 224 bytes (below TI's documented 254-byte
+  NavNet service ceiling after reserving the 16-byte NSAI header). Python
+  tests cover a multi-frame 5000+ byte response.
+* 2026-09-21: Repeated live checks found the macOS USB descriptor (`0x0451:0xE022`) without a usable handheld session. TI `connector*.log` reports `Failed to Open Device ... kIOReturnExclusiveAccess`; the TI UI remains `No handheld selected`, and bounded raw/Java probes produce timeout or `NoDevice`. This is below the application protocol, so the page-open `CONNECTED`/request/response gate remains open.

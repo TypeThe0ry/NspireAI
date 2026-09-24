@@ -1,0 +1,3 @@
+STATE=CX2_USB_CANDIDATE product=0xE022
+ACTION=run-nspireai-usb-helper-info-then-deploy
+TI-Nspire CX II handheld is not enumerated; bridge not started
