@@ -1427,3 +1427,28 @@ and read back byte-for-byte with the same SHA. The calculator showed TI's
 present. No `CONNECTED`, calculator `RX`, or response was observed. The exact
 SHA is now blocked by both upload entry points; this candidate must not be
 repeated.
+
+### 2026-09-25 safe default package launch boundary
+
+After the handheld was manually restored to Home and the USB descriptor
+returned, the safe default package was uploaded through the normal gate and
+read back from the same CX II CAS node:
+
+```text
+sha256=a48994c9b1347b7419c4fd4fb4c46302ab296d469242b3fd53b735278bcf9b1e
+ui_backend=TRUE
+ngc_auto_transport=FALSE
+ngc_cpu_irq=FALSE
+ngc_irq_window=FALSE
+ngc_irq_menu=FALSE
+build_status=success
+```
+
+The readback verifier reported the exact byte count and SHA. One controlled
+`~enter~` was then sent to dismiss the transfer dialog; the remote event call
+timed out before returning its `KEY` marker. A subsequent bounded `info` probe
+still saw the USB descriptor but did not receive a NavNet node, and no
+`CONNECTED`, calculator `RX`, or same-page response was observed. This is a
+launch/remote-event boundary failure, not evidence of a successful page launch;
+the safe package remains the only package eligible for a future controlled
+test.
