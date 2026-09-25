@@ -1506,3 +1506,13 @@ The candidate was kept outside `dist` and was not uploaded because the
 handheld still lacks a stable NavNet `NODE`; the verified safe package was
 restored at SHA `a48994c9b1347b7419c4fd4fb4c46302ab296d469242b3fd53b735278bcf9b1e`.
 `make program-test`, the 19-test host suite, and both lifecycle tests pass.
+
+### 2026-09-25 desktop-occupancy exclusion
+
+Computer Use reported that `TI-Nspire CX CAS Student Software` was not
+running. A simultaneous process snapshot found no `RemoteNavnetServer`,
+`NspireRemoteControl`, `NspireNavnetHelper`, bridge, or N-Link process, while
+the read-only USB gate still reported `STATE=CX2_USB_CANDIDATE
+product=0xE022`. This rules out an active Student Software process or stale
+project helper as the current cause of the missing `NODE`; it does not prove a
+usable NavNet connection.
