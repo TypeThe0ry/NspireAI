@@ -1552,3 +1552,9 @@ A read-only raw `--screenshot` probe was then bounded at five seconds. It did
 not return a frame and was terminated by the timeout wrapper; a follow-up
 process check found no helper or RMI residue. This is another synchronous
 device-call stall, not screen evidence and not a page-open round trip.
+
+The raw file path itself remains healthy: a read-only download of
+`/nspire_ai.tns` completed in 12 seconds with 25,656 bytes and SHA-256
+`a48994c9b1347b7419c4fd4fb4c46302ab296d469242b3fd53b735278bcf9b1e`, exactly
+matching the verified safe package. The missing page response is therefore not
+caused by an absent or stale calculator artifact.
