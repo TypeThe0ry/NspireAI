@@ -15,7 +15,15 @@ LOCK_DIR="${NSPIRE_BRIDGE_LOCK_DIR:-${TMPDIR:-/tmp}/nspireai-navnet-bridge.lock}
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
   if [[ -f "$LOCK_DIR/pid" ]]; then
     owner="$(<"$LOCK_DIR/pid")"
-    if [[ "$owner" =~ ^[0-9]+$ ]] && ! kill -0 "$owner" 2>/dev/null; then
+    owner_alive=0
+    if [[ "$owner" =~ ^[0-9]+$ ]] && kill -0 "$owner" 2>/dev/null; then
+      owner_state="$(ps -p "$owner" -o stat= 2>/dev/null | tr -d '[:space:]')"
+      # A killed shell can leave a zombie briefly; it cannot own the bridge.
+      if [[ -n "$owner_state" && "$owner_state" != Z* ]]; then
+        owner_alive=1
+      fi
+    fi
+    if [[ "$owner" =~ ^[0-9]+$ ]] && [[ "$owner_alive" -eq 0 ]]; then
       rm -f "$LOCK_DIR/pid"
       rmdir "$LOCK_DIR" 2>/dev/null || true
     fi

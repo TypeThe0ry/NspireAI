@@ -45,13 +45,20 @@ NAVNET_SERVER_PATTERN='com\.ti\.eps\.navnet\.server\.RemoteNavnetServer'
 NAVNET_SERVER_BEFORE="$(pgrep -f "$NAVNET_SERVER_PATTERN" 2>/dev/null || true)"
 NAVNET_SERVER_PID=""
 
+# `lsof -i` can itself block while TI's native NavNet server is spinning in
+# connector initialization.  Use a bounded localhost connect instead, so a
+# broken server produces a deterministic startup failure and cleanup can run.
+port_open() {
+  nc -z -w 1 127.0.0.1 "$1" >/dev/null 2>&1
+}
+
 # NavNetCommProxy normally launches RemoteNavnetServer itself. On Apple
 # Silicon with TI's Intel-only runtime that launch can race a stale RMI
 # registry: the client sees the registry, then retries while no server is
 # listening. Start the exact TI server command first when port 1099 is free;
 # an already-running TI server remains untouched.
 start_navnet_server_if_needed() {
-  if lsof -nP -iTCP:1099 -sTCP:LISTEN -t >/dev/null 2>&1; then
+  if port_open 1099; then
     return 0
   fi
   local server_log server_err error_file
@@ -79,7 +86,7 @@ start_navnet_server_if_needed() {
   fi
   NAVNET_SERVER_PID=$!
   for _ in {1..80}; do
-    if lsof -nP -iTCP:1099 -sTCP:LISTEN -t >/dev/null 2>&1; then
+    if port_open 1099; then
       return 0
     fi
     if ! kill -0 "$NAVNET_SERVER_PID" 2>/dev/null; then
@@ -118,6 +125,13 @@ cleanup_server() {
   done
   if [[ -n "$NAVNET_SERVER_PID" ]] && kill -0 "$NAVNET_SERVER_PID" 2>/dev/null; then
     kill -TERM "$NAVNET_SERVER_PID" 2>/dev/null || true
+    for _ in {1..20}; do
+      kill -0 "$NAVNET_SERVER_PID" 2>/dev/null || break
+      sleep 0.1
+    done
+    if kill -0 "$NAVNET_SERVER_PID" 2>/dev/null; then
+      kill -KILL "$NAVNET_SERVER_PID" 2>/dev/null || true
+    fi
     wait "$NAVNET_SERVER_PID" 2>/dev/null || true
   fi
 }

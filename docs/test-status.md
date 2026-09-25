@@ -1558,3 +1558,36 @@ The raw file path itself remains healthy: a read-only download of
 `a48994c9b1347b7419c4fd4fb4c46302ab296d469242b3fd53b735278bcf9b1e`, exactly
 matching the verified safe package. The missing page response is therefore not
 caused by an absent or stale calculator artifact.
+
+### 2026-09-25 Java NavNet server startup boundary and launcher hardening
+
+After the safe package was left open on the handheld, a 25-second production
+bridge run reached `navnet bridge starting: service=0x5001` but produced no
+`READY`, `CONNECTED`, `NODE`, or calculator `RX`. A direct helper probe showed
+the TI-bundled `RemoteNavnetServer` child remaining in `R+` without opening
+TCP port 1099; its stderr contained only:
+
+```text
+Starting RemoveNavnetServer
+jarPath=/Applications/TI-Nspire%20CX%20CAS%20Student%20Software.app/Contents/Java
+File did not exist and was created. No action
+```
+
+The child was terminated by the bounded diagnostic, and a subsequent process
+and port check was empty. This is a host-side NavNet server initialization
+failure before the project helper can emit `READY`; it is not evidence of a
+calculator `CONNECTED` or request/response.
+
+The Java build wrapper now skips `javac` when both adapter classes and the
+TI NavNet jars are unchanged, avoiding the roughly 30-second first-start
+compile cost. The bridge lock now treats missing or zombie owners as stale,
+and the Java wrapper uses a bounded localhost connect check instead of an
+unbounded `lsof` poll while waiting for RMI 1099. These changes make startup
+and teardown deterministic without touching the calculator package or
+enabling any IRQ/Menu experiment.
+
+After this change, a fresh production run reached `READY service=0x5001`
+within the bounded window, but still emitted no `NODE`, `CONNECTED`, or
+calculator `RX` before the 25-second observation ended. The host startup path
+is therefore repaired; the remaining missing link is the handheld's NavNet
+node discovery while the page is open.
