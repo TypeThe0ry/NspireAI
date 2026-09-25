@@ -1547,3 +1547,8 @@ application/NavNet peer is absent. The raw bridge entrypoint now performs an
 incremental Cargo freshness check for its default helper before starting, so
 an old service ID cannot be used silently; an explicitly supplied custom
 helper remains untouched.
+
+A read-only raw `--screenshot` probe was then bounded at five seconds. It did
+not return a frame and was terminated by the timeout wrapper; a follow-up
+process check found no helper or RMI residue. This is another synchronous
+device-call stall, not screen evidence and not a page-open round trip.
