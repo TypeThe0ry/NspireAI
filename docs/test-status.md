@@ -1465,3 +1465,10 @@ seconds (status 143); subsequent process and port-1099 checks found no
 `NspireRemoteControl` or `RemoteNavnetServer` residue. `bash -n` and
 `git diff --check` passed. This is host lifecycle evidence only: no device
 `NODE`, `CONNECTED`, calculator `RX`, or same-page response was verified.
+
+A fresh post-cleanup `info` probe at 10 seconds reached callback registration
+but still produced no `NODE`. The native child ignored TERM and was escalated
+to KILL; the wrapper then removed its newly-created RMI server. Follow-up
+process and port-1099 checks were empty, and the USB gate still reported the
+CX II descriptor (`product=0xE022`). This confirms cleanup is bounded while
+the physical NavNet discovery failure remains unresolved.
