@@ -137,7 +137,7 @@ the current physical test calls for it; USB operation is not yet validated.
 
 ## Run the persistent echo bridge
 
-Start it with one command:
+Start the bridge before opening the calculator page:
 
 ```sh
 ./scripts/run-navnet-bridge.sh echo
@@ -163,14 +163,23 @@ helper: READY service=0x5001
 helper: NODE 1
 ```
 
-Open `nspire_ai.tns` on the calculator, type `Hello`, and press Enter. The
-expected answer in the same program page is:
+After the bridge prints `helper: READY service=0x5001`, open `nspire_ai.tns`
+on the calculator. The page starts USB-idle and does not enumerate NavNet by
+itself. Press Menu once to arm one transport attempt, then type `Hello` and
+press Enter. The expected answer in the same program page is:
 
 ```text
 Mac received: Hello
 ```
 
 No request/response document should appear and the TI page must stay open.
+
+If the first attempt reports `USB held`, leave the page open and fix the host
+side first; do not keep pressing Menu. The page deliberately stops calling
+the synchronous TI NavNet syscalls after the first error. A later single Menu
+press is the only retry. This prevents the repeated enumeration loop that can
+leave macOS seeing only the TS4 `0xACE1` dock controller until a physical
+replug.
 
 ## Run the real model backend
 

@@ -107,6 +107,27 @@ static int pending;
  * changes can mark the native framebuffer dirty without introducing another
  * callback or scheduler dependency. */
 static int ngc_ui_dirty = 1;
+/* A failed NavNet syscall is a transport fault, not a reason to keep
+ * touching the calculator USB endpoint.  The CX II does not document a
+ * wall-clock bound for NodeEnumInit/Connect/Read; repeated retries were
+ * observed to leave the handheld visible only as the TS4's 0xACE1 DMC
+ * controller until the cable was physically replugged.  Hold this page's
+ * transport after the first failure and let the explicit Menu action retry
+ * only after the host bridge has been started. */
+static int nav_transport_blocked;
+
+static void nav_transport_hold(void) {
+    nav_transport_blocked = 1;
+}
+
+static void nav_transport_rearm(void) {
+    nav_transport_blocked = 0;
+    nav_retry_at = nav_clock_ms();
+}
+
+static int nav_transport_is_blocked(void) {
+    return nav_transport_blocked;
+}
 #endif
 
 static unsigned char response_data[MAX_RESPONSE];
@@ -325,8 +346,15 @@ static void nav_disconnect(const char *reason) {
     response_next_offset = 0;
     nav_connected_at = 0;
     nav_ping_at = 0;
+#ifdef NSPIRE_UI_NGC
+    nav_transport_hold();
+    nav_retry_at = 0;
+    set_status("USB held after disconnect: %s; Menu retries",
+               reason ? reason : "bridge unavailable");
+#else
     nav_retry_at = nav_clock_ms() + NAV_DISCONNECT_RETRY_MS;
     set_status("bridge disconnected: %s", reason ? reason : "retrying");
+#endif
 }
 
 /* Historical Ndless NavNet calculator tests start a local service before
@@ -368,12 +396,20 @@ static int nav_try_connect(void) {
     int node_count = 0;
 
     if (nav_connected) return 1;
+#ifdef NSPIRE_UI_NGC
+    if (nav_transport_is_blocked()) return 0;
+#endif
     if (!nav_deadline_reached(nav_clock_ms(), nav_retry_at)) return 0;
 
     operation = NAV_OS_CALL(TI_NN_CreateOperationHandle());
     if (!operation) {
         set_status("NavNet operation unavailable");
+#ifdef NSPIRE_UI_NGC
+        nav_transport_hold();
+        set_status("USB held: NavNet operation unavailable; Menu retries");
+#else
         nav_retry_at = nav_clock_ms() + NAV_RETRY_DELAY_MS;
+#endif
         return 0;
     }
     status = NAV_OS_CALL(TI_NN_NodeEnumInit(operation));
@@ -393,7 +429,12 @@ static int nav_try_connect(void) {
         } else {
             set_status("NavNet enumeration init: %d", status);
         }
+#ifdef NSPIRE_UI_NGC
+        nav_transport_hold();
+        set_status("USB held: enum init=%d; Menu retries", status);
+#else
         nav_retry_at = nav_clock_ms() + NAV_RETRY_DELAY_MS;
+#endif
         return 0;
     }
     last_enum_error = 0;
@@ -424,7 +465,12 @@ static int nav_try_connect(void) {
         add_history_line(detail);
         nav_channel = NULL;
         set_status("NavNet service 0x%04x unavailable (%d nodes)", SERVICE_ID, node_count);
+#ifdef NSPIRE_UI_NGC
+        nav_transport_hold();
+        set_status("USB held: service unavailable; Menu retries");
+#else
         nav_retry_at = nav_clock_ms() + NAV_RETRY_DELAY_MS;
+#endif
         return 0;
     }
 

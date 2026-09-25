@@ -39,9 +39,6 @@ ZEHNFLAGS += --notice "NGC/RTC UI; experimental IRQ window; USB transport remain
 else ifeq ($(NGC_USB_IRQ_MENU),TRUE)
 GCCFLAGS += -DNSPIRE_NGC_USB_IRQ_MENU
 ZEHNFLAGS += --notice "NGC/RTC UI; Menu-gated experimental IRQ window" --uses-lcd-blit true
-else ifeq ($(NGC_AUTO_TRANSPORT),TRUE)
-GCCFLAGS += -DNSPIRE_NGC_AUTO_TRANSPORT
-ZEHNFLAGS += --notice "NGC/RTC UI; USB transport explicitly armed by build" --uses-lcd-blit true
 else
 ZEHNFLAGS += --notice "NGC/RTC UI; USB idle until Menu; timer-neutral" --uses-lcd-blit true
 endif

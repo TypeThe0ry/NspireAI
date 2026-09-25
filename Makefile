@@ -9,7 +9,8 @@ program-docker-ngc:
 	NSPIRE_UI_NGC=TRUE ./scripts/build-program-docker.sh
 
 program-docker-ngc-auto-transport:
-	NSPIRE_UI_NGC=TRUE NSPIRE_NGC_AUTO_TRANSPORT=TRUE ./scripts/build-program-docker.sh
+	@echo "auto-transport was removed: build program-docker-ngc and arm once with Menu after bridge READY" >&2
+	@exit 65
 
 bridge-test:
 	./scripts/test-bridge.sh

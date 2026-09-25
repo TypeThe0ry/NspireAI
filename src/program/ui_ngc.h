@@ -13,16 +13,13 @@ static struct nav_irq_window ngc_menu_irq_window;
 static int ngc_menu_irq_window_active;
 #endif
 
-/* Automatic NavNet calls are intentionally opt-in on CX II.  NodeEnumInit,
- * Connect, and Read are synchronous OS calls and the SDK does not document a
- * wall-clock bound for them.  Opening the page must therefore not enter that
- * path just because USB happens to be attached.  A later build can opt in for
- * a controlled transport experiment with NGC_AUTO_TRANSPORT=TRUE. */
-#ifdef NSPIRE_NGC_AUTO_TRANSPORT
-#define NGC_TRANSPORT_DEFAULT 1
-#else
+/* Never enumerate NavNet during page startup.  NodeEnumInit, Connect, and
+ * Read are synchronous OS calls and the SDK does not document a wall-clock
+ * bound for them.  The old auto-transport candidate called this path before
+ * the Mac bridge was READY and repeatedly wedged the USB endpoint.  Transport
+ * is now armed only by one explicit Menu press after the host bridge is
+ * already running; the first failure is held until the next explicit retry. */
 #define NGC_TRANSPORT_DEFAULT 0
-#endif
 
 static int ngc_prepare_lcd(void) {
     if (ngc_lcd_ready) return 1;
@@ -99,6 +96,16 @@ static int ngc_keys(void) {
             else if (keys[i] == &KEY_NSPIRE_DEL) {
                 if (input_len) input_text[--input_len] = 0;
             } else if (keys[i] == &KEY_NSPIRE_MENU) {
+                /* A held transport remains logically armed after its first
+                 * failed attempt.  Treat the next Menu press as the single
+                 * explicit retry instead of requiring an off/on double press. */
+                if (ngc_transport_armed && nav_transport_is_blocked()) {
+                    nav_transport_rearm();
+                    set_status("USB retry armed; bridge must be READY");
+                    changed = 1;
+                    previous[i] = down;
+                    continue;
+                }
                 ngc_transport_armed = !ngc_transport_armed;
                 if (ngc_transport_armed) {
 #ifdef NSPIRE_NGC_USB_IRQ_MENU
@@ -110,9 +117,9 @@ static int ngc_keys(void) {
                                    ? "USB armed; IRQ window active; Menu disables"
                                    : "USB armed; connecting... Menu disables");
 #else
-                    set_status("USB armed; connecting... Menu disables");
+                    set_status("USB armed once; bridge must already be READY");
 #endif
-                    nav_retry_at = nav_clock_ms();
+                    nav_transport_rearm();
                 } else {
 #ifdef NSPIRE_NGC_USB_IRQ_MENU
                     if (ngc_menu_irq_window_active) {
@@ -120,7 +127,8 @@ static int ngc_keys(void) {
                         ngc_menu_irq_window_active = 0;
                     }
 #endif
-                    set_status("USB idle; Menu enables transport");
+                    nav_transport_hold();
+                    set_status("USB idle; Menu enables one retry");
                 }
             }
             else if (keys[i] == &KEY_NSPIRE_N && isKeyPressed(KEY_NSPIRE_CTRL))
@@ -244,7 +252,7 @@ int main(void) {
         if (done) break;
         /* RTC supplies at most one poll per second. Avoid a busy NavNet loop;
          * this is not a syscall timeout or scheduling solution. */
-        if (ngc_transport_armed && now != last_tick) {
+        if (ngc_transport_armed && !nav_transport_is_blocked() && now != last_tick) {
             last_tick = now;
             (void)nav_try_connect();
             nav_poll();

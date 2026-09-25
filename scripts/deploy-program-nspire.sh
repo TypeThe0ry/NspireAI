@@ -25,6 +25,18 @@ case "$UI_BACKEND" in
   FALSE|TRUE) ;;
   *) echo "Manifest is missing a valid ui_backend field; refusing upload" >&2; exit 65;;
 esac
+AUTO_TRANSPORT="$(sed -n 's/^ngc_auto_transport=//p' "$META")"
+case "$AUTO_TRANSPORT" in
+  FALSE) ;;
+  TRUE)
+    echo "Refusing auto-transport artifact: startup NavNet enumeration can wedge CX II USB; rebuild USB-idle/Menu-retry package" >&2
+    exit 65
+    ;;
+  *)
+    echo "Manifest is missing a valid ngc_auto_transport field; refusing upload" >&2
+    exit 65
+    ;;
+esac
 IRQ_WINDOW="$(sed -n 's/^ngc_irq_window=//p' "$META")"
 case "$IRQ_WINDOW" in
   FALSE) ;;

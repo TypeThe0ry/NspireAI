@@ -1627,3 +1627,33 @@ This is the first physical test of the authorized auto-transport package. It
 proves deployment and page launch were reached, but not a NavNet node or the
 requested same-page request/response. No further key, Menu action, IRQ change,
 or upload was attempted after the node disappeared.
+
+### 2026-09-25 USB-wedge prevention fix
+
+The auto-transport run above explains the recurring unplug/replug symptom. The
+candidate entered synchronous `NodeEnumInit`/`NodeEnumNext` calls before the
+Mac service was ready, then continued retrying after the negative result. TI's
+CX II SDK does not provide a verified wall-clock bound for those calls. During
+the physical run, the handheld interface disappeared and macOS exposed only
+the TS4 `0xACE1` DMC controller; stopping the Java helper did not restore
+`0xE022`. Replugging resets the endpoint, which is why it appeared to be the
+only recovery.
+
+The source/build/deploy path now enforces the safe state:
+
+* NGC startup is always USB-idle; `NSPIRE_NGC_AUTO_TRANSPORT=TRUE` is rejected
+  by both the Docker build and the top-level Make target.
+* The first Menu press is the only arm operation, and it is intended to happen
+  after the host bridge has emitted `READY service=0x5001`.
+* The first operation/enumeration/connect failure sets a per-page transport
+  hold. The loop makes no further NavNet calls until one later Menu retry.
+* Upload rejects manifests with `ngc_auto_transport=TRUE`, so the previously
+  built SHA `573db70148ff76ed671f401cab0544aba0d528a119f24ad5493e8fcb3ff82702`
+  cannot be deployed again.
+
+Host tests remain green (`make program-test`, 19 bridge tests, lifecycle
+tests). The clean USB-idle/Menu-retry NGC package now builds with SHA-256
+`f3e0506602168626e70f1c335f8e76db3f3ec5014d88ca98a47a338d3b3b5b5d` and a
+matching `build_status=success`, `ngc_auto_transport=FALSE` manifest. It has
+not been uploaded because the handheld is currently still enumerating only
+`0xACE1`; no claim of `CONNECTED` or same-page response is made here.

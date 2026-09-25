@@ -61,17 +61,22 @@ must not be reported as a registered host service or an application connection.
 
 The Java service callback stores the host channel; the standalone program performs short,
 non-blocking reads and answers subsequent PINGs.
-The standalone page waits 2 seconds before its first node enumeration, retries
-failed enumeration every 3 seconds, and retries a dropped channel every 2
-seconds. This is deliberately conservative backoff while the USB/host state
-settles; it is not evidence that enumeration caused the earlier USB loss.
+The standalone NGC page is USB-idle at startup. It performs no NavNet
+enumeration until the host bridge has printed `READY service=0x5001` and the
+user presses Menu once. The first failed synchronous NavNet call permanently
+holds transport for that page; a later single Menu press is the only retry.
+The previous 2/3/2-second automatic retry loop was removed after the
+auto-transport candidate reproduced a transition from the handheld `0xE022`
+interface to the TS4 `0xACE1` dock controller. A cable replug resets that USB
+endpoint, but is not a software fix.
 The historical Ndless calculator NavNet test (nsptools-history commit
 `fce7f26cd8d9806bc4d9e4b5db85b90d80bf26b6`) starts a local service before
 `TI_NN_NodeEnumInit`; the calculator then performs the reverse client connect
-only after the peer-side service has been exercised. The next NGC auto-transport
-candidate adopts only that local-service bootstrap (`TI_NN_StartService`), with
-no CPU-IRQ, timer, `idle`, or `msleep` changes. It is a hypothesis to isolate
-NavNet initialization, not yet hardware evidence.
+only after the peer-side service has been exercised. The old NGC auto-transport
+and local-service candidates are now build/upload blocked. No CPU-IRQ, timer,
+`idle`, or `msleep` workaround is enabled. The remaining experiment is
+host-first: start the bridge, wait for READY, then arm one calculator-side
+attempt.
 The remaining physical gate is still explicit: opening the page, sending a
 request, receiving the response, and keeping the page visible throughout. The
 file transport is retained only as legacy compatibility code and is not used
