@@ -334,6 +334,7 @@ static void nav_disconnect(const char *reason) {
  * NavNet bootstrap path; it is not a scheduler or interrupt workaround.
  * Keep it scoped to the experimental NGC transport candidate and never call
  * it from the default safe page. */
+#ifdef NSPIRE_NGC_AUTO_TRANSPORT
 static void nav_bootstrap_service_callback(nn_ch_t channel, void *data) {
     (void)channel;
     (void)data;
@@ -351,6 +352,7 @@ static void nav_start_local_service(void) {
         set_status("NavNet local service=%d; USB armed", status);
     }
 }
+#endif
 
 static void nav_stop_local_service(void) {
     if (!nav_local_service_started) return;
