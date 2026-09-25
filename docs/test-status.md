@@ -1591,3 +1591,39 @@ within the bounded window, but still emitted no `NODE`, `CONNECTED`, or
 calculator `RX` before the 25-second observation ended. The host startup path
 is therefore repaired; the remaining missing link is the handheld's NavNet
 node discovery while the page is open.
+
+### 2026-09-25 auto-transport candidate upload and launch boundary
+
+With explicit user authorization, the clean auto-transport candidate was
+rebuilt and its manifest/SHA were checked before upload:
+
+```text
+sha256=573db70148ff76ed671f401cab0544aba0d528a119f24ad5493e8fcb3ff82702
+ui_backend=TRUE
+ngc_auto_transport=TRUE
+ngc_local_service=FALSE
+ngc_cpu_irq=FALSE
+ngc_irq_window=FALSE
+ngc_irq_menu=FALSE
+build_status=success
+```
+
+After the USB gate returned `CX2_USB_CANDIDATE product=0xE022`, the normal
+deployment gate returned `RC=0`. An immediate raw readback briefly reported
+`Error: Busy`; after the transfer settled, read-only `--info` still returned
+the CX II CAS identity, but the raw file readback then reported `NoDevice`.
+No helper or N-Link process remained.
+
+The user opened the candidate page. At that point macOS exposed only the TS4
+`NO_NSPIRE_DOCK_DMC_CONTROLLER product=0xACE1`; the normal bridge gate refused
+to start. A single diagnostic run with `NSPIRE_SKIP_USB_GATE=1` reached
+`helper: READY service=0x5001` but produced no `NODE`, `CONNECTED`, or RX before
+the bounded timeout. Starting TI Student Software through Computer Use did not
+restore the handheld: its authoritative UI state remained `No handheld
+selected`, and a bounded read-only `info` probe ended with
+`no connected TI-Nspire node within 12000 ms`.
+
+This is the first physical test of the authorized auto-transport package. It
+proves deployment and page launch were reached, but not a NavNet node or the
+requested same-page request/response. No further key, Menu action, IRQ change,
+or upload was attempted after the node disappeared.
