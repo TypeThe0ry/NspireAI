@@ -1391,6 +1391,16 @@ safe interrupt or NavNet execution context. No further CPU-IRQ candidate
 should be uploaded until a different, documented runtime mechanism is
 identified and host-tested.
 
+The TI Student Software logs provide an independent host-side correlation for
+the same failure window. At 11:53:13 the host added node `200.1` for
+`Nspire 05523712`; the node-info PTTID, metrics, and PTTENTRY requests all
+completed successfully. At 11:54:26 the stream reported
+`TI_CN_ERR_STREAM_DISCONNECT`, and at 11:54:28 the host removed node `200.1`.
+The later helper run could only reach `READY`, with no calculator-originated
+`CONNECTED` or `RX`. This confirms that the host initially saw the handheld,
+but the launched candidate did not sustain the NavNet stream; it is not
+evidence of a bad cable or an unavailable Mac node.
+
 ### 2026-09-25 local-service bootstrap candidate (not uploaded)
 
 The historical calculator-side NavNet ordering was compared against the
