@@ -223,7 +223,7 @@ int main(void) {
      * entry/GC/LCD stage from the clock/transport stage. */
     nav_retry_at = 0;
     ngc_draw();
-#ifdef NSPIRE_NGC_AUTO_TRANSPORT
+#ifdef NSPIRE_NGC_LOCAL_SERVICE
     nav_start_local_service();
     ngc_draw();
 #endif

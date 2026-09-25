@@ -1471,4 +1471,38 @@ but still produced no `NODE`. The native child ignored TERM and was escalated
 to KILL; the wrapper then removed its newly-created RMI server. Follow-up
 process and port-1099 checks were empty, and the USB gate still reported the
 CX II descriptor (`product=0xE022`). This confirms cleanup is bounded while
-the physical NavNet discovery failure remains unresolved.
+ the physical NavNet discovery failure remains unresolved.
+
+### 2026-09-25 auto-arm without local-service bootstrap (not uploaded)
+
+The NGC build previously coupled two independent experiments: enabling the
+periodic calculator-side `nav_try_connect()` path also called
+`TI_NN_StartService(SERVICE_ID, ...)` before the first RTC read. The exact
+local-service candidate was already rejected after a physical launch stall.
+The source now separates these controls:
+
+```text
+NGC_AUTO_TRANSPORT=TRUE    -> arm periodic connect/poll attempts
+NGC_LOCAL_SERVICE=TRUE     -> explicitly add TI_NN_StartService (blocked)
+```
+
+`NGC_LOCAL_SERVICE` defaults to `FALSE`, and both upload paths require a
+manifest field declaring it. A clean Docker build of the safer hypothesis
+(`UI_NGC=TRUE`, `NGC_AUTO_TRANSPORT=TRUE`, `NGC_LOCAL_SERVICE=FALSE`, all IRQ
+flags false) produced:
+
+```text
+sha256=573db70148ff76ed671f401cab0544aba0d528a119f24ad5493e8fcb3ff82702
+ui_backend=TRUE
+ngc_auto_transport=TRUE
+ngc_local_service=FALSE
+ngc_cpu_irq=FALSE
+ngc_irq_window=FALSE
+ngc_irq_menu=FALSE
+build_status=success
+```
+
+The candidate was kept outside `dist` and was not uploaded because the
+handheld still lacks a stable NavNet `NODE`; the verified safe package was
+restored at SHA `a48994c9b1347b7419c4fd4fb4c46302ab296d469242b3fd53b735278bcf9b1e`.
+`make program-test`, the 19-test host suite, and both lifecycle tests pass.

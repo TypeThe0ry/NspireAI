@@ -65,6 +65,18 @@ case "$IRQ_MENU" in
     exit 65
     ;;
 esac
+LOCAL_SERVICE="$(sed -n 's/^ngc_local_service=//p' "$META")"
+case "$LOCAL_SERVICE" in
+  FALSE) ;;
+  TRUE)
+    echo "Refusing local-service bootstrap candidate; this path stalled the CX II" >&2
+    exit 65
+    ;;
+  *)
+    echo "Manifest is missing a valid ngc_local_service field; refusing upload" >&2
+    exit 65
+    ;;
+esac
 ARTIFACT_DIGEST="$(shasum -a 256 "$ARTIFACT" | awk '{print $1}')"
 if ! grep -qx "sha256=$ARTIFACT_DIGEST" "$META"; then
   echo "Artifact/manifest SHA mismatch; refusing upload" >&2

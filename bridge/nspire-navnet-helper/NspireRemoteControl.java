@@ -205,6 +205,11 @@ public final class NspireRemoteControl {
                     throw new IllegalArgumentException("manifest missing valid ngc_irq_menu");
                 if (irqMenu)
                     throw new IllegalArgumentException("refusing physically-crashing Menu-gated IRQ candidate; rebuild with ngc_irq_menu=FALSE");
+                boolean localService = manifestLines.contains("ngc_local_service=TRUE");
+                if (!localService && !manifestLines.contains("ngc_local_service=FALSE"))
+                    throw new IllegalArgumentException("manifest missing valid ngc_local_service");
+                if (localService)
+                    throw new IllegalArgumentException("refusing local-service bootstrap candidate: CX II NavNet startup stalled");
                 if (artifactSha.equals("ce92ae85e1d60cf9c3d4fea08ff1e897d35e13718cafd0ce23080fddd9e13c6c"))
                     throw new IllegalArgumentException("refusing known-crashing IRQ-scope 0922 build");
                 if (artifactSha.equals("53f5f14965d3c4280f86f82565f22916db7eabbace8f6b7b9a4c410b4d94db2e"))

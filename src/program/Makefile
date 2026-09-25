@@ -3,6 +3,7 @@ UI_NGC ?= FALSE
 NGC_PROBE ?= FALSE
 NGC_PROBE_STAGE ?= 0
 NGC_AUTO_TRANSPORT ?= FALSE
+NGC_LOCAL_SERVICE ?= FALSE
 NGC_CPU_IRQ ?= FALSE
 NGC_USB_IRQ_WINDOW ?= FALSE
 NGC_USB_IRQ_MENU ?= FALSE
@@ -26,6 +27,9 @@ endif
 
 ifeq ($(UI_NGC),TRUE)
 GCCFLAGS += -DNSPIRE_UI_NGC
+ifeq ($(NGC_LOCAL_SERVICE),TRUE)
+GCCFLAGS += -DNSPIRE_NGC_LOCAL_SERVICE
+endif
 ifeq ($(NGC_CPU_IRQ),TRUE)
 $(error NGC_CPU_IRQ=TRUE is permanently disabled after the CX II freeze; use a documented scheduler mechanism instead)
 endif
