@@ -39,6 +39,18 @@ case "$IRQ_WINDOW" in
     exit 65
     ;;
 esac
+CPU_IRQ="$(sed -n 's/^ngc_cpu_irq=//p' "$META")"
+case "$CPU_IRQ" in
+  FALSE) ;;
+  TRUE)
+    echo "Refusing CPU-IRQ candidate: CX II flashed once and froze after launch on 2026-09-25; no override is permitted" >&2
+    exit 65
+    ;;
+  *)
+    echo "Manifest is missing a valid ngc_cpu_irq field; refusing upload" >&2
+    exit 65
+    ;;
+esac
 IRQ_MENU="$(sed -n 's/^ngc_irq_menu=//p' "$META")"
 case "$IRQ_MENU" in
   FALSE) ;;
@@ -79,6 +91,8 @@ case "${ARTIFACT_SHA%% *}" in
     echo "Refusing SDK-wrapper NGC candidate: handheld rejected it as unsupported document format on 2026-09-24" >&2; exit 65;;
   b821080614c2d3eb839b38f8a1f45105485f7a4bee26f49dea149bba82e42d20)
     echo "Refusing NGC lcd-order candidate: handheld rejected it as unsupported document format on 2026-09-24" >&2; exit 65;;
+  6fbafc2c81be00e05baf62c898b895e3cbce4a0f6bddd58c5730254369759238)
+    echo "Refusing CPU-IRQ auto-transport candidate: handheld flashed once and froze after launch on 2026-09-25" >&2; exit 65;;
   9cdf132883b0001259aaee62725ae5b0232cf8e7c477c3b879f5cf27cfffee5a|a88bd700651bac3876a23e4b0e45428535102f1834524169219b04a249b499ef|86b883f680a41f3c034167227ae3b0645d26652a8e8a299b2857b0d17a2f1ea1)
     echo "Refusing NGC candidate: handheld rejected this exact SHA as unsupported document format on 2026-09-24" >&2; exit 65;;
 esac

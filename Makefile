@@ -22,6 +22,7 @@ program-test:
 		python3 scripts/check-ngc-startup-order.py && \
 		python3 scripts/check-ngc-safe-loop.py && \
 		python3 scripts/check-ngc-irq-window.py && \
+		python3 scripts/check-ngc-cpu-irq.py && \
 		python3 scripts/check-navnet-bridge-gate.py && \
 		if test -f src/program/nspire_ai.elf && test -f dist/nspire_ai.tns; then python3 scripts/check-ngc-relocations.py src/program/nspire_ai.elf dist/nspire_ai.tns; fi && \
 		./scripts/test-ngc-lcdinit-candidate.sh && \

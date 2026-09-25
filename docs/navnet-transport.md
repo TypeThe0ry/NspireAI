@@ -2,10 +2,11 @@
 
 ## Freeze prevention
 
-The standalone SDL loop uses `NAV_READ_TIMEOUT=1` for `TI_NN_Read`. This is
-the smallest finite timeout accepted by the TI API and prevents a missing or
-invalid host channel from blocking keyboard/event processing. A 2.5-second
-handshake watchdog still disconnects and retries a channel that never answers.
+The standalone SDL loop requests `NAV_READ_TIMEOUT=1` for `TI_NN_Read`.
+This is a requested API timeout, not a verified wall-clock bound on CX II;
+the synchronous call can still freeze keyboard/event processing if USB/NavNet
+scheduling stops. A 2.5-second handshake watchdog only runs when the main loop
+continues executing, so it cannot recover a stuck syscall.
 The local rebuilt artifact currently hashes to
 `7a6c5d9c97b0e52d6cb34cc1368ab4eff76de8c251cec13442d2bc2ebb3fec13`; it must
 be uploaded and retested on the calculator before replacing the deployed

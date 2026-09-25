@@ -3,6 +3,7 @@ UI_NGC ?= FALSE
 NGC_PROBE ?= FALSE
 NGC_PROBE_STAGE ?= 0
 NGC_AUTO_TRANSPORT ?= FALSE
+NGC_CPU_IRQ ?= FALSE
 NGC_USB_IRQ_WINDOW ?= FALSE
 NGC_USB_IRQ_MENU ?= FALSE
 
@@ -25,6 +26,9 @@ endif
 
 ifeq ($(UI_NGC),TRUE)
 GCCFLAGS += -DNSPIRE_UI_NGC
+ifeq ($(NGC_CPU_IRQ),TRUE)
+GCCFLAGS += -DNSPIRE_NGC_CPU_IRQ
+endif
 ifeq ($(NGC_USB_IRQ_WINDOW),TRUE)
 GCCFLAGS += -DNSPIRE_NGC_USB_IRQ_WINDOW
 ZEHNFLAGS += --notice "NGC/RTC UI; experimental IRQ window; USB transport remains gated" --uses-lcd-blit true

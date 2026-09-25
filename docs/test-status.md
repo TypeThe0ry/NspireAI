@@ -1260,3 +1260,133 @@ then exercised locally: the Menu candidate build returns exit 65, and
 tests, both lifecycle tests, and `git diff --check` pass. This validates the
 prevention and host-side cleanup only; it is not a physical CONNECTED or
 request/response result.
+
+### Safe package reopened after Ndless activation
+
+After Ndless was activated again, the previously uploaded Menu-crash artifact
+was read back at the exact SHA and deleted from `/nspire_ai.tns`. The current
+IRQ-neutral package was then uploaded and read back from the same CX II CAS
+node:
+
+```text
+VERIFIED /nspire_ai.tns bytes=25624 sha256=77b33e21661be5556c1f6a9c14e9ba3d0959c8da81ae1fca8546c41a49a5daec
+ngc_irq_window=FALSE
+ngc_irq_menu=FALSE
+```
+
+The user opened that package and reported the on-page status
+`NGC RTC USB idle Menu enables`. A read-only screen/node probe observed no
+stable `NODE` while the page remained open. The production bridge reached
+`helper: READY service=0x5001`, then was stopped with
+`unregisterNotifyCallback` and `helper: STOPPED`; no `CONNECTED`, request RX,
+or response was observed. No Menu key was sent. This confirms the safe package
+does not reproduce the earlier Menu-gated IRQ crash, but the standalone-page
+USB scheduling blocker remains unresolved.
+
+On a fresh read-only check with the page still reported open, macOS exposed the
+`0xE022` CX II USB descriptor, but the Java `info` client initialized and
+registered its callback without receiving a stable node before its 25-second
+outer timeout. Relaunching TI Student Software changed neither its visible
+`No handheld selected` state nor the outcome of a second bounded `info` probe.
+Both probes cleaned up; no helper/RMI child was left running. `READY`, USB
+descriptor visibility, and successful host NavNet initialization therefore
+remain separate from the missing `NODE`/`CONNECTED`/request/response evidence.
+
+A standard 45-second `run-navnet-bridge.sh echo` session after launching TI
+Student Software reproduced the same boundary: `helper: READY service=0x5001`
+with no `NODE`, `CONNECTED`, or `RX`, followed by a controlled
+`helper: STOPPED` shutdown. No background helper/RMI process remained.
+
+The tempting calculator-side `TI_NN_Init(NULL)` hypothesis was rejected before
+editing or uploading code: the [Ndless NavNet API notes](https://www.hackspire.org/Syscalls/)
+document `TI_NN_Init` and `TI_NN_Shutdown` as *computer-side* stack lifecycle
+calls, while calculator-side
+clients enumerate nodes directly. Calling host initialization from the
+handheld would be an unsupported experiment, not an established fix.
+
+### 2026-09-24 connector boundary and CPU-IRQ-only candidate
+
+After a controlled TI Student Software restart, the fresh connector log found
+the actual handheld and opened its USB configuration:
+
+```text
+DeviceAdded(): IORegistryEntryGetName: TI-Nspire(tm) CX II Handheld
+ConfigureNspireDevice(): Successfully set configuration to value 1
+addDevice(): Opening USB\\18\\NSP_02112400
+```
+
+The same `connector0.log` then stopped at
+`kIOMessageServiceIsAttemptingOpen` while the server process remained alive.
+This is stronger evidence than the earlier descriptor-only result: the device
+is present, but the USB/OS scheduling path does not progress after page launch.
+The process was not force-killed and no package was uploaded during this
+observation.
+
+Ndless's loader masks CPU IRQ delivery before entering a standalone program;
+the production NGC loop then intentionally busy-spins with no scheduler call.
+An opt-in `NSPIRE_NGC_CPU_IRQ` candidate was added for the next controlled
+experiment. It enables only `TCT_Local_Control_Interrupts(0)` after the first
+frame, performs no interrupt-controller or timer writes, and restores the
+previous CPU mask on exit. The flag defaults to `FALSE`, both deployment paths
+require an explicit `NSPIRE_ALLOW_NGC_CPU_IRQ_UPLOAD=1` gate, and the existing
+safe artifact remains unchanged. The candidate passed source/static audits and
+host program tests; it has not been packaged or uploaded because the local
+Ndless ARM Docker toolchain is unavailable in this session.
+
+### 2026-09-24 23:02--23:05 fresh USB/node and screen probe
+
+The CX II became visible again on the direct USB path as
+`0x0451:0xE022`. A bounded `run-nspire-remote.sh info` completed with the
+actual handheld node:
+
+```text
+NODE id=1C50000000001049C94E681A757 name=TI-Nspire CX II CAS
+serial=0000000001049C94 runLevel=4 connectionType=0
+```
+
+The production Java bridge then reached `helper: NODE 1` and
+`helper: READY service=0x5001`, but a 20-second session produced no
+`CONNECTED`, calculator-originated `RX`, or response before controlled
+shutdown. This is expected for the currently verified artifact because its
+manifest has `ngc_auto_transport=FALSE`; it is not physical round-trip
+evidence. A read-only screen capture showed the calculator at Home/Scratchpad,
+not inside `nspire_ai.tns`, so the page-open gate was not satisfied in this
+probe. No Menu key, reset, upload, or calculator file deletion was performed.
+
+The root file was then opened through the calculator's own file browser using
+`Ctrl+O`, directory navigation, and one `Enter` on `nspire_ai`. The open call
+did not return within the bounded 20-second remote window. A subsequent
+read-only key probe could still enumerate the USB descriptor, but NavNet's
+`getNodeInfo` returned `-2` and the wrapper timed out. This is a reproducible
+safe-package page-open stall, not `CONNECTED` evidence; the helper was not left
+running and no further key or Menu input was sent.
+
+Docker Desktop was then started and the previously unavailable candidate was
+rebuilt from a clean program directory with `UI_NGC=TRUE`,
+`NGC_CPU_IRQ=TRUE`, and `NGC_AUTO_TRANSPORT=TRUE`. The result is
+`dist/nspire_ai.tns` SHA-256
+`6fbafc2c81be00e05baf62c898b895e3cbce4a0f6bddd58c5730254369759238`, with a
+successful manifest declaring `ngc_irq_window=FALSE` and
+`ngc_irq_menu=FALSE`. `make program-test`, `check-ngc-cpu-irq.py`, and
+`git diff --check` pass. This candidate has not been uploaded: after the safe
+package was opened, the next bounded node probe returned NavNet `getNodeInfo`
+`-2` and timed out, so the handheld is not currently in a safe upload-ready
+state.
+
+### 2026-09-25 CPU-IRQ candidate physical failure
+
+The candidate above was subsequently uploaded only after the USB checker
+reported the normal CX II node. Its exact artifact SHA was
+`6fbafc2c81be00e05baf62c898b895e3cbce4a0f6bddd58c5730254369759238` and its
+manifest enabled both `ngc_cpu_irq=TRUE` and `ngc_auto_transport=TRUE`.
+Immediately after launch the handheld flashed once and then froze. A bounded
+readback/screen probe timed out, and a controlled bridge run reached only
+`helper: READY service=0x5001`; it produced no `NODE`, `CONNECTED`, or
+calculator-originated `RX` before clean shutdown. This is a physical runtime
+failure, not a cable or model-backend result.
+
+The exact SHA is now rejected by both upload entry points. CPU-IRQ
+re-enablement is not a scheduler fix: this experiment did not establish a
+safe interrupt or NavNet execution context. No further CPU-IRQ candidate
+should be uploaded until a different, documented runtime mechanism is
+identified and host-tested.
