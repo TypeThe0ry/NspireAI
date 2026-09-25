@@ -4,7 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND="${1:-${NSPIRE_AI_BACKEND:-echo}}"
 PYTHON_BIN="${PYTHON_BIN:-$ROOT/bridge/.venv/bin/python}"
-HELPER_BIN="${NSPIRE_USB_HELPER:-$ROOT/bridge/nspire-helper/target/debug/nspireai-usb-helper}"
+CUSTOM_USB_HELPER="${NSPIRE_USB_HELPER:-}"
+HELPER_BIN="${CUSTOM_USB_HELPER:-$ROOT/bridge/nspire-helper/target/debug/nspireai-usb-helper}"
 JAVA_HELPER="${NSPIRE_NAVNET_JAVA_HELPER:-$ROOT/bridge/nspire-navnet-helper/build}"
 LOCK_DIR="${NSPIRE_BRIDGE_LOCK_DIR:-${TMPDIR:-/tmp}/nspireai-navnet-bridge.lock}"
 
@@ -55,6 +56,24 @@ fi
 if [[ "$TRANSPORT" == "java" ]]; then
   export NSPIRE_USB_HELPER="$ROOT/scripts/run-nspire-java-helper.sh"
 else
+  export NSPIRE_USB_HELPER="$HELPER_BIN"
+fi
+if [[ "$TRANSPORT" == "raw" && -z "$CUSTOM_USB_HELPER" ]]; then
+  # The raw helper is a source-built binary, not a stable system install.
+  # Always run Cargo's incremental freshness check so a stale target/debug
+  # executable cannot silently use an old service ID or frame implementation.
+  if ! command -v cargo >/dev/null 2>&1; then
+    echo "Cargo is required to refresh the default raw USB helper" >&2
+    exit 2
+  fi
+  RAW_TARGET_DIR="${NSPIRE_RAW_TARGET_DIR:-${TMPDIR:-/tmp}/nspireai-raw-target}"
+  # Homebrew's Cargo can inherit an x86_64 `cc` selection from the TI/Rosetta
+  # toolchain. Pin the native Apple clang defaults unless the caller supplied
+  # an explicit compiler, otherwise a fresh isolated target fails in xcrun.
+  CC="${CC:-clang}" CXX="${CXX:-clang++}" \
+    cargo build --manifest-path "$ROOT/bridge/nspire-helper/Cargo.toml" \
+      --target-dir "$RAW_TARGET_DIR" --quiet
+  HELPER_BIN="$RAW_TARGET_DIR/debug/nspireai-usb-helper"
   export NSPIRE_USB_HELPER="$HELPER_BIN"
 fi
 if [[ "$TRANSPORT" != "java" && ! -x "$HELPER_BIN" ]]; then

@@ -1526,3 +1526,24 @@ then fed only `QUIT`. It reached `READY service=0x5001`, but emitted no
 cleanly, and a post-run process/port check was empty. This independent control
 probe reproduces the missing-node condition without opening a calculator page,
 sending a key, or uploading an artifact.
+
+### 2026-09-25 raw USB freshness and service probe
+
+The raw helper's first `--ping` run printed `sid=0x4051` even though the
+current source declares the project service as `0x5001`; that executable was a
+stale `target/debug` build. After `cargo build --manifest-path
+bridge/nspire-helper/Cargo.toml`, the same binary reported:
+
+```text
+persistent USB handle open; cx2=true ready=true
+NavNet AI service open; sid=0x5001
+TX PING frame
+```
+
+It received no calculator response during a bounded six-second run. The
+read-only `--info` path independently returned the CX II CAS OS 6.2.0.333 and
+the expected handheld ID, proving the raw USB handle works while the
+application/NavNet peer is absent. The raw bridge entrypoint now performs an
+incremental Cargo freshness check for its default helper before starting, so
+an old service ID cannot be used silently; an explicitly supplied custom
+helper remains untouched.
