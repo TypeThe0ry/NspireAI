@@ -8,10 +8,6 @@ static Gc chat_gc;
 static scr_type_t ngc_screen_type;
 static int ngc_lcd_ready;
 static int ngc_transport_armed;
-#ifdef NSPIRE_NGC_CPU_IRQ
-static int ngc_cpu_irq_enabled;
-static int ngc_saved_cpu_mask;
-#endif
 #ifdef NSPIRE_NGC_USB_IRQ_MENU
 static struct nav_irq_window ngc_menu_irq_window;
 static int ngc_menu_irq_window_active;
@@ -37,26 +33,6 @@ static int ngc_prepare_lcd(void) {
     ngc_lcd_ready = 1;
     return 1;
 }
-
-#ifdef NSPIRE_NGC_CPU_IRQ
-/* The Ndless loader enters a standalone program with CPU IRQ delivery masked.
- * This opt-in candidate re-enables only the CPU mask after the first frame;
- * it does not touch the interrupt controller, timer registers, or sleep path.
- * The default build leaves this disabled because the CX II runtime result is
- * not yet verified. */
-static void ngc_enable_cpu_irq(void) {
-    if (ngc_cpu_irq_enabled) return;
-    ngc_saved_cpu_mask = TCT_Local_Control_Interrupts(0);
-    ngc_cpu_irq_enabled = 1;
-}
-
-static void ngc_restore_cpu_irq(void) {
-    if (!ngc_cpu_irq_enabled) return;
-    (void)TCT_Local_Control_Interrupts(-1);
-    TCT_Local_Control_Interrupts(ngc_saved_cpu_mask);
-    ngc_cpu_irq_enabled = 0;
-}
-#endif
 
 static void ngc_line(int y, const char *text) {
     char utf16[LINE_CAP * 2];
@@ -247,13 +223,6 @@ int main(void) {
      * entry/GC/LCD stage from the clock/transport stage. */
     nav_retry_at = 0;
     ngc_draw();
-#ifdef NSPIRE_NGC_CPU_IRQ
-    ngc_enable_cpu_irq();
-    set_status(ngc_transport_armed
-                   ? "NGC/RTC; CPU IRQ on; USB armed"
-                   : "NGC/RTC; CPU IRQ on; USB idle");
-    ngc_draw();
-#endif
     last_tick = nav_clock_ms();
     nav_retry_at = last_tick + NAV_INITIAL_DELAY_MS;
 #ifdef NSPIRE_NGC_USB_IRQ_WINDOW
@@ -299,9 +268,6 @@ int main(void) {
         nav_irq_window_leave(&ngc_menu_irq_window);
 #endif
     if (nav_channel) (void)NAV_OS_CALL(TI_NN_Disconnect(nav_channel));
-#ifdef NSPIRE_NGC_CPU_IRQ
-    ngc_restore_cpu_irq();
-#endif
     return EXIT_SUCCESS;
 #endif
 }

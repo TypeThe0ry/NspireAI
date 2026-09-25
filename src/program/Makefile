@@ -27,7 +27,7 @@ endif
 ifeq ($(UI_NGC),TRUE)
 GCCFLAGS += -DNSPIRE_UI_NGC
 ifeq ($(NGC_CPU_IRQ),TRUE)
-GCCFLAGS += -DNSPIRE_NGC_CPU_IRQ
+$(error NGC_CPU_IRQ=TRUE is permanently disabled after the CX II freeze; use a documented scheduler mechanism instead)
 endif
 ifeq ($(NGC_USB_IRQ_WINDOW),TRUE)
 GCCFLAGS += -DNSPIRE_NGC_USB_IRQ_WINDOW

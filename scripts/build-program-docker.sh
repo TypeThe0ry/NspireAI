@@ -14,6 +14,10 @@ case "$NGC_PROBE" in TRUE|FALSE) ;; *) echo "NSPIRE_NGC_PROBE must be TRUE or FA
 case "$NGC_PROBE_STAGE" in 0|1|2|3|4|5|6|7|8|9|10|11) ;; *) echo "NSPIRE_NGC_PROBE_STAGE must be 0 through 11" >&2; exit 2;; esac
 case "$NGC_AUTO_TRANSPORT" in TRUE|FALSE) ;; *) echo "NSPIRE_NGC_AUTO_TRANSPORT must be TRUE or FALSE" >&2; exit 2;; esac
 case "$NGC_CPU_IRQ" in TRUE|FALSE) ;; *) echo "NSPIRE_NGC_CPU_IRQ must be TRUE or FALSE" >&2; exit 2;; esac
+if [[ "$NGC_CPU_IRQ" == TRUE ]]; then
+  echo "Refusing to build CPU-IRQ candidate: CX II flashed once and froze after launch on 2026-09-25" >&2
+  exit 65
+fi
 case "$NGC_USB_IRQ_WINDOW" in TRUE|FALSE) ;; *) echo "NSPIRE_NGC_USB_IRQ_WINDOW must be TRUE or FALSE" >&2; exit 2;; esac
 case "$NGC_USB_IRQ_MENU" in TRUE|FALSE) ;; *) echo "NSPIRE_NGC_USB_IRQ_MENU must be TRUE or FALSE" >&2; exit 2;; esac
 if [[ "$NGC_USB_IRQ_MENU" == TRUE ]]; then
