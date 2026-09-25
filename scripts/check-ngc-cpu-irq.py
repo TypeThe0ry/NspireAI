@@ -27,6 +27,9 @@ def main() -> int:
         raise SystemExit("FAIL: build paths do not permanently reject CPU-IRQ candidates")
     if "no override is permitted" not in deploy or "no override is permitted" not in remote:
         raise SystemExit("FAIL: upload paths do not hard-block the physically failed CPU-IRQ path")
+    failed_bootstrap = "cc49702f6fa3aa182b0e8daf8ca1dd62eeee14136d17678b70c8bb35f823f14c"
+    if failed_bootstrap not in deploy or failed_bootstrap not in remote:
+        raise SystemExit("FAIL: upload paths do not block the failed local-service bootstrap candidate")
     print("PASS: CPU-IRQ experiment is removed from NGC UI and blocked by build/upload paths")
     return 0
 

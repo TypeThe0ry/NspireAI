@@ -198,6 +198,8 @@ public final class NspireRemoteControl {
                     throw new IllegalArgumentException("refusing CPU-IRQ candidate: CX II flashed once and froze after launch on 2026-09-25; no override is permitted");
                 if (artifactSha.equals("6fbafc2c81be00e05baf62c898b895e3cbce4a0f6bddd58c5730254369759238"))
                     throw new IllegalArgumentException("refusing CPU-IRQ auto-transport candidate: handheld flashed once and froze after launch on 2026-09-25");
+                if (artifactSha.equals("cc49702f6fa3aa182b0e8daf8ca1dd62eeee14136d17678b70c8bb35f823f14c"))
+                    throw new IllegalArgumentException("refusing local-service bootstrap candidate: launch attempt left CX II NavNet screen/info calls unresponsive on 2026-09-25");
                 boolean irqMenu = manifestLines.contains("ngc_irq_menu=TRUE");
                 if (!irqMenu && !manifestLines.contains("ngc_irq_menu=FALSE"))
                     throw new IllegalArgumentException("manifest missing valid ngc_irq_menu");

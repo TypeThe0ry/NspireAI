@@ -1401,7 +1401,7 @@ The later helper run could only reach `READY`, with no calculator-originated
 but the launched candidate did not sustain the NavNet stream; it is not
 evidence of a bad cable or an unavailable Mac node.
 
-### 2026-09-25 local-service bootstrap candidate (not uploaded)
+### 2026-09-25 local-service bootstrap candidate physical failure
 
 The historical calculator-side NavNet ordering was compared against the
 current NGC path. The next candidate starts a local `TI_NN_StartService`
@@ -1420,6 +1420,10 @@ build_status=success
 ```
 
 `make program-test`, the startup-order audit, the CPU-IRQ removal audit, and
-the bridge tests pass. This is a source/build hypothesis only. It has not
-been uploaded or counted as `CONNECTED`; the previous handheld freeze means
-the next physical test requires a recovered Home screen and a fresh USB gate.
+the bridge tests pass. The package was then uploaded after a fresh USB gate
+and read back byte-for-byte with the same SHA. The calculator showed TI's
+`Document Sent` dialog, but after the dialog was acknowledged, bounded remote
+`screen` and `info` calls both timed out while the USB descriptor remained
+present. No `CONNECTED`, calculator `RX`, or response was observed. The exact
+SHA is now blocked by both upload entry points; this candidate must not be
+repeated.

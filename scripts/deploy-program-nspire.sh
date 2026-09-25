@@ -93,6 +93,8 @@ case "${ARTIFACT_SHA%% *}" in
     echo "Refusing NGC lcd-order candidate: handheld rejected it as unsupported document format on 2026-09-24" >&2; exit 65;;
   6fbafc2c81be00e05baf62c898b895e3cbce4a0f6bddd58c5730254369759238)
     echo "Refusing CPU-IRQ auto-transport candidate: handheld flashed once and froze after launch on 2026-09-25" >&2; exit 65;;
+  cc49702f6fa3aa182b0e8daf8ca1dd62eeee14136d17678b70c8bb35f823f14c)
+    echo "Refusing local-service bootstrap candidate: launch attempt left CX II NavNet screen/info calls unresponsive on 2026-09-25" >&2; exit 65;;
   9cdf132883b0001259aaee62725ae5b0232cf8e7c477c3b879f5cf27cfffee5a|a88bd700651bac3876a23e4b0e45428535102f1834524169219b04a249b499ef|86b883f680a41f3c034167227ae3b0645d26652a8e8a299b2857b0d17a2f1ea1)
     echo "Refusing NGC candidate: handheld rejected this exact SHA as unsupported document format on 2026-09-24" >&2; exit 65;;
 esac
