@@ -21,6 +21,10 @@ def main() -> None:
     gc = body.index("    chat_gc = gui_gc_global_GC();")
     if prepare >= gc:
         raise SystemExit("NGC startup regression: GC acquisition must follow lcd_init")
+    if body.index("nav_start_local_service();") >= first_clock:
+        raise SystemExit("NGC transport regression: local NavNet service must start before the first RTC read")
+    if "nav_stop_local_service();" not in body:
+        raise SystemExit("NGC transport cleanup missing: local NavNet service is not stopped on exit")
     helper = text.split("static int ngc_prepare_lcd(void)", 1)[1].split("static void ngc_line", 1)[0]
     if helper.index("ngc_screen_type = lcd_type();") >= helper.index("if (!lcd_init(ngc_screen_type)) return 0;"):
         raise SystemExit("NGC LCD setup regression: lcd_type/lcd_init order changed")

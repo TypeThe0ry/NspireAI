@@ -65,6 +65,13 @@ The standalone page waits 2 seconds before its first node enumeration, retries
 failed enumeration every 3 seconds, and retries a dropped channel every 2
 seconds. This is deliberately conservative backoff while the USB/host state
 settles; it is not evidence that enumeration caused the earlier USB loss.
+The historical Ndless calculator NavNet test (nsptools-history commit
+`fce7f26cd8d9806bc4d9e4b5db85b90d80bf26b6`) starts a local service before
+`TI_NN_NodeEnumInit`; the calculator then performs the reverse client connect
+only after the peer-side service has been exercised. The next NGC auto-transport
+candidate adopts only that local-service bootstrap (`TI_NN_StartService`), with
+no CPU-IRQ, timer, `idle`, or `msleep` changes. It is a hypothesis to isolate
+NavNet initialization, not yet hardware evidence.
 The remaining physical gate is still explicit: opening the page, sending a
 request, receiving the response, and keeping the page visible throughout. The
 file transport is retained only as legacy compatibility code and is not used

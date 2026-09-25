@@ -223,6 +223,10 @@ int main(void) {
      * entry/GC/LCD stage from the clock/transport stage. */
     nav_retry_at = 0;
     ngc_draw();
+#ifdef NSPIRE_NGC_AUTO_TRANSPORT
+    nav_start_local_service();
+    ngc_draw();
+#endif
     last_tick = nav_clock_ms();
     nav_retry_at = last_tick + NAV_INITIAL_DELAY_MS;
 #ifdef NSPIRE_NGC_USB_IRQ_WINDOW
@@ -268,6 +272,7 @@ int main(void) {
         nav_irq_window_leave(&ngc_menu_irq_window);
 #endif
     if (nav_channel) (void)NAV_OS_CALL(TI_NN_Disconnect(nav_channel));
+    nav_stop_local_service();
     return EXIT_SUCCESS;
 #endif
 }

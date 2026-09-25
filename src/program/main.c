@@ -89,6 +89,7 @@ static int history_count;
 static char status_text[LINE_CAP];
 
 static nn_ch_t nav_channel;
+static int nav_local_service_started;
 static int nav_connected;
 static int nav_ping_sent;
 static int nav_handshake_pending;
@@ -326,6 +327,35 @@ static void nav_disconnect(const char *reason) {
     nav_ping_at = 0;
     nav_retry_at = nav_clock_ms() + NAV_DISCONNECT_RETRY_MS;
     set_status("bridge disconnected: %s", reason ? reason : "retrying");
+}
+
+/* Historical Ndless NavNet calculator tests start a local service before
+ * enumerating the computer node.  This appears to be the calculator-side
+ * NavNet bootstrap path; it is not a scheduler or interrupt workaround.
+ * Keep it scoped to the experimental NGC transport candidate and never call
+ * it from the default safe page. */
+static void nav_bootstrap_service_callback(nn_ch_t channel, void *data) {
+    (void)channel;
+    (void)data;
+}
+
+static void nav_start_local_service(void) {
+    int16_t status;
+    if (nav_local_service_started) return;
+    status = NAV_OS_CALL(TI_NN_StartService(SERVICE_ID, NULL,
+                                            nav_bootstrap_service_callback));
+    if (status >= 0) {
+        nav_local_service_started = 1;
+        set_status("NavNet local service ready; USB armed");
+    } else {
+        set_status("NavNet local service=%d; USB armed", status);
+    }
+}
+
+static void nav_stop_local_service(void) {
+    if (!nav_local_service_started) return;
+    (void)NAV_OS_CALL(TI_NN_StopService(SERVICE_ID));
+    nav_local_service_started = 0;
 }
 
 static int nav_try_connect(void) {

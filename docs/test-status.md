@@ -1390,3 +1390,26 @@ re-enablement is not a scheduler fix: this experiment did not establish a
 safe interrupt or NavNet execution context. No further CPU-IRQ candidate
 should be uploaded until a different, documented runtime mechanism is
 identified and host-tested.
+
+### 2026-09-25 local-service bootstrap candidate (not uploaded)
+
+The historical calculator-side NavNet ordering was compared against the
+current NGC path. The next candidate starts a local `TI_NN_StartService`
+endpoint before the first RTC read and stops it during normal exit; it does
+not enable CPU IRQs, touch timers, call `idle`/`msleep`, or change the wire
+protocol. A clean Docker build produced:
+
+```text
+sha256=cc49702f6fa3aa182b0e8daf8ca1dd62eeee14136d17678b70c8bb35f823f14c
+ui_backend=TRUE
+ngc_auto_transport=TRUE
+ngc_cpu_irq=FALSE
+ngc_irq_window=FALSE
+ngc_irq_menu=FALSE
+build_status=success
+```
+
+`make program-test`, the startup-order audit, the CPU-IRQ removal audit, and
+the bridge tests pass. This is a source/build hypothesis only. It has not
+been uploaded or counted as `CONNECTED`; the previous handheld freeze means
+the next physical test requires a recovered Home screen and a fresh USB gate.
