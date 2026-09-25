@@ -156,6 +156,13 @@ CHILD_PID=$!
   if [[ -n "$CHILD_PID" ]] && kill -0 "$CHILD_PID" 2>/dev/null; then
     echo "NspireRemoteControl timed out after ${TIMEOUT_SECONDS}s; cleaning up" >&2
     kill -TERM "$CHILD_PID" 2>/dev/null || true
+    # TI's native USB call can ignore TERM indefinitely. Bound the parent's
+    # wait on that Java child so the EXIT trap can reap the RMI server too.
+    sleep 2
+    if kill -0 "$CHILD_PID" 2>/dev/null; then
+      echo "NspireRemoteControl did not stop after TERM; sending KILL" >&2
+      kill -KILL "$CHILD_PID" 2>/dev/null || true
+    fi
   fi
 ) &
 TIMER_PID=$!

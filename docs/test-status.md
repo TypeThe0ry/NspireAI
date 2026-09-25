@@ -928,7 +928,7 @@ recomputed as
 `46065900de89efb12a56b7b2b2e464c87e8b02132cbd2806c8b71f25478c5`.
 
 The diagnostic launcher `scripts/run-nspire-remote.sh` now has a bounded
-`NSPIRE_REMOTE_TIMEOUT_SECONDS` (30 seconds by default), forwards termination
+`NSPIRE_REMOTE_TIMEOUT_SECONDS` (60 seconds by default), forwards termination
 to its Java child, and removes only newly spawned `RemoteNavnetServer` PIDs.
 A two-second timeout run returned after the deadline with no new helper or RMI
 process; the existing pre-run TI server was preserved. The standard protocol
@@ -1452,3 +1452,16 @@ still saw the USB descriptor but did not receive a NavNet node, and no
 launch/remote-event boundary failure, not evidence of a successful page launch;
 the safe package remains the only package eligible for a future controlled
 test.
+
+### 2026-09-25 diagnostic timeout cleanup retest
+
+With USB still enumerating as `0x0451:0xE022`, a 15-second read-only `info`
+probe reached NavNet initialization but returned no `NODE`. Its Java child
+remained inside a native call after TERM, leaving the launcher and RMI server
+alive until the launcher itself was terminated. The diagnostic wrapper now
+escalates from TERM to KILL after two seconds so its EXIT cleanup can run.
+A bounded `NSPIRE_REMOTE_TIMEOUT_SECONDS=3` retest exited in about five
+seconds (status 143); subsequent process and port-1099 checks found no
+`NspireRemoteControl` or `RemoteNavnetServer` residue. `bash -n` and
+`git diff --check` passed. This is host lifecycle evidence only: no device
+`NODE`, `CONNECTED`, calculator `RX`, or same-page response was verified.
