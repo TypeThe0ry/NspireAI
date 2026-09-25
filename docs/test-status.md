@@ -1516,3 +1516,13 @@ the read-only USB gate still reported `STATE=CX2_USB_CANDIDATE
 product=0xE022`. This rules out an active Student Software process or stale
 project helper as the current cause of the missing `NODE`; it does not prove a
 usable NavNet connection.
+
+### 2026-09-25 direct Java-helper control probe
+
+To separate the diagnostic `getConnectedNodes()` path from the production
+bridge, the standalone Java helper was started directly for five seconds and
+then fed only `QUIT`. It reached `READY service=0x5001`, but emitted no
+`NODE 1`/`NODE 2` callback. The helper and its detached RMI server both exited
+cleanly, and a post-run process/port check was empty. This independent control
+probe reproduces the missing-node condition without opening a calculator page,
+sending a key, or uploading an artifact.
