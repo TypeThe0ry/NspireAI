@@ -72,11 +72,15 @@ enumeration until the host bridge has printed `READY service=0x5001` and the
 user presses Menu once. The first failed synchronous NavNet call permanently
 holds transport for that page; a later single Menu press is the only retry.
 An offline candidate can additionally start the historical calculator-side
-`TI_NN_StartService(SERVICE_ID, ...)` only on that Menu arm, after the host is
-ready (`NSPIRE_NGC_MENU_LOCAL_SERVICE=TRUE`). This is distinct from the old
-startup local-service candidate: the default package keeps the option false,
-and deployment requires an explicit opt-in because this Menu-local-service
-variant still needs a physical test.
+`TI_NN_StartService(0x5002, ...)` only on that Menu arm, after the host is
+ready (`NSPIRE_NGC_MENU_LOCAL_SERVICE=TRUE`). The Mac helper still exposes
+the application service as `0x5001`; setting
+`NSPIRE_BOOTSTRAP_SERVICE_ID=0x5002` makes it call the calculator's separate
+bootstrap service once on `NODE 1`, write a bounded probe, read the fixed
+acknowledgement, and disconnect. This follows the historical TI test's
+two-service ordering and is disabled by default. The default package keeps
+the option false, and deployment requires an explicit opt-in because this
+Menu-local-service variant still needs a physical test.
 The previous 2/3/2-second automatic retry loop was removed after the
 auto-transport candidate reproduced a transition from the handheld `0xE022`
 interface to the TS4 `0xACE1` dock controller. A cable replug resets that USB

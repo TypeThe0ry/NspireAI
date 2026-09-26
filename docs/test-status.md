@@ -20,7 +20,7 @@ the current live bridge still has no physical `CONNECTED`, calculator-originated
 `RX`, or same-page response.  Those remain separate device-gated evidence and
 are not inferred from `READY`, `NODE`, or the USB product ID alone.
 
-### 2026-09-26 deferred local-service candidate
+### 2026-09-26 deferred local-service candidate (two-service bootstrap v3)
 
 The safe package remained USB-idle after the host bridge reached `READY` and a
 single Menu arm produced no `NODE`; a read-only remote screen probe then timed
@@ -33,12 +33,18 @@ The historical calculator-side `TI_NN_StartService` path is now separated into
 an explicit `NSPIRE_NGC_MENU_LOCAL_SERVICE=TRUE` build. It is invoked only by
 the first Menu arm, after the host is already ready; it is not called during
 page startup, does not enable CPU IRQs, does not add automatic retries, and is
-not part of the safe package. The candidate built cleanly through the Docker
-Ndless toolchain:
+not part of the safe package. The first candidate used `0x5001` for both the
+host and calculator service and was superseded before upload. The reviewed v3
+candidate instead exposes calculator bootstrap service `0x5002`, while the
+Mac helper keeps the application service at `0x5001` and can call `0x5002`
+only when `NSPIRE_BOOTSTRAP_SERVICE_ID=0x5002` is explicitly set. This mirrors
+the historical two-service ordering: host calls the calculator service first,
+then the calculator connects back to the host service. The candidate built
+cleanly through the Docker Ndless toolchain:
 
 ```text
-sha256=4670938f5ffdd2ff6c0ad66e44cffc3b2c35f115db069f3f5c907ab2d94b2a20
-bytes=26156
+sha256=c8c7b9977ae933ef4efe2f7fc6f8dad717abc0fe21b7f45fa95a884df991dc06
+bytes=26340
 ui_backend=TRUE
 ngc_auto_transport=FALSE
 ngc_local_service=FALSE
@@ -49,13 +55,16 @@ ngc_irq_menu=FALSE
 build_status=success
 ```
 
-The candidate was copied out of `dist/` and the verified safe package was
-rebuilt/restored at SHA
-`f3e0506602168626e70f1c335f8e76db3f3ec5014d88ca98a47a338d3b3b5b5d`, with
-`ngc_menu_local_service=FALSE`. The candidate has not been uploaded; both
-deployment paths require an explicit
-`NSPIRE_ALLOW_NGC_MENU_LOCAL_SERVICE_UPLOAD=1` override. No physical result
-is inferred from this build.
+The candidate is currently staged only in `dist/` for review; it has not been
+uploaded. Both deployment paths require an explicit
+`NSPIRE_ALLOW_NGC_MENU_LOCAL_SERVICE_UPLOAD=1` override, and a candidate
+bridge run must additionally set `NSPIRE_BOOTSTRAP_SERVICE_ID=0x5002`. No
+physical result is inferred from this build. After review, the verified safe
+package must be rebuilt/restored with `ngc_menu_local_service=FALSE` before
+normal deployment. It has now been rebuilt and restored at SHA
+`9e861a992dbaa7445866deca00d5d1cf05d3d9328a63735be0430d4b221526fb`
+(`25,992` bytes); `dist/nspire_ai.tns.meta` records
+`ngc_menu_local_service=FALSE` and `build_status=success`.
 If `StartService` returns a negative status, this candidate immediately holds
 transport and does not continue into `NodeEnumInit`; the safe artifact is
 unchanged.

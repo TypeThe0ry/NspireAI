@@ -55,6 +55,7 @@
 #define LINE_CAP 192
 
 #define SERVICE_ID 0x5001 /* project-private NavNet application service */
+#define CALC_LOCAL_SERVICE_ID 0x5002 /* bootstrap peer service, candidate only */
 
 /* NavNet node enumeration is a calculator/host transport operation, not a
  * local socket lookup.  Give the USB stack time to settle after the page is
@@ -364,14 +365,26 @@ static void nav_disconnect(const char *reason) {
  * it from the default safe page. */
 #if defined(NSPIRE_NGC_LOCAL_SERVICE) || defined(NSPIRE_NGC_MENU_LOCAL_SERVICE)
 static void nav_bootstrap_service_callback(nn_ch_t channel, void *data) {
-    (void)channel;
     (void)data;
+    /* The historical NavNet test makes the PC call the calculator's local
+     * service before the calculator connects back to the PC service.  Keep
+     * this callback deliberately tiny and candidate-only: one bounded read,
+     * then a fixed acknowledgement. */
+    {
+        unsigned char request[32];
+        uint32_t received = 0;
+        const char ready[] = "NSAI bootstrap ready";
+        if (NAV_OS_CALL(TI_NN_Read(channel, NAV_READ_TIMEOUT, request,
+                                   sizeof(request), (uint32_t)&received)) >= 0)
+            (void)NAV_OS_CALL(TI_NN_Write(channel, (void *)ready,
+                                           (uint32_t)sizeof(ready)));
+    }
 }
 
 static int nav_start_local_service(void) {
     int16_t status;
     if (nav_local_service_started) return 1;
-    status = NAV_OS_CALL(TI_NN_StartService(SERVICE_ID, NULL,
+    status = NAV_OS_CALL(TI_NN_StartService(CALC_LOCAL_SERVICE_ID, NULL,
                                             nav_bootstrap_service_callback));
     if (status >= 0) {
         nav_local_service_started = 1;
@@ -386,7 +399,7 @@ static int nav_start_local_service(void) {
 
 static void nav_stop_local_service(void) {
     if (!nav_local_service_started) return;
-    (void)NAV_OS_CALL(TI_NN_StopService(SERVICE_ID));
+    (void)NAV_OS_CALL(TI_NN_StopService(CALC_LOCAL_SERVICE_ID));
     nav_local_service_started = 0;
 }
 

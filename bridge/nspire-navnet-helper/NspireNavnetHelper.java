@@ -39,6 +39,9 @@ public final class NspireNavnetHelper {
     private static volatile Thread connectionWatcher;
     private static volatile Thread nodePoller;
     private static volatile boolean nodePresent;
+    private static volatile int bootstrapServiceId;
+    private static volatile ConnectionHandle bootstrapConnection;
+    private static volatile Thread bootstrapThread;
 
     /*
      * TI's macOS NavNet 6.2 native server has a reproducible teardown crash:
@@ -219,6 +222,15 @@ public final class NspireNavnetHelper {
                     if (present != nodePresent) {
                         nodePresent = present;
                         emit("NODE " + (present ? "1" : "0"));
+                        if (present && bootstrapServiceId > 0 && nodes != null) {
+                            try {
+                                startBootstrap(proxy.getHandle(nodes[0]));
+                            } catch (RuntimeException ignored) {
+                                // A transient RMI node snapshot can disappear
+                                // between getConnectedNodes/getHandle; the
+                                // next state transition or callback retries.
+                            }
+                        }
                     }
                 } catch (Exception ignored) {
                     // The callback remains authoritative when the RMI server
@@ -236,9 +248,67 @@ public final class NspireNavnetHelper {
         nodePoller.start();
     }
 
+    /*
+     * Candidate-only handshake for the calculator's separate local service.
+     * The historical TI test calls the calculator service from the PC before
+     * the calculator connects back to the PC service.  Keep this off by
+     * default: the production bridge must not open an extra NavNet channel.
+     */
+    private static synchronized void startBootstrap(NodeHandle node) {
+        if (bootstrapServiceId <= 0 || node == null || stopping) return;
+        if (bootstrapThread != null && bootstrapThread.isAlive()) return;
+        bootstrapThread = new Thread(() -> {
+            try {
+                /* The node can be visible before the calculator reaches the
+                 * Menu arm and registers 0x5002. Retry only in this explicit
+                 * candidate mode, for a bounded window, so the normal helper
+                 * never adds another NavNet call or timer. */
+                for (int attempt = 0; attempt < 40 && !stopping; attempt++) {
+                    ConnectionHandle handle = new ConnectionHandle();
+                    try {
+                        int status = NavNet.connect(node, bootstrapServiceId, handle);
+                        emit(String.format("BOOTSTRAP CONNECT service=0x%04x attempt=%d status=%d",
+                                bootstrapServiceId, attempt + 1, status));
+                        if (status >= 0) {
+                            bootstrapConnection = handle;
+                            byte[] request = "NSAI bootstrap".getBytes(StandardCharsets.US_ASCII);
+                            int writeStatus = NavNet.write(handle, request, request.length);
+                            emit("BOOTSTRAP WRITE status=" + writeStatus);
+                            if (writeStatus >= 0) {
+                                byte[] response = new byte[64];
+                                IntegerBox received = new IntegerBox();
+                                int readStatus = NavNet.read(handle, 1000L, response, received);
+                                emit("BOOTSTRAP RX status=" + readStatus +
+                                        " length=" + received.getValue());
+                            }
+                            return;
+                        }
+                    } finally {
+                        if (bootstrapConnection == handle) bootstrapConnection = null;
+                        try { NavNet.disconnect(handle); } catch (RuntimeException ignored) { }
+                    }
+                    try {
+                        Thread.sleep(250L);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+            } catch (RuntimeException error) {
+                emit("BOOTSTRAP ERR " + error.getMessage());
+            } finally {
+                bootstrapThread = null;
+            }
+        }, "nspire-navnet-bootstrap");
+        bootstrapThread.setDaemon(true);
+        bootstrapThread.start();
+    }
+
     public static void main(String[] args) throws Exception {
         final int serviceId = Integer.decode(System.getenv().getOrDefault(
                 "NSPIRE_SERVICE_ID", "0x5001"));
+        bootstrapServiceId = Integer.decode(System.getenv().getOrDefault(
+                "NSPIRE_BOOTSTRAP_SERVICE_ID", "0"));
         String tmp = System.getProperty("java.io.tmpdir");
         String javaHome = System.getProperty("java.home") + "/bin";
         NavNetCommProxy proxy;
@@ -263,6 +333,7 @@ public final class NspireNavnetHelper {
                 @Override public void nodeNotificationCallback(NodeHandle node, int event) {
                     nodePresent = event != 0;
                     emit("NODE " + event);
+                    if (event != 0) startBootstrap(node);
                 }
             });
             status = NavNet.startService(serviceId, new Context(), new ServiceCallbackListener() {
@@ -307,6 +378,10 @@ public final class NspireNavnetHelper {
             ConnectionHandle handle = connection;
             if (handle != null) {
                 try { NavNet.disconnect(handle); } catch (RuntimeException ignored) { }
+            }
+            ConnectionHandle bootstrap = bootstrapConnection;
+            if (bootstrap != null) {
+                try { NavNet.disconnect(bootstrap); } catch (RuntimeException ignored) { }
             }
             if (shouldStopService()) {
                 try { NavNet.stopService(serviceId); } catch (RuntimeException ignored) { }
