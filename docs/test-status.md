@@ -24,9 +24,10 @@ are not inferred from `READY`, `NODE`, or the USB product ID alone.
 
 The safe package remained USB-idle after the host bridge reached `READY` and a
 single Menu arm produced no `NODE`; a read-only remote screen probe then timed
-out while waiting for `getConnectedNodes()`. This confirms that the remaining
-failure is at calculator-side NavNet bootstrap, not merely a stale helper
-callback.
+out while waiting for `getConnectedNodes()`. This rules out a simple missing
+`NODE` log replay as the sole explanation, but does not yet distinguish a
+calculator-side NavNet bootstrap failure from a lower-level host/RMI USB
+session failure.
 
 The historical calculator-side `TI_NN_StartService` path is now separated into
 an explicit `NSPIRE_NGC_MENU_LOCAL_SERVICE=TRUE` build. It is invoked only by
