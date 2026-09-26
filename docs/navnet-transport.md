@@ -88,11 +88,12 @@ endpoint, but is not a software fix.
 The historical Ndless calculator NavNet test (nsptools-history commit
 `fce7f26cd8d9806bc4d9e4b5db85b90d80bf26b6`) starts a local service before
 `TI_NN_NodeEnumInit`; the calculator then performs the reverse client connect
-only after the peer-side service has been exercised. The old NGC auto-transport
-and local-service candidates are now build/upload blocked. No CPU-IRQ, timer,
-`idle`, or `msleep` workaround is enabled. The remaining experiment is
-host-first: start the bridge, wait for READY, then arm one calculator-side
-attempt.
+only after the peer-side service has been exercised. The old NGC auto-transport,
+startup local-service, and two-service Menu candidates are now build/upload
+blocked after physical freezes. No CPU-IRQ, timer, `idle`, or `msleep`
+workaround is enabled. The two-service candidate did produce one host
+`CONNECTED` callback, but the calculator crashed on Menu and the channel
+degraded to `-257`; this does not establish a usable page bridge.
 The remaining physical gate is still explicit: opening the page, sending a
 request, receiving the response, and keeping the page visible throughout. The
 file transport is retained only as legacy compatibility code and is not used

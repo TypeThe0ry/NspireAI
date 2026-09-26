@@ -20,6 +20,39 @@ the current live bridge still has no physical `CONNECTED`, calculator-originated
 `RX`, or same-page response.  Those remain separate device-gated evidence and
 are not inferred from `READY`, `NODE`, or the USB product ID alone.
 
+### 2026-09-26 two-service bootstrap v3 physical failure
+
+With explicit user authorization, candidate v3 was uploaded after a fresh
+`STATE=CX2_USB_CANDIDATE product=0xE022` gate. Its exact SHA was
+`c8c7b9977ae933ef4efe2f7fc6f8dad717abc0fe21b7f45fa95a884df991dc06`.
+The host first exercised the new ordering successfully:
+
+```text
+NODE 1
+BOOTSTRAP CONNECT service=0x5002 attempt=1 status=1
+BOOTSTRAP WRITE status=1
+BOOTSTRAP RX status=0 length=0
+```
+
+The user then opened the candidate and pressed Menu; the calculator flashed,
+crashed, and froze. The host subsequently observed one application callback
+followed by an invalid connection loop and node removal:
+
+```text
+CONNECTED handle=0x2
+ERR NavNet.read=-257; retrying
+NODE 2
+NODE 0
+```
+
+No valid NSAI request or same-page response was received. This is authoritative
+physical failure evidence against the exact candidate, not a cable or backend
+failure. SHA `c8c7b9977ae933ef4efe2f7fc6f8dad717abc0fe21b7f45fa95a884df991dc06`
+is now permanently rejected by both the N-Link shell deployment path and the
+Java direct-upload path. Do not re-upload this package or repeat the Menu
+experiment. The local `dist/` package was restored to the safe USB-idle build
+after the test.
+
 ### 2026-09-26 deferred local-service candidate (two-service bootstrap v3)
 
 The safe package remained USB-idle after the host bridge reached `READY` and a
