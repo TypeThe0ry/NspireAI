@@ -174,6 +174,24 @@ also produced no node, so callback address selection is not sufficient to
 explain the empty USB enumeration.  The official UI still reports `No
 handheld selected`, leaving the physical node gate open.
 
+### 2026-09-26 Home recovery and positive-only node reconciliation
+
+After the user returned the calculator to Home without unplugging it, a fresh
+bridge run received a real NavNet add callback twice:
+
+```text
+helper: NODE 1
+helper: NODE 1
+helper: READY service=0x5001
+```
+
+The old reconciliation poller then read one transient empty snapshot and
+incorrectly emitted `NODE 0`.  Since the callback is the authoritative source
+for removal, the poller now only reconciles positive presence; it no longer
+turns a single empty `getConnectedNodes()` read into a disconnect.  The run
+still ended before calculator `CONNECTED`/`RX`, so the next physical step is to
+open the page while this corrected bridge is already running.
+
 ### 2026-09-26 deferred local-service candidate (two-service bootstrap v3)
 
 The safe package remained USB-idle after the host bridge reached `READY` and a

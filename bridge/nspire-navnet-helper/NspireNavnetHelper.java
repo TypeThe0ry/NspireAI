@@ -231,16 +231,25 @@ public final class NspireNavnetHelper {
                 try {
                     INodeID[] nodes = proxy.getConnectedNodes();
                     boolean present = nodes != null && nodes.length > 0;
-                    if (present != nodePresent) {
-                        nodePresent = present;
-                        emit("NODE " + (present ? "1" : "0"));
-                        if (present && bootstrapServiceId > 0 && nodes != null) {
+                    /* The callback is authoritative for removal.  During
+                     * connector startup getConnectedNodes() can briefly
+                     * return an empty snapshot immediately after the same
+                     * node's ADD callback; treating that one read as NODE 0
+                     * made a real node disappear from the bridge.  Use the
+                     * poller only to reconcile positive presence and leave
+                     * removal to the callback. */
+                    if (present) {
+                        if (!nodePresent) {
+                            nodePresent = true;
+                            emit("NODE 1");
+                        }
+                        if (bootstrapServiceId > 0 && nodes != null) {
                             try {
                                 startBootstrap(proxy.getHandle(nodes[0]));
                             } catch (RuntimeException ignored) {
                                 // A transient RMI node snapshot can disappear
                                 // between getConnectedNodes/getHandle; the
-                                // next state transition or callback retries.
+                                // next positive poll or callback retries.
                             }
                         }
                     }

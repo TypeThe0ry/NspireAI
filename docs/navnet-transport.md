@@ -207,3 +207,9 @@ by the standalone `nspire_ai.tns` program.
   1099 and no new crash report appeared.  The run still had no `NODE 1`, and
   the official UI stayed at `No handheld selected`; lifecycle safety is fixed,
   but physical node discovery is not.
+* 2026-09-26: Returning the calculator to Home produced two real `NODE 1`
+  callbacks, followed by a transient empty poll that the old code reported as
+  `NODE 0`.  Node reconciliation is now positive-only; callback removal stays
+  authoritative.  This recovers the host node signal, but the page-open
+  `CONNECTED`/request/response loop still needs to be exercised with the
+  corrected bridge running.
