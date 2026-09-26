@@ -1918,22 +1918,22 @@ enabling IRQ experiments, `idle()`, or `msleep()`. The change is committed as
 so no physical retest or `CONNECTED` claim is made until a clean artifact can
 be built and separately authorized for upload.
 
-### 2026-09-26 bounded OS-event poll candidate
+### 2026-09-26 event-poll and held-key candidates rejected
 
-The first clean NGC package after the key/RTC throttles was uploaded and read
-back exactly (`d58b5974...`), but launching it still made the read-only screen
-client time out. That ruled out the stale-artifact explanation, while a second
-remote client also exposed a separate shared `RemoteNavnetServer` shutdown
-race when it closed its RMI connection. The handheld was returned to Home and
-the host bridge was stopped before changing the package again.
+The clean package containing a `get_event()` poll was uploaded and read back
+exactly (`564c62ff...`), but launching it again made the remote key client time
+out. Ndless documents `get_event()` only as “Poll for an OS event”; its CX II
+6.2 blocking, timer, interrupt, and scheduler semantics are not specified.
+Blindly consuming the event record could also swallow Home/Menu events, so it
+was removed from the production path rather than called a USB fix.
 
-The NGC loop now calls Ndless's documented non-blocking `get_event()` poll once
-per 128 scheduler spins, alongside the existing bounded RTC sample. This is a
-cooperative OS/USB hand-off and does not enable CPU IRQs or call `idle()` or
-`msleep()`. The fresh Docker-built artifact is:
+The next candidate only decimates the expensive full matrix-key path: the
+`any_key_pressed()`/`isKeyPressed()` scan runs once per 512 loop spins instead
+of on every spin, while the page remains USB-idle until Menu. Its fresh
+Docker-built artifact is:
 
 ```text
-sha256=564c62ff131aa007efd2c0797208153d584fbd7f16e6467e43e42fec3d2bb973
+sha256=88e56d28c3a48cbf530378efa092e0e8cff7440e98799bdd54cc56a6752d22e0
 ui_backend=TRUE
 ngc_auto_transport=FALSE
 ngc_local_service=FALSE
@@ -1944,7 +1944,6 @@ ngc_irq_menu=FALSE
 build_status=success
 ```
 
-`make program-test`, the NGC safe-loop/device-artifact audits, 19 bridge tests,
-and both helper/bridge lifecycle tests pass. This is a host/build result only;
-the new package has not yet been uploaded or credited with calculator
-`CONNECTED`, request/RX, or same-page response evidence.
+The NGC safe-loop/device-artifact audits, `make program-test`, and 19 bridge
+tests pass. The held-key candidate has not been uploaded or credited with
+calculator `CONNECTED`, request/RX, or same-page response evidence.

@@ -176,19 +176,6 @@ static int ngc_keys(void) {
     return changed;
 }
 
-/* Return through Ndless's documented OS-event poll at a bounded cadence.
- * Unlike idle()/msleep(), get_event() is a non-blocking poll and does not
- * rewrite the CX II timer or interrupt mask.  Keeping one event record local
- * prevents the standalone page from spinning exclusively in matrix and RTC
- * syscalls while the OS drains USB work.  Matrix scanning remains the
- * authoritative edge detector for the small text UI; this poll is only the
- * cooperative OS/USB hand-off. */
-static void ngc_pump_os_event(void) {
-    struct s_ns_event event;
-    memset(&event, 0, sizeof(event));
-    (void)get_event(&event);
-}
-
 int main(void) {
 #ifdef NSPIRE_NGC_PROBE
     /* Incremental entry probe. Stage 0 calls no Ndless UI API; stage 1 adds
@@ -249,6 +236,7 @@ int main(void) {
 #else
     uint32_t last_tick;
     unsigned scheduler_spin = 0;
+    unsigned key_sample_spin = 0;
 #ifdef NSPIRE_NGC_USB_IRQ_WINDOW
     struct nav_irq_window irq_window = {0};
 #endif
@@ -292,7 +280,15 @@ int main(void) {
     }
 #endif
     while (!done) {
-        int changed = ngc_keys();
+        int changed = 0;
+        /* A stuck/held virtual key makes any_key_pressed() take the expensive
+         * full matrix path.  Do not run that path on every tight-loop spin;
+         * this bounded sample still keeps normal text input responsive while
+         * preventing one launch/menu key from monopolising the task. */
+        if (++key_sample_spin >= 512u) {
+            key_sample_spin = 0;
+            changed = ngc_keys();
+        }
         /* RTC access is an OS syscall too.  Sampling it on every tight-loop
          * iteration defeats the no-key fast path and needlessly competes with
          * the handheld's USB work queue.  Keep the UI edge path responsive,
@@ -301,7 +297,6 @@ int main(void) {
         if (++scheduler_spin >= 128u) {
             scheduler_spin = 0;
             now = nav_clock_ms();
-            ngc_pump_os_event();
         }
         if (done) break;
 #if defined(NSPIRE_NGC_LOCAL_SERVICE) || defined(NSPIRE_NGC_MENU_LOCAL_SERVICE)
@@ -324,10 +319,9 @@ int main(void) {
         if (ngc_ui_dirty) ngc_draw();
         /* Do not call msleep here.  Ndless's CX II implementation rewrites
          * SP804 timer registers and masks every IRQ except timer 19 while it
-         * waits.  The documented get_event() poll above is the only OS hand-
-         * off in this loop; this bounded NOP yield keeps the safe startup
-         * build timer-neutral while transport remains explicitly experimental
-         * until a non-blocking NavNet API is proven. */
+         * waits.  This bounded NOP yield keeps the safe startup build
+         * timer-neutral while transport remains explicitly experimental until
+         * a non-blocking NavNet API is proven. */
         for (volatile unsigned spin = 0; spin < 256; ++spin)
             __asm volatile("nop");
     }
