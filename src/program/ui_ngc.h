@@ -100,6 +100,14 @@ static int ngc_keys(void) {
                  * failed attempt.  Treat the next Menu press as the single
                  * explicit retry instead of requiring an off/on double press. */
                 if (ngc_transport_armed && nav_transport_is_blocked()) {
+#ifdef NSPIRE_NGC_MENU_LOCAL_SERVICE
+                    if (!nav_start_local_service()) {
+                        nav_transport_hold();
+                        changed = 1;
+                        previous[i] = down;
+                        continue;
+                    }
+#endif
                     nav_transport_rearm();
                     set_status("USB retry armed; bridge must be READY");
                     changed = 1;
@@ -113,7 +121,12 @@ static int ngc_keys(void) {
                      * service before enumerating the Mac peer.  Keep this
                      * candidate behind the explicit Menu arm so page launch
                      * remains USB-idle and the host bridge is already READY. */
-                    nav_start_local_service();
+                    if (!nav_start_local_service()) {
+                        nav_transport_hold();
+                        changed = 1;
+                        previous[i] = down;
+                        continue;
+                    }
 #endif
 #ifdef NSPIRE_NGC_USB_IRQ_MENU
                     if (!ngc_menu_irq_window_active &&

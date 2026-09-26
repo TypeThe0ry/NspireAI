@@ -37,7 +37,7 @@ not part of the safe package. The candidate built cleanly through the Docker
 Ndless toolchain:
 
 ```text
-sha256=0b4b56e13775a0f2eb0e87b72b4640433b64c596aaf28b2a1da27a4a50f692c3
+sha256=4670938f5ffdd2ff6c0ad66e44cffc3b2c35f115db069f3f5c907ab2d94b2a20
 bytes=26156
 ui_backend=TRUE
 ngc_auto_transport=FALSE
@@ -56,6 +56,9 @@ rebuilt/restored at SHA
 deployment paths require an explicit
 `NSPIRE_ALLOW_NGC_MENU_LOCAL_SERVICE_UPLOAD=1` override. No physical result
 is inferred from this build.
+If `StartService` returns a negative status, this candidate immediately holds
+transport and does not continue into `NodeEnumInit`; the safe artifact is
+unchanged.
 
 ## 2026-09-24 user-reported NGC freeze and timer-neutral startup mitigation
 

@@ -368,16 +368,18 @@ static void nav_bootstrap_service_callback(nn_ch_t channel, void *data) {
     (void)data;
 }
 
-static void nav_start_local_service(void) {
+static int nav_start_local_service(void) {
     int16_t status;
-    if (nav_local_service_started) return;
+    if (nav_local_service_started) return 1;
     status = NAV_OS_CALL(TI_NN_StartService(SERVICE_ID, NULL,
                                             nav_bootstrap_service_callback));
     if (status >= 0) {
         nav_local_service_started = 1;
         set_status("NavNet local service ready; USB armed");
+        return 1;
     } else {
-        set_status("NavNet local service=%d; USB armed", status);
+        set_status("NavNet local service=%d; USB held", status);
+        return 0;
     }
 }
 #endif
