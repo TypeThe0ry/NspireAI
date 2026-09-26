@@ -26,6 +26,8 @@ def main() -> int:
         raise SystemExit("FAIL: NGC key loop lacks the aggregate no-key fast path")
     if "if (++scheduler_spin >= 128u)" not in text:
         raise SystemExit("FAIL: NGC loop samples the RTC on every spin")
+    if "ngc_pump_os_event();" not in production or "static void ngc_pump_os_event(void)" not in text:
+        raise SystemExit("FAIL: NGC loop lacks the documented non-blocking OS event poll")
     if "static void nav_bootstrap_service_callback" in main_text:
         callback = main_text.split("static void nav_bootstrap_service_callback", 1)[1]
         callback = callback.split("static void nav_local_service_poll", 1)[0]

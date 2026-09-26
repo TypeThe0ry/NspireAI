@@ -1917,3 +1917,34 @@ enabling IRQ experiments, `idle()`, or `msleep()`. The change is committed as
 --check` pass. The already-installed calculator package predates this change,
 so no physical retest or `CONNECTED` claim is made until a clean artifact can
 be built and separately authorized for upload.
+
+### 2026-09-26 bounded OS-event poll candidate
+
+The first clean NGC package after the key/RTC throttles was uploaded and read
+back exactly (`d58b5974...`), but launching it still made the read-only screen
+client time out. That ruled out the stale-artifact explanation, while a second
+remote client also exposed a separate shared `RemoteNavnetServer` shutdown
+race when it closed its RMI connection. The handheld was returned to Home and
+the host bridge was stopped before changing the package again.
+
+The NGC loop now calls Ndless's documented non-blocking `get_event()` poll once
+per 128 scheduler spins, alongside the existing bounded RTC sample. This is a
+cooperative OS/USB hand-off and does not enable CPU IRQs or call `idle()` or
+`msleep()`. The fresh Docker-built artifact is:
+
+```text
+sha256=564c62ff131aa007efd2c0797208153d584fbd7f16e6467e43e42fec3d2bb973
+ui_backend=TRUE
+ngc_auto_transport=FALSE
+ngc_local_service=FALSE
+ngc_menu_local_service=FALSE
+ngc_cpu_irq=FALSE
+ngc_irq_window=FALSE
+ngc_irq_menu=FALSE
+build_status=success
+```
+
+`make program-test`, the NGC safe-loop/device-artifact audits, 19 bridge tests,
+and both helper/bridge lifecycle tests pass. This is a host/build result only;
+the new package has not yet been uploaded or credited with calculator
+`CONNECTED`, request/RX, or same-page response evidence.
