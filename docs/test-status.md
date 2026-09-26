@@ -80,6 +80,27 @@ at SHA `9e861a992dbaa7445866deca00d5d1cf05d3d9328a63735be0430d4b221526fb`.
 The v3 SHA remains permanently blocked and must not be used as a comparison
 run.
 
+### 2026-09-26 v4 physical no-peer result
+
+After explicit authorization, v4 SHA
+`fd41f654c4047cc7683f98702cf1ffeb33d430b8ef7aa62d3d8f6780c173645c` was
+uploaded through a fresh `0xE022` USB gate. The host bridge reached
+`READY service=0x5001`. With the v4 page open, the user pressed Menu once; the
+page displayed:
+
+```text
+USB held enum init -274 Menu retries
+```
+
+The installed TI NavNet constants identify `-274` as the empty/enumeration-done
+condition. During this attempt the host received no `NODE`, `CONNECTED`,
+calculator `RX`, or same-page response. The bridge then stopped cleanly with
+`STOPPED` and no helper/RMI residue. This is a non-crashing but unsuccessful
+physical transport result: v4 avoided the v3 callback crash, but it did not
+make a calculator page visible to the host. Do not count `-274` as a cable
+failure or as a completed bridge; the next change must address the CX II page
+USB scheduling boundary rather than add another application framing variant.
+
 ### 2026-09-26 deferred local-service candidate (two-service bootstrap v3)
 
 The safe package remained USB-idle after the host bridge reached `READY` and a
