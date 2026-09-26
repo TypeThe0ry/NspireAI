@@ -329,6 +329,18 @@ public final class NspireNavnetHelper {
         }
         int status;
         try {
+            /* NavNet.init() establishes the RMI client, but the TI Java API
+             * exposes connector loading as a separate operation.  Student
+             * Software normally performs this during its own startup; a
+             * standalone helper must do it explicitly or it can report READY
+             * while getConnectedNodes() remains empty even though macOS sees
+             * the CX II USB descriptor. */
+            int connectorStatus = NavNet.loadConnectors();
+            emit("CONNECTORS status=" + connectorStatus);
+            if (connectorStatus < 0) {
+                emit("ERR NavNet.loadConnectors=" + connectorStatus);
+                return;
+            }
             NavNet.registerNotifyCallback(new NodeNotificationListener() {
                 @Override public void nodeNotificationCallback(NodeHandle node, int event) {
                     nodePresent = event != 0;

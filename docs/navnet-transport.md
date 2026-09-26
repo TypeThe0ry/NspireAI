@@ -190,3 +190,9 @@ by the standalone `nspire_ai.tns` program.
   official UI remained `No handheld selected`. Both runs cleaned up normally;
   no calculator package or Menu retry was performed. Treat this as missing
   host NavNet node availability, not a framing or service-ID defect.
+* 2026-09-26: The standalone helper now calls `NavNet.loadConnectors()`
+  explicitly after `NavNetCommProxy.init()`. The operation returned
+  `CONNECTORS status=1` and the helper reached `READY service=0x5001`, but a
+  bounded live run still produced no `NODE 1`. This confirms connector-load
+  initialization is successful without closing the lower-level host node
+  discovery gap; no physical calculator pass is inferred.

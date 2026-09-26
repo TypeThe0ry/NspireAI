@@ -121,6 +121,31 @@ Menu presses were requested.  The next physical prerequisite is a real
 host-side `NODE 1`; only then is another calculator-side transport test
 meaningful.
 
+### 2026-09-26 explicit connector-load host probe
+
+The standalone Java helper now calls the public TI `NavNet.loadConnectors()`
+operation explicitly after `NavNetCommProxy.init()` and before registering the
+service callback.  A clean host run returned:
+
+```text
+CONNECTORS status=1
+READY service=0x5001
+```
+
+The helper stayed alive for the bounded observation window, but still received
+no `NODE 1`; it was stopped cleanly with no helper/RMI child left behind.  The
+helper build, bridge protocol suite (19 tests), and both lifecycle tests pass.
+This is a safe host-side initialization fix and useful evidence that connector
+loading itself succeeds; it does not claim USB node discovery, calculator
+`CONNECTED`, `RX`, or a same-page response.  No package was uploaded and no
+additional Menu press was part of that bounded host probe.
+
+After the probe, the user made one controlled Menu press on the already-open
+page and reported the same visible status, `USB held enum init -274 Menu
+retries`.  No bridge was running concurrently, so this repeat is recorded as
+calculator-side confirmation of the empty-enumeration state only; it is not a
+new host `NODE` or calculator `CONNECTED` result.
+
 ### 2026-09-26 deferred local-service candidate (two-service bootstrap v3)
 
 The safe package remained USB-idle after the host bridge reached `READY` and a
