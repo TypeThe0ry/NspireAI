@@ -4,6 +4,7 @@ import com.ti.eps.navnet.IntegerBox;
 import com.ti.eps.navnet.NodeHandle;
 import com.ti.eps.navnet.NodeNotificationListener;
 import com.ti.eps.navnet.ServiceCallbackListener;
+import com.ti.et.education.commproxy.INodeID;
 /* Use the public client facade.  The server-side class has the same method
  * names but calls libnavnet.dylib directly; using it from this process skips
  * Student Software's RemoteNavnetServer and crashes while registering a
@@ -36,6 +37,8 @@ public final class NspireNavnetHelper {
     private static volatile boolean stopping;
     private static volatile Thread reader;
     private static volatile Thread connectionWatcher;
+    private static volatile Thread nodePoller;
+    private static volatile boolean nodePresent;
 
     /*
      * TI's macOS NavNet 6.2 native server has a reproducible teardown crash:
@@ -198,6 +201,41 @@ public final class NspireNavnetHelper {
         connectionWatcher.start();
     }
 
+    /**
+     * TI's RMI server can already know about a handheld when a new client
+     * registers its callback.  In that case the callback is not guaranteed to
+     * replay an ADD event, leaving the bridge at READY forever even though the
+     * USB device is still 0xE022.  Poll the public connected-node list as a
+     * read-only reconciliation path; this never opens a calculator channel or
+     * invokes a device syscall.
+     */
+    private static void startNodePoller(NavNetCommProxy proxy) {
+        if (nodePoller != null && nodePoller.isAlive()) return;
+        nodePoller = new Thread(() -> {
+            while (!stopping) {
+                try {
+                    INodeID[] nodes = proxy.getConnectedNodes();
+                    boolean present = nodes != null && nodes.length > 0;
+                    if (present != nodePresent) {
+                        nodePresent = present;
+                        emit("NODE " + (present ? "1" : "0"));
+                    }
+                } catch (Exception ignored) {
+                    // The callback remains authoritative when the RMI server
+                    // is between reconnects; retry on the next poll interval.
+                }
+                try {
+                    Thread.sleep(500L);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }, "nspire-navnet-node-poller");
+        nodePoller.setDaemon(true);
+        nodePoller.start();
+    }
+
     public static void main(String[] args) throws Exception {
         final int serviceId = Integer.decode(System.getenv().getOrDefault(
                 "NSPIRE_SERVICE_ID", "0x5001"));
@@ -223,6 +261,7 @@ public final class NspireNavnetHelper {
         try {
             NavNet.registerNotifyCallback(new NodeNotificationListener() {
                 @Override public void nodeNotificationCallback(NodeHandle node, int event) {
+                    nodePresent = event != 0;
                     emit("NODE " + event);
                 }
             });
@@ -243,6 +282,7 @@ public final class NspireNavnetHelper {
             }
             emit(String.format("READY service=0x%04x", serviceId));
             startConnectionWatcher();
+            startNodePoller(proxy);
             BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
             String line;
             while (!stopping && (line = input.readLine()) != null) {

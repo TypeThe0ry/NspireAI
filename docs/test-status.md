@@ -1,5 +1,25 @@
 # Verification record
 
+## 2026-09-26 helper node-state reconciliation
+
+The TI RMI callback does not reliably replay an already-attached handheld to a
+new helper client.  After a bridge restart this could leave the helper at
+`READY service=0x5001` even while the USB layer still exposed the CX II
+interface, making the host appear disconnected until another attach event.
+
+`NspireNavnetHelper` now runs a daemon reconciliation poller after service
+registration.  Every 500 ms it reads the public `getConnectedNodes()` list and
+emits a single `NODE 1`/`NODE 0` transition when the list changes.  This is a
+read-only host-side check: it does not open a calculator channel, invoke a
+calculator NavNet syscall, or alter the NGC page's USB scheduling.  The normal
+node notification callback remains authoritative when RMI notifications are
+available.
+
+The Java helper build and lifecycle regression pass with the poller enabled;
+the current live bridge still has no physical `CONNECTED`, calculator-originated
+`RX`, or same-page response.  Those remain separate device-gated evidence and
+are not inferred from `READY`, `NODE`, or the USB product ID alone.
+
 ## 2026-09-24 user-reported NGC freeze and timer-neutral startup mitigation
 
 The user reported that opening the AI program after Ndless activation made the

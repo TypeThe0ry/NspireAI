@@ -24,6 +24,12 @@ requested UX because every response upload is a TI document transfer and may
 show an “accept new file” prompt.
 
 The default host path uses TI's Java NavNet helper and `startService(0x5001)`.
+The helper consumes TI's node notification callback and also performs a
+read-only `getConnectedNodes()` reconciliation poll every 500 ms.  TI's RMI
+server can already have a handheld attached before a new client registers its
+callback, so the poller closes that host-side restart gap by emitting only
+state transitions (`NODE 1`/`NODE 0`).  It never opens the calculator channel
+and cannot manufacture an application `CONNECTED` event.
 A direct host probe on 2026-09-20 returned `READY service=0x5001` without a
 calculator connection. Neither event proves an application connection:
 `CONNECTED` and an NSAI request/response round trip are still required. The TI
