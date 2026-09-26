@@ -21,8 +21,9 @@ def main() -> None:
     gc = body.index("    chat_gc = gui_gc_global_GC();")
     if prepare >= gc:
         raise SystemExit("NGC startup regression: GC acquisition must follow lcd_init")
-    if body.index("nav_start_local_service();") >= first_clock:
-        raise SystemExit("NGC transport regression: local NavNet service must start before the first RTC read")
+    startup_service = "#ifdef NSPIRE_NGC_LOCAL_SERVICE\n    nav_start_local_service();"
+    if startup_service in body and body.index(startup_service) >= first_clock:
+        raise SystemExit("NGC transport regression: startup local NavNet service moved after the first RTC read")
     if "nav_stop_local_service();" not in body:
         raise SystemExit("NGC transport cleanup missing: local NavNet service is not stopped on exit")
     helper = text.split("static int ngc_prepare_lcd(void)", 1)[1].split("static void ngc_line", 1)[0]

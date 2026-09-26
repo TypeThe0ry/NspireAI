@@ -20,6 +20,42 @@ the current live bridge still has no physical `CONNECTED`, calculator-originated
 `RX`, or same-page response.  Those remain separate device-gated evidence and
 are not inferred from `READY`, `NODE`, or the USB product ID alone.
 
+### 2026-09-26 deferred local-service candidate
+
+The safe package remained USB-idle after the host bridge reached `READY` and a
+single Menu arm produced no `NODE`; a read-only remote screen probe then timed
+out while waiting for `getConnectedNodes()`. This confirms that the remaining
+failure is at calculator-side NavNet bootstrap, not merely a stale helper
+callback.
+
+The historical calculator-side `TI_NN_StartService` path is now separated into
+an explicit `NSPIRE_NGC_MENU_LOCAL_SERVICE=TRUE` build. It is invoked only by
+the first Menu arm, after the host is already ready; it is not called during
+page startup, does not enable CPU IRQs, does not add automatic retries, and is
+not part of the safe package. The candidate built cleanly through the Docker
+Ndless toolchain:
+
+```text
+sha256=0b4b56e13775a0f2eb0e87b72b4640433b64c596aaf28b2a1da27a4a50f692c3
+bytes=26156
+ui_backend=TRUE
+ngc_auto_transport=FALSE
+ngc_local_service=FALSE
+ngc_menu_local_service=TRUE
+ngc_cpu_irq=FALSE
+ngc_irq_window=FALSE
+ngc_irq_menu=FALSE
+build_status=success
+```
+
+The candidate was copied out of `dist/` and the verified safe package was
+rebuilt/restored at SHA
+`f3e0506602168626e70f1c335f8e76db3f3ec5014d88ca98a47a338d3b3b5b5d`, with
+`ngc_menu_local_service=FALSE`. The candidate has not been uploaded; both
+deployment paths require an explicit
+`NSPIRE_ALLOW_NGC_MENU_LOCAL_SERVICE_UPLOAD=1` override. No physical result
+is inferred from this build.
+
 ## 2026-09-24 user-reported NGC freeze and timer-neutral startup mitigation
 
 The user reported that opening the AI program after Ndless activation made the

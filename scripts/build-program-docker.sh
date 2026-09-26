@@ -7,6 +7,7 @@ NGC_PROBE="${NSPIRE_NGC_PROBE:-FALSE}"
 NGC_PROBE_STAGE="${NSPIRE_NGC_PROBE_STAGE:-0}"
 NGC_AUTO_TRANSPORT="${NSPIRE_NGC_AUTO_TRANSPORT:-FALSE}"
 NGC_LOCAL_SERVICE="${NSPIRE_NGC_LOCAL_SERVICE:-FALSE}"
+NGC_MENU_LOCAL_SERVICE="${NSPIRE_NGC_MENU_LOCAL_SERVICE:-FALSE}"
 NGC_CPU_IRQ="${NSPIRE_NGC_CPU_IRQ:-FALSE}"
 NGC_USB_IRQ_WINDOW="${NSPIRE_NGC_USB_IRQ_WINDOW:-FALSE}"
 NGC_USB_IRQ_MENU="${NSPIRE_NGC_USB_IRQ_MENU:-FALSE}"
@@ -19,6 +20,7 @@ if [[ "$NGC_AUTO_TRANSPORT" == TRUE ]]; then
   exit 65
 fi
 case "$NGC_LOCAL_SERVICE" in TRUE|FALSE) ;; *) echo "NSPIRE_NGC_LOCAL_SERVICE must be TRUE or FALSE" >&2; exit 2;; esac
+case "$NGC_MENU_LOCAL_SERVICE" in TRUE|FALSE) ;; *) echo "NSPIRE_NGC_MENU_LOCAL_SERVICE must be TRUE or FALSE" >&2; exit 2;; esac
 if [[ "$NGC_LOCAL_SERVICE" == TRUE && "$NGC_AUTO_TRANSPORT" != TRUE ]]; then
   echo "NSPIRE_NGC_LOCAL_SERVICE=TRUE requires NSPIRE_NGC_AUTO_TRANSPORT=TRUE" >&2
   exit 2
@@ -48,6 +50,7 @@ docker run --rm \
   -e "NGC_PROBE_STAGE=$NGC_PROBE_STAGE" \
   -e "NGC_AUTO_TRANSPORT=$NGC_AUTO_TRANSPORT" \
   -e "NGC_LOCAL_SERVICE=$NGC_LOCAL_SERVICE" \
+  -e "NGC_MENU_LOCAL_SERVICE=$NGC_MENU_LOCAL_SERVICE" \
   -e "NGC_CPU_IRQ=$NGC_CPU_IRQ" \
   -e "NGC_USB_IRQ_WINDOW=$NGC_USB_IRQ_WINDOW" \
   -e "NGC_USB_IRQ_MENU=$NGC_USB_IRQ_MENU" \
@@ -70,7 +73,7 @@ docker run --rm \
     # Do not reuse main.o across SDL/NGC flag changes; the object must be
     # rebuilt when UI_NGC changes.
     make -C /work/src/program clean
-    make -C /work/src/program UI_NGC="$UI_NGC" NGC_PROBE="$NGC_PROBE" NGC_PROBE_STAGE="$NGC_PROBE_STAGE" NGC_AUTO_TRANSPORT="$NGC_AUTO_TRANSPORT" NGC_LOCAL_SERVICE="$NGC_LOCAL_SERVICE" NGC_CPU_IRQ="$NGC_CPU_IRQ" NGC_USB_IRQ_WINDOW="$NGC_USB_IRQ_WINDOW" NGC_USB_IRQ_MENU="$NGC_USB_IRQ_MENU"
+    make -C /work/src/program UI_NGC="$UI_NGC" NGC_PROBE="$NGC_PROBE" NGC_PROBE_STAGE="$NGC_PROBE_STAGE" NGC_AUTO_TRANSPORT="$NGC_AUTO_TRANSPORT" NGC_LOCAL_SERVICE="$NGC_LOCAL_SERVICE" NGC_MENU_LOCAL_SERVICE="$NGC_MENU_LOCAL_SERVICE" NGC_CPU_IRQ="$NGC_CPU_IRQ" NGC_USB_IRQ_WINDOW="$NGC_USB_IRQ_WINDOW" NGC_USB_IRQ_MENU="$NGC_USB_IRQ_MENU"
   '
 
 mkdir -p "$ROOT/dist"
@@ -81,6 +84,7 @@ sha256=$ARTIFACT_SHA
 ui_backend=$UI_NGC
 ngc_auto_transport=$NGC_AUTO_TRANSPORT
 ngc_local_service=$NGC_LOCAL_SERVICE
+ngc_menu_local_service=$NGC_MENU_LOCAL_SERVICE
 ngc_cpu_irq=$NGC_CPU_IRQ
 ngc_irq_window=$NGC_USB_IRQ_WINDOW
 ngc_irq_menu=$NGC_USB_IRQ_MENU
@@ -92,6 +96,7 @@ printf 'ngc_probe=%s\n' "$NGC_PROBE"
 printf 'ngc_probe_stage=%s\n' "$NGC_PROBE_STAGE"
 printf 'ngc_auto_transport=%s\n' "$NGC_AUTO_TRANSPORT"
 printf 'ngc_local_service=%s\n' "$NGC_LOCAL_SERVICE"
+printf 'ngc_menu_local_service=%s\n' "$NGC_MENU_LOCAL_SERVICE"
 printf 'ngc_cpu_irq=%s\n' "$NGC_CPU_IRQ"
 printf 'ngc_irq_window=%s\n' "$NGC_USB_IRQ_WINDOW"
 printf 'ngc_irq_menu=%s\n' "$NGC_USB_IRQ_MENU"

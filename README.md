@@ -75,6 +75,18 @@ make program-docker
 ./scripts/build-nspire-navnet-helper.sh
 ```
 
+The deferred calculator-side NavNet bootstrap candidate is offline-only until
+its physical behavior is reviewed:
+
+```sh
+make program-docker-ngc-menu-local-service
+```
+
+It sets `NSPIRE_NGC_MENU_LOCAL_SERVICE=TRUE`, which calls `StartService` only
+after a Menu arm. Uploading that candidate requires the explicit
+`NSPIRE_ALLOW_NGC_MENU_LOCAL_SERVICE_UPLOAD=1` gate and is not implied by a
+successful build.
+
 Run all protocol/backend tests:
 
 ```sh

@@ -108,6 +108,13 @@ static int ngc_keys(void) {
                 }
                 ngc_transport_armed = !ngc_transport_armed;
                 if (ngc_transport_armed) {
+#ifdef NSPIRE_NGC_MENU_LOCAL_SERVICE
+                    /* Historical NavNet clients start a calculator-side
+                     * service before enumerating the Mac peer.  Keep this
+                     * candidate behind the explicit Menu arm so page launch
+                     * remains USB-idle and the host bridge is already READY. */
+                    nav_start_local_service();
+#endif
 #ifdef NSPIRE_NGC_USB_IRQ_MENU
                     if (!ngc_menu_irq_window_active &&
                         nav_irq_window_enter(&ngc_menu_irq_window)) {

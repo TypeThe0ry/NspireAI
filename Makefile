@@ -1,4 +1,4 @@
-.PHONY: all program-docker program-docker-ngc program-docker-ngc-auto-transport clean bridge-test program-test
+.PHONY: all program-docker program-docker-ngc program-docker-ngc-menu-local-service program-docker-ngc-auto-transport clean bridge-test program-test
 
 all: program-docker
 
@@ -7,6 +7,9 @@ program-docker:
 
 program-docker-ngc:
 	NSPIRE_UI_NGC=TRUE ./scripts/build-program-docker.sh
+
+program-docker-ngc-menu-local-service:
+	NSPIRE_UI_NGC=TRUE NSPIRE_NGC_MENU_LOCAL_SERVICE=TRUE ./scripts/build-program-docker.sh
 
 program-docker-ngc-auto-transport:
 	@echo "auto-transport was removed: build program-docker-ngc and arm once with Menu after bridge READY" >&2

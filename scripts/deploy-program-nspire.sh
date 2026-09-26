@@ -89,6 +89,20 @@ case "$LOCAL_SERVICE" in
     exit 65
     ;;
 esac
+MENU_LOCAL_SERVICE="$(sed -n 's/^ngc_menu_local_service=//p' "$META")"
+case "$MENU_LOCAL_SERVICE" in
+  FALSE) ;;
+  TRUE)
+    if [[ "${NSPIRE_ALLOW_NGC_MENU_LOCAL_SERVICE_UPLOAD:-}" != "1" ]]; then
+      echo "Refusing Menu-local-service candidate without explicit upload confirmation" >&2
+      exit 65
+    fi
+    ;;
+  *)
+    echo "Manifest is missing a valid ngc_menu_local_service field; refusing upload" >&2
+    exit 65
+    ;;
+esac
 ARTIFACT_DIGEST="$(shasum -a 256 "$ARTIFACT" | awk '{print $1}')"
 if ! grep -qx "sha256=$ARTIFACT_DIGEST" "$META"; then
   echo "Artifact/manifest SHA mismatch; refusing upload" >&2

@@ -71,6 +71,12 @@ The standalone NGC page is USB-idle at startup. It performs no NavNet
 enumeration until the host bridge has printed `READY service=0x5001` and the
 user presses Menu once. The first failed synchronous NavNet call permanently
 holds transport for that page; a later single Menu press is the only retry.
+An offline candidate can additionally start the historical calculator-side
+`TI_NN_StartService(SERVICE_ID, ...)` only on that Menu arm, after the host is
+ready (`NSPIRE_NGC_MENU_LOCAL_SERVICE=TRUE`). This is distinct from the old
+startup local-service candidate: the default package keeps the option false,
+and deployment requires an explicit opt-in because this Menu-local-service
+variant still needs a physical test.
 The previous 2/3/2-second automatic retry loop was removed after the
 auto-transport candidate reproduced a transition from the handheld `0xE022`
 interface to the TS4 `0xACE1` dock controller. A cable replug resets that USB
