@@ -109,8 +109,9 @@ descriptor (`0x0451:0xE022`), but two fresh Java bridge runs both stopped at
 The first run was made with TI-Nspire Student Software closed; starting the
 official software and repeating the run produced the same result.  The
 official UI itself remained at `No handheld selected... please connect a
-handheld`.  Both bridge runs were stopped cleanly and left no helper/RMI
-processes.
+handheld`.  Both bridge runs were stopped cleanly and left no helper or
+bridge-created RMI child.  The second run intentionally left the official TI
+application's own server untouched.
 
 This A/B separates USB descriptor presence from TI NavNet node availability:
 the calculator's `USB held enum init -274 Menu retries` is consistent with an
