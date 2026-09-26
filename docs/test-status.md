@@ -1898,3 +1898,22 @@ tests). The clean USB-idle/Menu-retry NGC package now builds with SHA-256
 matching `build_status=success`, `ngc_auto_transport=FALSE` manifest. It has
 not been uploaded because the handheld is currently still enumerating only
 `0xACE1`; no claim of `CONNECTED` or same-page response is made here.
+
+### 2026-09-26 native-page launch stall and key-scan mitigation
+
+With the host bridge left running (`NODE 1`, `READY service=0x5001`), a
+read-only NavNet screen capture entered the handheld document browser and
+confirmed that `nspire_ai` (not a Lua backup) was selected. Sending one
+`Enter` to launch it did not produce `CONNECTED`; subsequent screen/key
+operations timed out and `getNodeInfo` returned `-2`. This is evidence that
+the running standalone page monopolized or wedged the calculator-side
+OS/USB path, not evidence of a cable failure or a successful bridge session.
+
+The NGC key loop previously called `isKeyPressed()` for every matrix key on
+every spin, even with no key pressed. It now uses `any_key_pressed()` as a
+fast path and clears edge state when idle, reducing syscall pressure without
+enabling IRQ experiments, `idle()`, or `msleep()`. The change is committed as
+`52a8fb8` and pushed to `origin/main`; `make program-test` and `git diff
+--check` pass. The already-installed calculator package predates this change,
+so no physical retest or `CONNECTED` claim is made until a clean artifact can
+be built and separately authorized for upload.
