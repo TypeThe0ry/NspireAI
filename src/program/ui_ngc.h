@@ -235,6 +235,7 @@ int main(void) {
     return EXIT_SUCCESS;
 #else
     uint32_t last_tick;
+    unsigned scheduler_spin = 0;
 #ifdef NSPIRE_NGC_USB_IRQ_WINDOW
     struct nav_irq_window irq_window = {0};
 #endif
@@ -279,7 +280,15 @@ int main(void) {
 #endif
     while (!done) {
         int changed = ngc_keys();
-        uint32_t now = nav_clock_ms();
+        /* RTC access is an OS syscall too.  Sampling it on every tight-loop
+         * iteration defeats the no-key fast path and needlessly competes with
+         * the handheld's USB work queue.  Keep the UI edge path responsive,
+         * but sample the deadline clock at a bounded cadence. */
+        uint32_t now = last_tick;
+        if (++scheduler_spin >= 128u) {
+            scheduler_spin = 0;
+            now = nav_clock_ms();
+        }
         if (done) break;
 #if defined(NSPIRE_NGC_LOCAL_SERVICE) || defined(NSPIRE_NGC_MENU_LOCAL_SERVICE)
         /* Service callbacks only hand off a channel; keep synchronous NavNet
