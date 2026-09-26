@@ -183,3 +183,10 @@ by the standalone `nspire_ai.tns` program.
   NavNet service ceiling after reserving the 16-byte NSAI header). Python
   tests cover a multi-frame 5000+ byte response.
 * 2026-09-21: Repeated live checks found the macOS USB descriptor (`0x0451:0xE022`) without a usable handheld session. TI `connector*.log` reports `Failed to Open Device ... kIOReturnExclusiveAccess`; the TI UI remains `No handheld selected`, and bounded raw/Java probes produce timeout or `NoDevice`. This is below the application protocol, so the page-open `CONNECTED`/request/response gate remains open.
+* 2026-09-26: A fresh host-side A/B after the v4 page reported `USB held enum
+  init -274 Menu retries` reproduced the boundary. With TI Student Software
+  closed, and again after starting it, the USB descriptor gate saw `0xE022`
+  but the Java helper stayed at `READY service=0x5001` with no `NODE`. The
+  official UI remained `No handheld selected`. Both runs cleaned up normally;
+  no calculator package or Menu retry was performed. Treat this as missing
+  host NavNet node availability, not a framing or service-ID defect.

@@ -101,6 +101,25 @@ make a calculator page visible to the host. Do not count `-274` as a cable
 failure or as a completed bridge; the next change must address the CX II page
 USB scheduling boundary rather than add another application framing variant.
 
+### 2026-09-26 host-side A/B for the `-274` report
+
+After the Menu report, the read-only USB gate continued to see the CX II
+descriptor (`0x0451:0xE022`), but two fresh Java bridge runs both stopped at
+`READY service=0x5001` without `NODE`, `CONNECTED`, or calculator `RX`.
+The first run was made with TI-Nspire Student Software closed; starting the
+official software and repeating the run produced the same result.  The
+official UI itself remained at `No handheld selected... please connect a
+handheld`.  Both bridge runs were stopped cleanly and left no helper/RMI
+processes.
+
+This A/B separates USB descriptor presence from TI NavNet node availability:
+the calculator's `USB held enum init -274 Menu retries` is consistent with an
+empty host node list, not evidence that the cable is bad and not evidence of
+a successful page connection.  No new package was uploaded and no further
+Menu presses were requested.  The next physical prerequisite is a real
+host-side `NODE 1`; only then is another calculator-side transport test
+meaningful.
+
 ### 2026-09-26 deferred local-service candidate (two-service bootstrap v3)
 
 The safe package remained USB-idle after the host bridge reached `READY` and a
