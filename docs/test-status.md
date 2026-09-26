@@ -146,6 +146,34 @@ retries`.  No bridge was running concurrently, so this repeat is recorded as
 calculator-side confirmation of the empty-enumeration state only; it is not a
 new host `NODE` or calculator `CONNECTED` result.
 
+### 2026-09-26 shared-server teardown crash and cleanup guard
+
+The clean host run also produced an authoritative TI crash report after the
+helper stopped.  `NN-crash-20260926-203006.log` identifies
+`libnavnet.dylib!List_RemoveItem` while the RMI server handled
+`NavNet.stopService(0x5001)`; the server log shows the shared `0x5001` service
+being removed immediately before the crash.  This explains why a later TI
+window can remain open while NavNet node discovery is dead.
+
+`NspireNavnetHelper` now leaves both native teardown operations off by default:
+`NSPIRE_NAVNET_STOP_SERVICE=1` remains the explicit opt-in for `stopService`,
+and the new `NSPIRE_NAVNET_PROXY_SHUTDOWN=1` opt-in is required for
+`NavNetCommProxy.shutdown()`.  Normal cleanup disconnects this helper,
+unregisters its callback, emits `STOPPED`, and lets the wrapper reap only a
+server it created.  Build, 19 bridge tests, and both lifecycle tests pass after
+this change.  A shared-server physical retest is still required; no
+`CONNECTED`/request/response claim is made from the crash fix alone.
+
+The guard was then exercised against a freshly restarted TI Student Software
+server.  The helper reached `CONNECTORS status=1` and `READY service=0x5001`,
+then stopped at the end of the bounded window with `STOPPED` and no `NODE`.
+Afterward the shared `RemoteNavnetServer` was still listening on port 1099,
+and `appmuxServer0.log` recorded the helper as a non-last client; no new
+`NN-crash-*` file was created.  A temporary `127.0.0.1` RMI callback binding
+also produced no node, so callback address selection is not sufficient to
+explain the empty USB enumeration.  The official UI still reports `No
+handheld selected`, leaving the physical node gate open.
+
 ### 2026-09-26 deferred local-service candidate (two-service bootstrap v3)
 
 The safe package remained USB-idle after the host bridge reached `READY` and a

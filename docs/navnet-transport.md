@@ -196,3 +196,14 @@ by the standalone `nspire_ai.tns` program.
   bounded live run still produced no `NODE 1`. This confirms connector-load
   initialization is successful without closing the lower-level host node
   discovery gap; no physical calculator pass is inferred.
+* 2026-09-26: The same shared-server run produced a native teardown crash in
+  `libnavnet.dylib!List_RemoveItem` while removing service `0x5001`.  The
+  helper now leaves `NavNetCommProxy.shutdown()` disabled by default, so a
+  bridge stop cannot ask TI's shared server to perform that unsafe native
+  teardown.  This is a lifecycle guard, not a claim of physical node or
+  calculator-page success.
+* 2026-09-26: After a clean TI Student Software restart, the guarded helper
+  stopped with `STOPPED` while the shared RMI server remained alive on port
+  1099 and no new crash report appeared.  The run still had no `NODE 1`, and
+  the official UI stayed at `No handheld selected`; lifecycle safety is fixed,
+  but physical node discovery is not.

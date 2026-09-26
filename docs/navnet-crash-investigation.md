@@ -89,6 +89,18 @@
   leaves that call behind the explicit `NSPIRE_NAVNET_STOP_SERVICE=1` switch;
   normal cleanup disconnects and bounds the remaining proxy shutdown.
 
+- 2026-09-26 shared-server teardown evidence: the fresh
+  `NN-crash-20260926-203006.log` reports SIGSEGV in
+  `libnavnet.dylib!List_RemoveItem+0x34` while the RMI server handles
+  `NavNet.stopService(0x5001)`.  The paired `navnetlog0.log` removes the
+  shared `0x5001` service at the same timestamp, and `appmuxServer0.log` shows
+  several callback unregisters followed by server shutdown.  This is a
+  host-side native teardown failure, not calculator-side protocol evidence.
+  The helper therefore no longer calls `NavNetCommProxy.shutdown()` by default:
+  `NSPIRE_NAVNET_PROXY_SHUTDOWN=1` is now an explicit controlled-test switch,
+  matching the existing `NSPIRE_NAVNET_STOP_SERVICE=1` guard.  The wrapper
+  still cleans only a detached server created by that invocation.
+
 - 2026-09-23 after restarting TI Student Software, a fresh server launch
   failed again before node enumeration. `NN-crash-20260923-182923.log` shows
   `CoreFoundation!_CFGetNonObjCTypeID` called by

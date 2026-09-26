@@ -57,6 +57,18 @@ public final class NspireNavnetHelper {
                 "NSPIRE_NAVNET_STOP_SERVICE", "0"));
     }
 
+    /* NavNetCommProxy.shutdown() calls the server-side NavNet.shutdown().
+     * When the server is shared with TI Student Software, that native teardown
+     * can remove the shared 0x5001 service and crash libnavnet even though the
+     * helper itself is the only client being stopped.  The wrapper owns only a
+     * server it created, so the safe default is to terminate this client after
+     * unregistering its callback and leave the shared server alive.  Keep an
+     * opt-in switch for controlled runtime experiments. */
+    private static boolean shouldShutdownProxy() {
+        return "1".equals(System.getenv().getOrDefault(
+                "NSPIRE_NAVNET_PROXY_SHUTDOWN", "0"));
+    }
+
     private static void armShutdownWatchdog() {
         Thread watchdog = new Thread(() -> {
             try {
@@ -404,7 +416,9 @@ public final class NspireNavnetHelper {
             // still removes the detached server if the best-effort thread is
             // cut short by the bounded halt.
             emit("STOPPED");
-            shutdownProxyBestEffort(proxy);
+            if (shouldShutdownProxy()) {
+                shutdownProxyBestEffort(proxy);
+            }
             // Avoid running TI's shutdown hook a second time and guarantee
             // that no RMI client thread keeps the helper alive after cleanup.
             Runtime.getRuntime().halt(0);
