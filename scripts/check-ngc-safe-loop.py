@@ -28,6 +28,12 @@ def main() -> int:
         raise SystemExit("FAIL: NGC loop samples the RTC on every spin")
     if "if (++key_sample_spin >= 512u)" not in production:
         raise SystemExit("FAIL: NGC loop still scans the full key matrix on every spin")
+    connect_body = main_text.split("static int nav_try_connect", 1)[1].split(
+        "static int nav_write_frame", 1)[0]
+    enum_done = connect_body.find("TI_NN_NodeEnumDone")
+    connect_call = connect_body.find("TI_NN_Connect")
+    if enum_done < 0 or connect_call < 0 or enum_done > connect_call:
+        raise SystemExit("FAIL: NavNet connect must follow NodeEnumDone")
     if "static void nav_bootstrap_service_callback" in main_text:
         callback = main_text.split("static void nav_bootstrap_service_callback", 1)[1]
         callback = callback.split("static void nav_local_service_poll", 1)[0]

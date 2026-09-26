@@ -1947,3 +1947,38 @@ build_status=success
 The NGC safe-loop/device-artifact audits, `make program-test`, and 19 bridge
 tests pass. The held-key candidate has not been uploaded or credited with
 calculator `CONNECTED`, request/RX, or same-page response evidence.
+
+### 2026-09-26 Menu crash narrowed to enumeration/connection lifetime
+
+The held-key artifact (`88e56d28...`) was uploaded with an exact 26196-byte
+readback. With the Mac helper already at `NODE 1` and `READY service=0x5001`,
+one Menu arm reached a real host callback:
+
+```text
+helper: CONNECTED handle=0x2
+helper: ERR NavNet.read=-257; retrying
+```
+
+The helper and TI server logs then repeated `server read: navnet failed. ret =
+-257` until the bridge was stopped. No calculator `RX`, request, or same-page
+response was observed; the user reported the page froze/flashed out at the
+same point. This is stronger than the earlier `READY`-only attempts: node
+discovery and `TI_NN_Connect` reached the host, but the channel was invalid by
+the first data operation.
+
+Source review found that the calculator called `TI_NN_Connect` while the
+enumeration operation handle was still active, then called
+`TI_NN_NodeEnumDone`/`TI_NN_DestroyOperationHandle` afterward. The historical
+Ndless calculator usage does the reverse. The production path now takes the
+first node, ends and destroys enumeration, and only then calls `Connect`; a
+failed service connect is held until an explicit Menu retry. The static NGC
+gate checks this ordering so it cannot silently regress.
+
+Host verification after this source change: `make program-test`,
+`check-ngc-safe-loop.py`, `git diff --check`, 19 bridge tests, Java helper
+lifecycle, and bridge lifecycle all pass. No replacement package was uploaded
+after the crash. A fresh Docker NGC build now produces
+`94bc14667c174925765fdedee82e616c47e7fb48b6dcee9266be9064a1c71327` (26168
+bytes, matching manifest) but it remains local and unuploaded. There is still
+no claim of calculator `CONNECTED` → request/RX → same-page response for the
+fixed source until this artifact is separately tested.

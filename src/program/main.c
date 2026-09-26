@@ -474,25 +474,20 @@ static int nav_try_connect(void) {
     }
     last_enum_error = 0;
 
-    /* Try every discovered node; a stale host entry may precede live USB. */
-    while ((status = NAV_OS_CALL(TI_NN_NodeEnumNext(operation, &node))) >= 0 && node) {
-        node_count++;
-        status = NAV_OS_CALL(TI_NN_Connect(node, SERVICE_ID, &nav_channel));
-        if (status >= 0 && nav_channel) break;
-        {
-            char detail[LINE_CAP];
-            set_status("NavNet node %d service 0x%04x=%d",
-                       node_count, SERVICE_ID, status);
-            strncpy(detail, status_text, sizeof(detail) - 1);
-            detail[sizeof(detail) - 1] = '\0';
-            add_history_line(detail);
-        }
-        nav_channel = NULL;
-        node = NULL;
-    }
+    /* Finish and destroy the enumeration before connecting.  The historical
+     * Ndless calculator example follows this order; connecting while the
+     * operation handle is still live can return a host-side CONNECTED event
+     * but leave the channel invalid as soon as the first Read/Write runs.
+     * That exact failure was observed on CX II 6.2: helper CONNECTED followed
+     * by repeated -257 reads and a calculator freeze.  Keep the first node
+     * handle, end enumeration, then connect it.  A later Menu retry can
+     * enumerate again if this node is stale.
+     */
+    status = NAV_OS_CALL(TI_NN_NodeEnumNext(operation, &node));
+    if (status >= 0 && node) node_count = 1;
     (void)NAV_OS_CALL(TI_NN_NodeEnumDone(operation));
     (void)NAV_OS_CALL(TI_NN_DestroyOperationHandle(operation));
-    if (status < 0 || !nav_channel) {
+    if (status < 0 || !node) {
         char detail[LINE_CAP];
         set_status("NavNet enum nodes=%d last=%d", node_count, status);
         strncpy(detail, status_text, sizeof(detail) - 1);
@@ -500,6 +495,26 @@ static int nav_try_connect(void) {
         add_history_line(detail);
         nav_channel = NULL;
         set_status("NavNet service 0x%04x unavailable (%d nodes)", SERVICE_ID, node_count);
+#ifdef NSPIRE_UI_NGC
+        nav_transport_hold();
+        set_status("USB held: service unavailable; Menu retries");
+#else
+        nav_retry_at = nav_clock_ms() + NAV_RETRY_DELAY_MS;
+#endif
+        return 0;
+    }
+
+    status = NAV_OS_CALL(TI_NN_Connect(node, SERVICE_ID, &nav_channel));
+    if (status < 0 || !nav_channel) {
+        char detail[LINE_CAP];
+        set_status("NavNet node %d service 0x%04x=%d",
+                   node_count, SERVICE_ID, status);
+        strncpy(detail, status_text, sizeof(detail) - 1);
+        detail[sizeof(detail) - 1] = '\0';
+        add_history_line(detail);
+        nav_channel = NULL;
+        set_status("NavNet service 0x%04x unavailable (%d nodes)",
+                   SERVICE_ID, node_count);
 #ifdef NSPIRE_UI_NGC
         nav_transport_hold();
         set_status("USB held: service unavailable; Menu retries");
