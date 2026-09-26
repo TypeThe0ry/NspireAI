@@ -93,7 +93,9 @@ startup local-service, and two-service Menu candidates are now build/upload
 blocked after physical freezes. No CPU-IRQ, timer, `idle`, or `msleep`
 workaround is enabled. The two-service candidate did produce one host
 `CONNECTED` callback, but the calculator crashed on Menu and the channel
-degraded to `-257`; this does not establish a usable page bridge.
+degraded to `-257`; this does not establish a usable page bridge. The next
+offline v4 candidate defers its bootstrap `Read/Write` out of the service
+callback into the NGC main loop; it is not yet physically tested.
 The remaining physical gate is still explicit: opening the page, sending a
 request, receiving the response, and keeping the page visible throughout. The
 file transport is retained only as legacy compatibility code and is not used

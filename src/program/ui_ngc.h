@@ -270,6 +270,11 @@ int main(void) {
         int changed = ngc_keys();
         uint32_t now = nav_clock_ms();
         if (done) break;
+#if defined(NSPIRE_NGC_LOCAL_SERVICE) || defined(NSPIRE_NGC_MENU_LOCAL_SERVICE)
+        /* Service callbacks only hand off a channel; keep synchronous NavNet
+         * I/O in the normal page loop rather than callback context. */
+        nav_local_service_poll();
+#endif
         /* RTC supplies at most one poll per second. Avoid a busy NavNet loop;
          * this is not a syscall timeout or scheduling solution. */
         if (ngc_transport_armed && !nav_transport_is_blocked() && now != last_tick) {

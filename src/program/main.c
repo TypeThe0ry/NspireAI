@@ -91,6 +91,13 @@ static char status_text[LINE_CAP];
 
 static nn_ch_t nav_channel;
 static int nav_local_service_started;
+#if defined(NSPIRE_NGC_LOCAL_SERVICE) || defined(NSPIRE_NGC_MENU_LOCAL_SERVICE)
+/* The NavNet service callback is not a proven context for synchronous
+ * TI_NN_Read/TI_NN_Write on CX II.  The candidate callback only hands the
+ * channel to the normal page loop; the loop performs the bounded probe. */
+static volatile nn_ch_t nav_local_service_channel;
+static volatile int nav_local_service_pending;
+#endif
 static int nav_connected;
 static int nav_ping_sent;
 static int nav_handshake_pending;
@@ -365,20 +372,29 @@ static void nav_disconnect(const char *reason) {
  * it from the default safe page. */
 #if defined(NSPIRE_NGC_LOCAL_SERVICE) || defined(NSPIRE_NGC_MENU_LOCAL_SERVICE)
 static void nav_bootstrap_service_callback(nn_ch_t channel, void *data) {
+    /* Do not call NavNet synchronously from this callback.  The v3 physical
+     * candidate crashed/froze on Menu after exactly that callback path was
+     * exercised.  Defer the tiny probe to nav_local_service_poll(). */
+    nav_local_service_channel = channel;
+    nav_local_service_pending = 1;
     (void)data;
-    /* The historical NavNet test makes the PC call the calculator's local
-     * service before the calculator connects back to the PC service.  Keep
-     * this callback deliberately tiny and candidate-only: one bounded read,
-     * then a fixed acknowledgement. */
-    {
-        unsigned char request[32];
-        uint32_t received = 0;
-        const char ready[] = "NSAI bootstrap ready";
-        if (NAV_OS_CALL(TI_NN_Read(channel, NAV_READ_TIMEOUT, request,
-                                   sizeof(request), (uint32_t)&received)) >= 0)
-            (void)NAV_OS_CALL(TI_NN_Write(channel, (void *)ready,
-                                           (uint32_t)sizeof(ready)));
-    }
+}
+
+static void nav_local_service_poll(void) {
+    nn_ch_t channel;
+    unsigned char request[32];
+    uint32_t received = 0;
+    const char ready[] = "NSAI bootstrap ready";
+    int16_t status;
+    if (!nav_local_service_pending) return;
+    channel = nav_local_service_channel;
+    nav_local_service_pending = 0;
+    if (!channel) return;
+    status = NAV_OS_CALL(TI_NN_Read(channel, NAV_READ_TIMEOUT, request,
+                                    sizeof(request), (uint32_t)&received));
+    if (status >= 0 && received > 0)
+        (void)NAV_OS_CALL(TI_NN_Write(channel, (void *)ready,
+                                      (uint32_t)sizeof(ready)));
 }
 
 static int nav_start_local_service(void) {
@@ -401,6 +417,10 @@ static void nav_stop_local_service(void) {
     if (!nav_local_service_started) return;
     (void)NAV_OS_CALL(TI_NN_StopService(CALC_LOCAL_SERVICE_ID));
     nav_local_service_started = 0;
+#if defined(NSPIRE_NGC_LOCAL_SERVICE) || defined(NSPIRE_NGC_MENU_LOCAL_SERVICE)
+    nav_local_service_pending = 0;
+    nav_local_service_channel = NULL;
+#endif
 }
 
 static int nav_try_connect(void) {

@@ -53,6 +53,33 @@ Java direct-upload path. Do not re-upload this package or repeat the Menu
 experiment. The local `dist/` package was restored to the safe USB-idle build
 after the test.
 
+### 2026-09-26 deferred two-service v4 callback-context fix
+
+The v3 crash narrowed the next change: its calculator service callback called
+synchronous `TI_NN_Read`/`TI_NN_Write` directly from the NavNet callback
+context. The v4 source callback now only stores the channel and sets a pending
+flag; the normal NGC page loop performs the one bounded read and fixed ACK.
+This removes the callback-context re-entry without enabling IRQs, timers,
+`idle`, or `msleep`. A clean Docker build succeeded:
+
+```text
+sha256=fd41f654c4047cc7683f98702cf1ffeb33d430b8ef7aa62d3d8f6780c173645c
+ui_backend=TRUE
+ngc_auto_transport=FALSE
+ngc_local_service=FALSE
+ngc_menu_local_service=TRUE
+ngc_cpu_irq=FALSE
+ngc_irq_window=FALSE
+ngc_irq_menu=FALSE
+build_status=success
+```
+
+The v4 package is staged only at `/tmp/nspireai-two-service-v4-deferred.tns`
+and has not been uploaded. The safe package was rebuilt/restored in `dist/`
+at SHA `9e861a992dbaa7445866deca00d5d1cf05d3d9328a63735be0430d4b221526fb`.
+The v3 SHA remains permanently blocked and must not be used as a comparison
+run.
+
 ### 2026-09-26 deferred local-service candidate (two-service bootstrap v3)
 
 The safe package remained USB-idle after the host bridge reached `READY` and a
