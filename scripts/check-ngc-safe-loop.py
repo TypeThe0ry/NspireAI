@@ -5,8 +5,10 @@ from pathlib import Path
 
 
 def main() -> int:
-    source = Path(__file__).resolve().parents[1] / "src/program/ui_ngc.h"
+    root = Path(__file__).resolve().parents[1]
+    source = root / "src/program/ui_ngc.h"
     text = source.read_text()
+    main_text = (root / "src/program/main.c").read_text()
     production = text.split("#else\n    uint32_t last_tick;", 1)[1].split("#endif\n}", 1)[0]
     if "msleep(" in production:
         raise SystemExit("FAIL: default NGC production loop must not call msleep")
@@ -20,6 +22,11 @@ def main() -> int:
         raise SystemExit("FAIL: NGC production loop lacks the transport fault hold")
     if "nav_transport_rearm();" not in text:
         raise SystemExit("FAIL: Menu retry does not explicitly rearm transport")
+    if "static void nav_bootstrap_service_callback" in main_text:
+        callback = main_text.split("static void nav_bootstrap_service_callback", 1)[1]
+        callback = callback.split("static void nav_local_service_poll", 1)[0]
+        if "TI_NN_Read" in callback or "TI_NN_Write" in callback:
+            raise SystemExit("FAIL: NavNet service callback must not synchronously read/write on CX II")
     print("PASS: NGC startup is USB-idle and first NavNet failure is held")
     return 0
 
