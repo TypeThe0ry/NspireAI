@@ -87,6 +87,17 @@ static int ngc_keys(void) {
     static unsigned char previous[sizeof(keys) / sizeof(keys[0])];
     static int initialized;
     int changed = 0;
+    /* Matrix scanning is a relatively expensive syscall on CX II.  The old
+     * loop called isKeyPressed() for every key on every spin, even while the
+     * page was idle; that monopolized the standalone task and starved the
+     * OS/USB work queue before transport was ever armed.  Use the cheap
+     * aggregate test as the fast path.  Clear edge state when no key is down
+     * so the next press is still reported after a skipped scan. */
+    if (!any_key_pressed()) {
+        memset(previous, 0, sizeof(previous));
+        initialized = 1;
+        return 0;
+    }
     if (isKeyPressed(KEY_NSPIRE_ESC)) { done = 1; return 1; }
     for (unsigned i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
         int down = (isKeyPressed)(keys[i]);

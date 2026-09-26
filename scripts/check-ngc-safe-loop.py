@@ -22,6 +22,8 @@ def main() -> int:
         raise SystemExit("FAIL: NGC production loop lacks the transport fault hold")
     if "nav_transport_rearm();" not in text:
         raise SystemExit("FAIL: Menu retry does not explicitly rearm transport")
+    if "if (!any_key_pressed())" not in text or "memset(previous, 0, sizeof(previous));" not in text:
+        raise SystemExit("FAIL: NGC key loop lacks the aggregate no-key fast path")
     if "static void nav_bootstrap_service_callback" in main_text:
         callback = main_text.split("static void nav_bootstrap_service_callback", 1)[1]
         callback = callback.split("static void nav_local_service_poll", 1)[0]
