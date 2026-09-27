@@ -2119,3 +2119,9 @@ cleaned up. There was no calculator page frame, no `CONNECTED`, no `RX`, and
 no request/response. This isolates the freeze to the post-launch native page
 before NavNet application traffic and permanently blocks the exact stage-12
 SHA in both normal upload paths.
+
+To distinguish the probe's intentional 30-second lifetime from a real wedge,
+a second read-only screen request was issued more than two minutes after the
+launch attempt. It also timed out and required Java child cleanup. Thus the
+stage-12 result is a genuine post-launch page/OS stall, not merely the
+20-second key wrapper expiring before the probe's planned exit.
