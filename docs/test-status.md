@@ -547,15 +547,18 @@ new TI crash log appeared. The bridge then shut down with unregister and
 launcher-return evidence only, not page residency or the requested protocol
 loop.
 
-### Unuploaded scheduler follow-up (commit `cdfc74b`)
+### Unuploaded scheduler follow-up (commits `cdfc74b`, `9b58f34`)
 
 The stage-15 result motivated a guarded production-loop change: while NGC
 transport is disarmed and no channel exists, the page calls Ndless `idle()` to
-yield the calculator scheduler; once Menu arms transport, the loop keeps the
-idle call out of the NavNet path. `make program-test`, the NGC safe-loop,
-startup-order, relocation, and 19 bridge tests passed after this edit. The
-change has not yet been converted into a new TNS or uploaded, so it is not
-physical-runtime evidence.
+yield the calculator scheduler; the same applies after a failed/held
+transport, while an active NavNet channel keeps the idle call out of the
+transport path. Menu no longer silently hides an active channel. `make
+program-test`, the NGC safe-loop truth-table, startup-order, relocation, and
+19 bridge tests passed after these edits. The changes have not yet been
+converted into a new TNS or uploaded, so they are not physical-runtime
+evidence. The synchronous NavNet syscall timeout remains unverified as a
+wall-clock bound and is still an open device-side risk.
 
 ## 2026-09-24 relocation-candidate physical rejection (Computer Use control)
 

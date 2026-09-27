@@ -698,9 +698,12 @@ No new TI crash log appeared, and bridge shutdown emitted unregister and
 and its CX II NavNet interaction remains unestablished; this is a scheduler
 discriminator, not a claimed USB fix or protocol result.
 
-The follow-up source change in commit `cdfc74b` applies that discriminator only
-while the production NGC page is still transport-disarmed and has no channel:
-it yields with `idle()` in that state, but retains the NOP tail after an
-explicit Menu arm. It passed the source-level safe-loop checks and host tests,
-but has not been built into a new TNS or uploaded; no physical result is
-claimed for this follow-up.
+The follow-up source changes in commits `cdfc74b` and `9b58f34` apply that
+discriminator only while the production NGC page has no active channel: the
+page yields with `idle()` when disarmed or held after a transport failure, but
+retains the NOP tail for an active NavNet channel. Menu no longer silently
+turns an active channel into a stale hidden handle. They pass the source-level
+safe-loop truth-table checks and host tests, but have not been built into a new
+TNS or uploaded; no physical result is claimed for this follow-up. The
+underlying synchronous `NodeEnumInit`/`Connect`/`Read`/`Write` calls still have
+no verified wall-clock bound on CX II and remain an unresolved runtime risk.
