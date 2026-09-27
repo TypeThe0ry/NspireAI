@@ -133,6 +133,20 @@ if ! grep -q '7afc998f9014236dbf45dd1cb33b74b5437329460c066516a66e25114163ba12' 
   echo "FAIL: physically frozen stage-13 probe is not blocked in both normal upload paths" >&2
   exit 1
 fi
+if [[ ! -x "$ROOT/scripts/deploy-ngc-entry-stage14.sh" ]]; then
+  echo "FAIL: stage-14 probe upload gate is missing or not executable" >&2
+  exit 1
+fi
+if NSPIRE_ALLOW_NGC_ENTRY_STAGE14_UPLOAD= "$ROOT/scripts/deploy-ngc-entry-stage14.sh" >"$ROOT/.build/ngc-stage14-reject-gate.out" 2>&1; then
+  echo "FAIL: stage-14 probe gate allowed an unconfirmed invocation" >&2
+  exit 1
+fi
+if ! grep -q 'NSPIRE_ALLOW_NGC_ENTRY_STAGE14_UPLOAD=1' "$ROOT/.build/ngc-stage14-reject-gate.out"; then
+  echo "FAIL: stage-14 gate did not explain the explicit confirmation variable" >&2
+  cat "$ROOT/.build/ngc-stage14-reject-gate.out" >&2
+  exit 1
+fi
+rm -f "$ROOT/.build/ngc-stage14-reject-gate.out"
 if ! grep -q 'unsupported document format' "$ROOT/.build/ngc-stage8-reject-gate.out"; then
   echo "FAIL: stage-8 gate did not explain physical rejection" >&2
   exit 1

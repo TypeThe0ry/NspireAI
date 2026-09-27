@@ -189,7 +189,8 @@ int main(void) {
      * Read, reproducing the long-running UI scheduler shape; stage 11 adds
      * one real nav_poll (PING/Read) after the bridge connection attempt;
      * stage 12 combines one frame with the long-running loop and no NavNet;
-     * stage 13 repeats that test with the production low-frequency RTC cadence.
+     * stage 13 repeats that test with the production low-frequency RTC cadence;
+     * stage 14 removes matrix-key scanning from that long-running path.
      * Each stage returns immediately so the first
      * unsupported-document result identifies the failing API boundary. */
 #if NSPIRE_NGC_PROBE_STAGE == 12
@@ -246,6 +247,29 @@ int main(void) {
                 last_tick = nav_clock_ms();
             }
             if (ngc_ui_dirty) ngc_draw();
+            for (volatile unsigned spin = 0; spin < 256; ++spin)
+                __asm volatile("nop");
+        }
+    }
+#elif NSPIRE_NGC_PROBE_STAGE == 14
+    /* Post-frame residency probe without matrix-key syscalls. This keeps the
+     * same LCD/GC frame and 128-spin RTC cadence as stage 13, but removes
+     * ngc_keys() entirely so a freeze can be attributed to the raw loop/RTC
+     * path rather than key-matrix ownership. */
+    if (!ngc_prepare_lcd()) return EXIT_FAILURE;
+    chat_gc = gui_gc_global_GC();
+    if (!chat_gc) return EXIT_FAILURE;
+    set_status("NGC probe stage 14");
+    ngc_draw();
+    {
+        uint32_t last_tick = nav_clock_ms();
+        uint32_t probe_until = last_tick + 30000;
+        unsigned scheduler_spin = 0;
+        while (!nav_deadline_reached(last_tick, probe_until)) {
+            if (++scheduler_spin >= 128u) {
+                scheduler_spin = 0;
+                last_tick = nav_clock_ms();
+            }
             for (volatile unsigned spin = 0; spin < 256; ++spin)
                 __asm volatile("nop");
         }

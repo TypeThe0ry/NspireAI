@@ -210,6 +210,9 @@ public final class NspireRemoteControl {
                     throw new IllegalArgumentException("refusing stage-12 long-running post-frame probe: launch froze before CONNECTED on 2026-09-27");
                 if (artifactSha.equals("7afc998f9014236dbf45dd1cb33b74b5437329460c066516a66e25114163ba12"))
                     throw new IllegalArgumentException("refusing stage-13 production-cadence post-frame probe: launch froze before CONNECTED on 2026-09-27");
+                if (artifactSha.equals("31d1d46554d72cf0958a55a84d9e93858cd849cab437f804b5062e640e07edd3")
+                        && !"1".equals(System.getenv("NSPIRE_ALLOW_NGC_ENTRY_STAGE14_UPLOAD")))
+                    throw new IllegalArgumentException("refusing NGC entry stage-14 probe without explicit upload confirmation");
                 boolean irqMenu = manifestLines.contains("ngc_irq_menu=TRUE");
                 if (!irqMenu && !manifestLines.contains("ngc_irq_menu=FALSE"))
                     throw new IllegalArgumentException("manifest missing valid ngc_irq_menu");
