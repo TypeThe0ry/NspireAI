@@ -780,8 +780,13 @@ static void nav_poll(void) {
     now = nav_clock_ms();
     if (!nav_ping_sent && !nav_deadline_reached(now, nav_ping_at)) return;
     if (!nav_ping_sent && nav_deadline_reached(now, nav_ping_at)) {
-        nav_ping_sent = 1;
         if (!nav_write_frame(OP_PING, 0, conversation_id, NULL, 0)) return;
+        /* The write is the readiness gate.  Do not arm the receive path until
+         * TI_NN_Write actually accepted the frame: a transient -258/-269
+         * result may tear down or invalidate the channel, and marking the
+         * ping sent before that result could make the next poll enter a
+         * synchronous Read on a channel that never carried a handshake. */
+        nav_ping_sent = 1;
         return;
     }
     if (!nav_ping_sent || !nav_deadline_reached(now, nav_read_at)) return;

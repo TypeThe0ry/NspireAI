@@ -2586,3 +2586,18 @@ read-only `screen` operation timed out after 10 seconds and was hard-cleaned,
 so no screenshot or page-state claim is made from that call. The blocked
 `6430301d...` package was not uploaded or launched, and there is still no
 physical calculator `CONNECTED`, request/RX, or same-page response evidence.
+
+### 2026-09-27 calculator first-PING write gate
+
+The calculator poller previously marked `nav_ping_sent` before
+`TI_NN_Write()` returned. A transient `-258/-269` or an invalid-handle result
+could therefore arm the synchronous receive path even though no handshake
+frame had been accepted. The assignment now occurs only after a successful
+write; failed writes return without entering `TI_NN_Read`. The NGC safe-loop
+check asserts this ordering, while the stale-handle `-257` path continues to
+abandon the local pointer without calling `TI_NN_Disconnect`.
+
+Local verification passed: NGC safe-loop/startup/IRQ gates, `make
+program-test`, and all 19 host bridge tests. No package was built or uploaded
+from this source change, because the currently available 6430301d package is
+permanently blocked after its physical launch freeze.

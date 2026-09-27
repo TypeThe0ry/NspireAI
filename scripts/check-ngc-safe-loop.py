@@ -48,6 +48,13 @@ def main() -> int:
         raise SystemExit("FAIL: transient NavNet read statuses still tear down the channel")
     if "nav_read_at = nav_clock_ms() + NAV_READ_ARM_DELAY_MS;" not in read_body:
         raise SystemExit("FAIL: transient NavNet read statuses lack retry backoff")
+    ping_body = read_body.split(
+        "if (!nav_ping_sent && nav_deadline_reached(now, nav_ping_at))", 1
+    )[1].split("if (!nav_ping_sent ||", 1)[0]
+    write_pos = ping_body.find("nav_write_frame(OP_PING")
+    arm_pos = ping_body.find("nav_ping_sent = 1;")
+    if write_pos < 0 or arm_pos < 0 or write_pos > arm_pos:
+        raise SystemExit("FAIL: PING must arm the read path only after TI_NN_Write succeeds")
     write_body = main_text.split("static int nav_write_frame", 1)[1].split(
         "static void reset_conversation", 1)[0]
     if 'if (status == -257)' not in write_body or \
