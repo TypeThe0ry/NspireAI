@@ -82,6 +82,8 @@ ARTIFACT_SHA="$(shasum -a 256 "$ROOT/dist/nspire_ai.tns" | awk '{print $1}')"
 cat > "$ROOT/dist/nspire_ai.tns.meta" <<EOF
 sha256=$ARTIFACT_SHA
 ui_backend=$UI_NGC
+ngc_probe=$NGC_PROBE
+ngc_probe_stage=$NGC_PROBE_STAGE
 ngc_auto_transport=$NGC_AUTO_TRANSPORT
 ngc_local_service=$NGC_LOCAL_SERVICE
 ngc_menu_local_service=$NGC_MENU_LOCAL_SERVICE

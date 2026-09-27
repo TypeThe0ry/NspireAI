@@ -25,6 +25,12 @@ case "$UI_BACKEND" in
   FALSE|TRUE) ;;
   *) echo "Manifest is missing a valid ui_backend field; refusing upload" >&2; exit 65;;
 esac
+NGC_PROBE="$(sed -n 's/^ngc_probe=//p' "$META")"
+NGC_PROBE_STAGE="$(sed -n 's/^ngc_probe_stage=//p' "$META")"
+if [[ "$NGC_PROBE" != FALSE || "$NGC_PROBE_STAGE" != 0 ]]; then
+  echo "Refusing diagnostic NGC probe through production upload path; use its dedicated reviewed probe script" >&2
+  exit 65
+fi
 AUTO_TRANSPORT="$(sed -n 's/^ngc_auto_transport=//p' "$META")"
 case "$AUTO_TRANSPORT" in
   FALSE) ;;
