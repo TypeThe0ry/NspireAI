@@ -2333,6 +2333,25 @@ has reached `READY service=0x5001` and `NODE 1`, but no calculator-originated
 Therefore the required page-open `CONNECTED -> request/RX -> same-page response`
 gate remains unverified; do not call this candidate physically successful.
 
+### 2026-09-27 calculator-first handshake fix (source committed; upload pending)
+
+The next physical attempt reached `CONNECTED handle=0x3`, but the helper's
+host-first probe returned `HOST PING status=-257` immediately.  The Java
+helper therefore no longer writes a synthetic PING immediately after the
+service callback.  It starts the reader first and waits for the calculator's
+own NSAI PING, which is the client-side protocol owner; the normal bridge
+response path then supplies the matching PONG.  This avoids using a freshly
+reported TI 6.2 handle before the calculator has emitted its first packet.
+
+`./scripts/test-nspire-java-helper-lifecycle.sh` and `./scripts/test-bridge.sh`
+pass (19 tests).  A clean NGC/RTC build produced SHA-256
+`28a7d652cafddb3d08f46d63e4cca4b17bf31e7fad7745af3fd38c89e55a7c4b` with
+`ngc_auto_transport=FALSE`, all IRQ flags false, and `build_status=success`.
+The deployment attempt then timed out after the handheld fell from the
+calculator interface `0xE022` to the TS4 dock controller `0xACE1`; no claim is
+made that this SHA reached the device.  The physical gate remains
+`CONNECTED -> calculator PING/PONG -> request/RX -> same-page response`.
+
 ### 2026-09-27 NavNet node-removal event normalization
 
 During resumed hardware probing, TI's `NodeNotifyCallback` logged a physical

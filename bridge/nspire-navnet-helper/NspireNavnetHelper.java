@@ -147,29 +147,6 @@ public final class NspireNavnetHelper {
         }
     }
 
-    /*
-     * TI_NN_Read on the CX II can stop returning to the standalone task when
-     * the calculator has just opened a channel but the host has not queued a
-     * packet yet.  The calculator's first poll used to be the only producer,
-     * so a lost first write left its UI in "connecting" inside that syscall.
-     * Queue a harmless NSAI PING as soon as the service callback has settled;
-     * this gives the calculator a packet to consume and is also a normal
-     * protocol handshake (the calculator answers with PONG).  It is kept out
-     * of the TI callback itself because NavNet is not re-entrant there.
-     */
-    private static void sendHostHandshakePing(ConnectionHandle handle) {
-        byte[] ping = new byte[] {
-                'N', 'S', 'A', 'I', 1, 1,
-                0, 0, 0, 0,       // request id = 0
-                0, 1,             // initial conversation id
-                0, 0, 0, 0        // empty payload
-        };
-        synchronized (IO_LOCK) {
-            int status = NavNet.write(handle, ping, ping.length);
-            emit("HOST PING status=" + status);
-        }
-    }
-
     private static void startReader(ConnectionHandle handle) {
         if (reader != null && reader.isAlive()) return;
         reader = new Thread(() -> {
@@ -251,7 +228,14 @@ public final class NspireNavnetHelper {
                     }
                     if (!stopping && connection == handle &&
                             (reader == null || !reader.isAlive())) {
-                        sendHostHandshakePing(handle);
+                        /* The calculator is the NavNet client and emits the
+                         * first NSAI PING after TI_NN_Connect.  Do not write
+                         * a host-first probe here: on CX II 6.2 a write made
+                         * immediately after the service callback can return
+                         * -257 and invalidate the fresh handle before the
+                         * calculator's packet is delivered.  Start the
+                         * reader first and let the normal NSAI response path
+                         * provide the PONG. */
                         startReader(handle);
                     }
                 }
