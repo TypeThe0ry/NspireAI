@@ -2540,3 +2540,15 @@ for a fresh service callback. Java helper lifecycle, bridge lifecycle, 19
 bridge tests, `make program-test`, upload gates, and `git diff --check` pass.
 This is host-side hardening only; it does not turn the blocked
 `6430301d…` package into physical `CONNECTED` evidence.
+
+### 2026-09-27 post-recovery node-callback probe
+
+After the host-side hardening, the read-only USB gate still reported
+`STATE=CX2_USB_CANDIDATE product=0xE022`. A fresh Java bridge reached
+`READY service=0x5001` but produced no `NODE` callback during a 25-second
+observation window and was stopped cleanly with `STOPPED`. A bounded remote
+`info` call also timed out before returning a node record. A diagnostic
+`n-link ls /` process failed to return and was terminated; no helper, bridge,
+or RMI child was left behind. This is new transport/node-callback evidence,
+not calculator `CONNECTED` or page-open request/response evidence, and no
+package was uploaded during this probe.
