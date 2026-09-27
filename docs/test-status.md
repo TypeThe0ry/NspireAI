@@ -2470,3 +2470,21 @@ screen was still the same dialog. USB recovered to `0xE022` and helper/RMI
 cleanup completed. This is not evidence of a resident page or bridge
 `CONNECTED`; do not claim the physical loop is complete or upload another
 variant until the open event can be observed.
+### 2026-09-27 touchpad key-scan guard (local-only candidate)
+
+The production page's first Enter arm was still coupled to `any_key_pressed()`.
+On the CX II touchpad this helper begins with an I2C `touchpad_scan()` before
+reading the key matrix; that can wait on the IRQ-owned touchpad controller in a
+standalone Ndless page. The NGC key loop now skips that I2C fast path when
+`is_touchpad` is true and uses the direct matrix reads for the supported text
+keys. The safe-loop gate requires both the touchpad guard and the aggregate
+no-key fast path.
+
+A clean local build produced SHA
+`c05c7c5640ac8f685b8ae8e5ec77fe77497fbbb44672d713397fa63da47b984d`,
+`alloc_size=51988`, and `ngc_probe=FALSE`. Program tests, the Java lifecycle,
+all upload gates, and 19 bridge tests passed. Upload was not completed because
+the previous page still owned the handheld USB endpoint; the uploader timed out
+and the device fell back to the TS4 `ACE1` controller. This candidate remains
+local-only until the device returns to `E022` and the page can be opened under a
+fresh bridge session.

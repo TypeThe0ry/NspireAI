@@ -807,3 +807,15 @@ read-only screen still showed that dialog. USB recovered to `0xE022` and helper
 cleanup completed. This narrows the remaining failure to the standalone
 entry/USB scheduling boundary, but does not establish a resident page or any
 `CONNECTED`/request/RX evidence.
+
+## 2026-09-27 touchpad I2C key-scan guard
+
+The default NGC loop previously called `any_key_pressed()` for its fast path.
+On the touchpad CX II, that helper first performs `touchpad_scan()` over I2C;
+the operation is a poor fit for the IRQ-masked standalone Ndless entry path and
+can prevent the first Enter arm from reaching the NavNet poll. The production
+loop now bypasses that I2C call on `is_touchpad` hardware and scans only the
+direct key matrix. The local candidate
+`c05c7c5640ac8f685b8ae8e5ec77fe77497fbbb44672d713397fa63da47b984d` passed all
+offline gates, but was not uploaded because the previous page still held the
+USB endpoint; no physical claim is made.
