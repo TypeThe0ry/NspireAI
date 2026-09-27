@@ -2943,3 +2943,23 @@ showed only the black Home surface. E022 and file readback remained healthy,
 but the fresh `0x5001` helper received no calculator-originated frame. The
 bridge therefore still lacks physical `CONNECTED`, request/RX, and same-page
 response evidence. This pair is not claimed as a completed device fix.
+
+### 2026-09-27 short-lived NGC stage-3 probe (local-only)
+
+To separate first-frame setup from the long-lived USB/scheduler boundary, a
+short-lived diagnostic was built with `NGC_PROBE_STAGE=3`. It performs only
+`lcd_type → lcd_init → gui_gc_global_GC → one frame → return`; it contains no
+NavNet calls, RTC reads, key scans, resident task, or IRQ experiment.
+
+```text
+path: .build/ngc-probe-stage3/nspire_ai-stage3.tns
+bytes: 5552
+sha256: bb04c5b670a1cc2ada81128c1951cf52512f626b5da4745f021c862a4f6df368
+loader allocation: 6920 <= 60000
+Zehn relocations: 48
+```
+
+The local loader, safe-loop, and relocation checks pass. This probe has not
+been uploaded; it is the next controlled diagnostic only if an explicit
+physical test is needed. A passing probe would clear the LCD/GC/first-frame
+boundary while leaving the resident scheduler/USB problem isolated.
