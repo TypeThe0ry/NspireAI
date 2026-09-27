@@ -16,6 +16,8 @@ def main() -> int:
         raise SystemExit("FAIL: NavNet polling is not gated by explicit transport arming")
     if "USB armed by Enter; bridge must be READY" not in text:
         raise SystemExit("FAIL: Enter transport arm is missing")
+    if "KEY_NSPIRE_HOME" not in text:
+        raise SystemExit("FAIL: Home teardown key guard is missing")
     if "&KEY_NSPIRE_MENU" in text:
         raise SystemExit("FAIL: CX II Menu key must not be read by the NGC matrix scanner")
     if "#define NGC_TRANSPORT_DEFAULT 0" not in text:

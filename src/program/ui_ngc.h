@@ -109,7 +109,16 @@ static int ngc_keys(void) {
         initialized = 1;
         return 0;
     }
-    if (isKeyPressed(KEY_NSPIRE_ESC)) { done = 1; return 1; }
+    /* Home is the calculator's normal way to leave a standalone page.  The
+     * Ndless loader does not deliver that key through an OS event queue while
+     * this page owns the framebuffer, so handle the matrix edge directly and
+     * run the normal teardown path.  This deliberately avoids Menu (whose
+     * CX II path has crashed physical candidates) and does not touch IRQs or
+     * the scheduler. */
+    if (isKeyPressed(KEY_NSPIRE_HOME) || isKeyPressed(KEY_NSPIRE_ESC)) {
+        done = 1;
+        return 1;
+    }
     for (unsigned i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
         int down = (isKeyPressed)(keys[i]);
         if (initialized && down && !previous[i]) {

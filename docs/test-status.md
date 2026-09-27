@@ -2488,3 +2488,18 @@ the previous page still owned the handheld USB endpoint; the uploader timed out
 and the device fell back to the TS4 `ACE1` controller. This candidate remains
 local-only until the device returns to `E022` and the page can be opened under a
 fresh bridge session.
+
+### 2026-09-27 Home teardown guard (local-only candidate)
+
+The NGC page now handles `KEY_NSPIRE_HOME` directly in the matrix scanner and
+uses the existing teardown path, alongside Esc. This is a recovery guard for a
+page that owns the standalone framebuffer; it does not read Menu, enable IRQs,
+call `idle()`/WFI, or claim to solve the underlying scheduler boundary.
+
+The clean rebuild produced SHA
+`6430301d3edf5f214854c3f8be6b7c182ec520e832a11d095e7ac9d0e673ffc8`,
+`alloc_size=52032`, and `ngc_probe=FALSE`. `make program-test`, 19 bridge
+tests, Java helper lifecycle, and all upload gates passed. The authoritative
+USB check immediately afterward still reported only TS4 `ACE1`, so this
+candidate has not been uploaded or physically verified; `E022`,
+`CONNECTED`, request/RX, and same-page response remain pending.

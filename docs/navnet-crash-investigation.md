@@ -819,3 +819,19 @@ direct key matrix. The local candidate
 `c05c7c5640ac8f685b8ae8e5ec77fe77497fbbb44672d713397fa63da47b984d` passed all
 offline gates, but was not uploaded because the previous page still held the
 USB endpoint; no physical claim is made.
+
+## 2026-09-27 Home teardown guard
+
+The production NGC key loop now checks the direct matrix mapping for
+`KEY_NSPIRE_HOME` and exits through the normal NavNet/local-service teardown
+path, just like Esc. This is intended to make a stuck foreground page
+recoverable without touching the known-crashing Menu path or experimenting
+with IRQ/scheduler calls. It is a source-level recovery guard, not evidence
+that standalone Ndless scheduling is fixed.
+
+The resulting local-only package is
+`6430301d3edf5f214854c3f8be6b7c182ec520e832a11d095e7ac9d0e673ffc8` with
+`alloc_size=52032`. All offline tests pass, but the host still enumerates only
+the TS4 `ACE1` controller and the package has not been uploaded; the physical
+`E022` and NavNet `CONNECTED -> request/RX -> same-page response` gates remain
+open.
