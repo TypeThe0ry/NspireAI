@@ -744,3 +744,22 @@ post-launch boundary. The frozen candidate SHA
 `2a20676747b78f87fab2f2d11d1e56ad70d6390097c3c9319affc60bcf4aefa8` remains
 blocked and must not be uploaded again. No new TNS is authorized until the
 standalone loader/USB scheduling boundary has a separately reviewed solution.
+## 2026-09-27 loader IRQ boundary reconfirmed
+
+The current crash report was followed by a host-side recheck showing only
+`0xACE1` (TS4 dock controller), with no bridge/helper process alive.  The
+Ndless source itself confirms why the standalone route can lose the handheld
+USB interface: `ploaderhook.c` calls `TCT_Local_Control_Interrupts(-1)` before
+`entry(argc, argv)` and restores the saved mask only after the program
+returns.  The production NGC loop has no verified cooperative USB/OS yield;
+`idle()`/WFI, `msleep()`, `get_event()`, and the scoped CPU-IRQ experiments
+were separately rejected after freezes or crashes.  A synchronous
+`TI_NN_Read` also has no proven wall-clock bound, so the page can remain
+inside that syscall while the host endpoint disappears.
+
+This is stronger evidence for a standalone loader/scheduler incompatibility
+than for a NavNet frame-order bug.  The calculator-first host handshake fix is
+still valid source work, but it cannot be physically tested until a standalone
+entry path that preserves CX II USB scheduling is established.  Do not upload
+another unchanged NGC/RTC package or treat `E022` recovery/`READY` as the
+requested page-open protocol loop.
