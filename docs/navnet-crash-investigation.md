@@ -690,17 +690,18 @@ was uploaded to `/nspire_ai.tns` (26,280 bytes) and a later readback verified
 the same SHA-256 byte-for-byte. The bridge then reached `READY service=0x5001`
 and `NODE 1`; the user pressed local Enter once while the file was highlighted.
 There was no `CONNECTED`, `RX`, or `TX`, as expected because this diagnostic
-does not call NavNet. A read-only screen probe performed after the probe's
-30-second residency showed the file list again, meaning the diagnostic had
-returned to the launcher; it does not prove page residency or a protocol loop.
+does not call NavNet. A read-only screen probe performed more than 30 seconds
+after the reported Enter showed the file list again. This does not distinguish
+"the probe ran and exited" from "the probe never opened"; stage-15 therefore
+does not prove that `idle()` resolved the stage-14 scheduler stall.
 No new TI crash log appeared, and bridge shutdown emitted unregister and
 `helper: STOPPED` cleanly. `idle()` masks all IRQs except the timer interrupt
 and its CX II NavNet interaction remains unestablished; this is a scheduler
 discriminator, not a claimed USB fix or protocol result.
 
-The follow-up source changes in commits `cdfc74b` and `9b58f34` apply that
-discriminator only while the production NGC page has no active channel: the
-page yields with `idle()` when disarmed or held after a transport failure, but
+The follow-up source changes in commits `cdfc74b` and `9b58f34` applied the
+experimental yield only while the production NGC page has no active channel:
+the page yields with `idle()` when disarmed or held after a transport failure, but
 retains the NOP tail for an active NavNet channel. Menu no longer silently
 turns an active channel into a stale hidden handle. They pass the source-level
 safe-loop truth-table checks and host tests, but have not been built into a new
@@ -711,5 +712,15 @@ no verified wall-clock bound on CX II and remain an unresolved runtime risk.
 The guarded source was then rebuilt through the Docker Ndless path into a
 production candidate at `dist/nspire_ai.tns`: 26,552 bytes,
 SHA-256 `2a20676747b78f87fab2f2d11d1e56ad70d6390097c3c9319affc60bcf4aefa8`,
-with a successful manifest and all auto-transport/IRQ flags disabled. It has
-not yet been uploaded to the handheld or treated as physical-runtime proof.
+with a successful manifest and all auto-transport/IRQ flags disabled. It was
+uploaded to `/nspire_ai.tns` with explicit authorization and read back at the
+same size and SHA-256. The host bridge reached `READY service=0x5001` and
+`NODE 1`, but never logged `CONNECTED`, `RX`, or `TX`. A bounded read-only
+screen probe timed out after 12 seconds; this is not proof of calculator
+crash or page residency. The user subsequently reported that the calculator
+was frozen, without yet confirming whether the freeze began on opening the
+program or after Menu. No newer `NN-crash-*` file appeared, and the USB
+descriptor remained `0xE022`. The host bridge was stopped cleanly with
+unregister and `helper: STOPPED`, leaving no helper/RMI process. The exact
+candidate SHA is quarantined in both upload paths pending root-cause work;
+the requested live protocol loop remains unverified.

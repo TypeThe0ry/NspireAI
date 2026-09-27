@@ -540,18 +540,19 @@ byte-for-byte: 26,280 bytes with the same SHA-256. The bridge was started
 separately and reached `READY service=0x5001` plus `NODE 1`; the user pressed
 local Enter once on the highlighted file. No `CONNECTED`, `RX`, or `TX` event
 was expected or observed because this stage contains no NavNet calls. A
-read-only screen probe taken after the 30-second diagnostic residency showed
-the file list again, consistent with the probe returning to the launcher. No
-new TI crash log appeared. The bridge then shut down with unregister and
+read-only screen probe taken more than 30 seconds after the reported Enter
+showed the file list again; this cannot distinguish normal probe exit from
+the file never having opened. No new TI crash log appeared. The bridge then
+shut down with unregister and
 `helper: STOPPED`, leaving no helper/RMI child. This is physical upload and
-launcher-return evidence only, not page residency or the requested protocol
+file-list evidence only, not page residency or the requested protocol
 loop.
 
-### Unuploaded scheduler follow-up (commits `cdfc74b`, `9b58f34`)
+### Scheduler follow-up (commits `cdfc74b`, `9b58f34`)
 
-The stage-15 result motivated a guarded production-loop change: while NGC
-transport is disarmed and no channel exists, the page calls Ndless `idle()` to
-yield the calculator scheduler; the same applies after a failed/held
+The inconclusive stage-15 observation motivated an experimental guarded
+production-loop change: while NGC transport is disarmed and no channel exists,
+the page calls Ndless `idle()` to yield the calculator scheduler; the same applies after a failed/held
 transport, while an active NavNet channel keeps the idle call out of the
 transport path. Menu no longer silently hides an active channel. `make
 program-test`, the NGC safe-loop truth-table, startup-order, relocation, and
@@ -565,8 +566,16 @@ the production candidate `dist/nspire_ai.tns`: 26,552 bytes,
 SHA-256
 `2a20676747b78f87fab2f2d11d1e56ad70d6390097c3c9319affc60bcf4aefa8`.
 Its manifest reports `build_status=success`, `ui_backend=TRUE`, and all
-auto-transport/IRQ flags disabled. It has not been uploaded or physically
-tested yet; the earlier `fc7f...` package remains stale and must not be used.
+auto-transport/IRQ flags disabled. With explicit authorization it was uploaded
+to `/nspire_ai.tns` and read back at the same size and SHA-256. The bridge
+reached `READY service=0x5001` and `NODE 1` but no `CONNECTED`, `RX`, or `TX`.
+A bounded read-only screen probe timed out after 12 seconds; this alone does
+not establish the calculator state. The user subsequently reported a freeze,
+without yet confirming whether it happened at program open or after Menu.
+No new `NN-crash-*` file appeared. The host bridge stopped cleanly with
+unregister/`helper: STOPPED`, and no helper/RMI process remained. The exact
+SHA is blocked by both upload paths. The earlier `fc7f...` package also remains
+blocked. Neither has verified same-page request/response behavior.
 
 ## 2026-09-24 relocation-candidate physical rejection (Computer Use control)
 

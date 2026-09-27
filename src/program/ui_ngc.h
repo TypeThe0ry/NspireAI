@@ -437,13 +437,13 @@ int main(void) {
          * redrew once per RTC tick even when nothing changed, repeatedly
          * entering the raw GC framebuffer path. */
         if (ngc_ui_dirty) ngc_draw();
-        /* The stage-15 discriminator showed that a pure NOP tail can starve
-         * the CX II page/screen scheduler even when the loop only samples
-         * RTC.  While transport is still disarmed there is no NavNet syscall
-         * whose IRQs need to be serviced, so yield through Ndless idle().
-         * Once Menu explicitly arms transport, keep idle() out of the path:
-         * idle() masks every IRQ except the Ndless timer interrupt and must
-         * not be allowed to hide a NavNet event. */
+        /* The stage-15 probe was intended to distinguish NOP-tail starvation
+         * from LCD/GC entry, but the post-test file-list capture did not
+         * establish that the probe page had actually stayed resident. Keep
+         * this yield experimental. While transport is still disarmed there
+         * is no active NavNet channel, so yield through Ndless idle().
+         * Keep idle() out of the active-channel path: it masks every IRQ
+         * except the Ndless timer interrupt and could hide a NavNet event. */
         if (!nav_connected &&
             (!ngc_transport_armed || nav_transport_is_blocked())) {
             idle();
