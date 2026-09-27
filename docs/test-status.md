@@ -2332,3 +2332,15 @@ has reached `READY service=0x5001` and `NODE 1`, but no calculator-originated
 `CONNECTED`, `HOST PING`, `PONG`, request, or response has yet been observed.
 Therefore the required page-open `CONNECTED -> request/RX -> same-page response`
 gate remains unverified; do not call this candidate physically successful.
+
+### 2026-09-27 NavNet node-removal event normalization
+
+During resumed hardware probing, TI's `NodeNotifyCallback` logged a physical
+REMOVE event with value `2`. The helper had treated every non-zero event as
+node-present, which could retain a dead node handle after a detach and explain
+why a subsequent bridge instance saw USB `0xE022` but no `NODE 1`. Commit
+`e612e06` now treats only event `1` as ADD, normalizes REMOVE to `NODE 0`,
+clears the application channel, and adds a lifecycle regression check. After
+cleaning the prior bridge/server processes, the host still required a fresh
+USB re-enumeration before another physical attempt; no protocol-loop success
+is claimed from this fix alone.
