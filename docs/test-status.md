@@ -2574,3 +2574,15 @@ That exact package remains permanently blocked after its launch freeze; it was
 not started. The bridge was then stopped cleanly. No physical
 `CONNECTED`/request/RX/same-page response claim is made from this recovery
 probe.
+
+### 2026-09-27 second post-replug bridge probe
+
+The user exited the stuck page and replugged the cable again. The USB gate
+again reported `STATE=CX2_USB_CANDIDATE product=0xE022`. A fresh Java bridge
+reached `READY service=0x5001` and received `NODE 1` after roughly three
+seconds; the helper stopped cleanly when the bounded observation ended.
+Read-only `info` returned the same CX II CAS node identity. The subsequent
+read-only `screen` operation timed out after 10 seconds and was hard-cleaned,
+so no screenshot or page-state claim is made from that call. The blocked
+`6430301d...` package was not uploaded or launched, and there is still no
+physical calculator `CONNECTED`, request/RX, or same-page response evidence.
