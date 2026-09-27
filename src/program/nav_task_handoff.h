@@ -8,9 +8,11 @@
  * restores them after that call returns.  The normal NGC page therefore cannot
  * own a long-running USB loop.  The loader exposes nl_set_resident(), which
  * keeps the loaded Zehn image alive, and the pinned CX II CAS IDC map exposes
- * the underlying Nucleus TCC_Create_Task routine.  This header contains the
- * smallest private ABI needed to create one preemptible task; it is not part
- * of the public SDK and is never enabled by a normal build.
+ * the underlying Nucleus TCC_Create_Task routine.  The task-handoff entry must
+ * return through crt0 after nl_set_resident(); calling _exit would bypass the
+ * loader's IRQ-restore path.  This header contains the smallest private ABI
+ * needed to create one preemptible task; it is not part of the public SDK and
+ * is never enabled by a normal build.
  *
  * The ABI and TCB layout are still unverified on hardware.  Keep this mode
  * behind NSPIRE_NGC_TASK_HANDOFF, require OS index 46, and reject its manifest
@@ -23,7 +25,6 @@ extern unsigned int nl_osid(void);
 extern void nl_set_resident(void);
 extern int TCC_Terminate_Task(void *task);
 extern void *TCC_Current_Task_Pointer(void);
-extern void _exit(int status) __attribute__((noreturn));
 
 typedef void (*nav_task_entry_t)(unsigned argc, void *argv);
 typedef int (*nav_tcc_create_task_t)(

@@ -26,8 +26,10 @@ def main() -> int:
         raise SystemExit("FAIL: CX II CAS TCC_Create_Task address is not present in pinned IDC")
     if "NSPIRE_CX2_CAS_TCC_CREATE_TASK ((uintptr_t)0x1042A8C8u)" not in header:
         raise SystemExit("FAIL: task ABI is not pinned to the CAS 6.2.0.333 address")
-    if "nl_set_resident();" not in ui or "_exit(EXIT_SUCCESS);" not in ui:
-        raise SystemExit("FAIL: task handoff does not retain the Zehn image before loader return")
+    if "nl_set_resident();" not in ui or "return EXIT_SUCCESS;" not in ui:
+        raise SystemExit("FAIL: task handoff does not return through crt0 after retaining the Zehn image")
+    if "_exit(EXIT_SUCCESS);" in ui:
+        raise SystemExit("FAIL: task handoff bypasses the loader IRQ-restore path with _exit")
     if "TCT_Local_Control_Interrupts(0)" in header or "idle()" in header or "msleep" in header:
         raise SystemExit("FAIL: task handoff header contains an IRQ/timer/WFI workaround")
     mask = loader.index("TCT_Local_Control_Interrupts(-1)")

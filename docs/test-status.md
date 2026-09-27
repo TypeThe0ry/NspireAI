@@ -2780,3 +2780,36 @@ timed out, and a bounded bridge run reached only `READY`/`NODE 1` with no
 the page never produced a usable service callback or request path. A host-side
 `Home` recovery call also timed out. This exact SHA is now permanently blocked
 in both upload entry points; no retry is allowed.
+
+### 2026-09-27 resident-task handoff return-through-crt0 candidate (local-only)
+
+The first task-handoff candidate is permanently rejected above because it
+called `_exit(0)` after `nl_set_resident()`. That bypassed the loader's normal
+crt0 return path, so it could not be trusted to restore the IRQ mask before the
+resident task owned the UI loop. The replacement keeps the same opt-in,
+OS-index-46 private task ABI, but returns `EXIT_SUCCESS` from `main` after
+`nl_set_resident()`; crt0 then calls the loader's exit path. It still does not
+enable CPU IRQs, call `idle()`/`msleep()`, call `TCT_Schedule`, or start NavNet
+from the document entry path.
+
+The replacement was built locally with the clean Docker Ndless wrapper and
+passed the static gates before any device action:
+
+```text
+sha256=4092c01a6010b0e562fb1ca95e5573b0b5ee4cf929fb1281998b93c04398013e
+bytes=16664
+loader allocation=59444 <= 60000
+Zehn relocations=242
+```
+
+`make program-test`, the 19-test bridge suite, Java helper lifecycle, bridge
+lifecycle, upload gates, task-handoff audit, loader-boundary audit, startup
+order audit, and `git diff --check` all passed. The artifact is kept separately
+under `.build/ngc-task-handoff-return/`; it has not produced any physical
+`CONNECTED`, calculator PING/PONG, request/RX, or same-page response evidence.
+
+An explicitly authorized upload attempt on 2026-09-27 did not return a success
+status: the bounded uploader timed out after 45 seconds, and the subsequent
+read-only USB check found that the direct `0x0451:0xE022` child had disappeared,
+leaving only the TS4 `0xACE1` controller. No readback or launch was claimed,
+and the new SHA is not marked successful or promoted over the rejected one.

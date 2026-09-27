@@ -893,3 +893,20 @@ black page. Later NavNet screen/key calls timed out; the bridge reached only
 The USB descriptor remained direct `0x0451:0xE022`, so this run did not reproduce
 the earlier TS4 endpoint drop, but it is still a physical rejection. The exact
 SHA is permanently blocked in the shell and Java upload paths.
+
+## 2026-09-27 resident task handoff return-through-crt0 candidate
+
+The rejected candidate above called `_exit(0)` after `nl_set_resident()`. The
+replacement keeps the same private, OS-index-46 task ABI but returns
+`EXIT_SUCCESS` through crt0 so the Ndless loader can execute its normal exit
+path and restore the loader-owned IRQ state. It contains no raw IRQ enable,
+`idle()`/WFI, `msleep()`, or `TCT_Schedule` call.
+
+The clean local build produced SHA
+`4092c01a6010b0e562fb1ca95e5573b0b5ee4cf929fb1281998b93c04398013e` (16,664
+bytes), with `alloc_size=59444` against the 60,000-byte budget and 242 Zehn
+relocations. All host/static tests passed. This is a local candidate only; an
+authorized uploader invocation timed out after 45 seconds and the next
+read-only check saw only the TS4 `ACE1` controller, not the direct calculator
+`E022` child. Therefore there is no upload readback, launch, `CONNECTED`,
+request/RX, or same-page response evidence for this SHA.

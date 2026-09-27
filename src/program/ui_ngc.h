@@ -494,14 +494,14 @@ static void ngc_task_entry(unsigned argc, void *argv) {
 
 int main(void) {
     /* Create the task before marking the image resident so a failed private
-     * ABI call still follows the loader's normal cleanup path.  Once creation
+     * ABI call still follows the loader's normal cleanup path. Once creation
      * succeeds, nl_set_resident() makes the direct TI document hook retain the
-     * Zehn image even though it normally calls ld_exec(path, NULL). The task
-     * is auto-started while the loader still owns the current entry; it becomes
-     * runnable when the loader returns and restores IRQs. */
+     * Zehn image even though it normally calls ld_exec(path, NULL). Return
+     * through crt0 instead of calling _exit: the loader must regain control to
+     * restore the IRQ mask before the auto-started task owns the UI loop. */
     if (!nav_task_create(ngc_task_entry)) return EXIT_FAILURE;
     nl_set_resident();
-    _exit(EXIT_SUCCESS);
+    return EXIT_SUCCESS;
 }
 #else
 int main(void) {
