@@ -2648,3 +2648,19 @@ newly-created RMI server: port 1099 was closed and no new
 This is host lifecycle evidence only. It does not prove a usable handheld
 session, calculator `CONNECTED`, request/RX, or same-page response. No
 package was uploaded or launched during this probe.
+
+### 2026-09-27 Student Software restart and USB-topology probe
+
+The TI-Nspire Student Software process was closed and relaunched through the
+computer-use interface while the handheld remained on the cable. After the
+relaunch, the accessibility tree still showed `No handheld selected`, and
+`Capture Selected Handheld` remained disabled. The bridge was then started
+with the normal USB gate: the direct device continued to enumerate as
+`0x0451:0xE022`, NavNet reached `READY service=0x5001`, and the bounded run
+stopped cleanly without a `NODE` or calculator `CONNECTED` event.
+
+The macOS IORegistry snapshot separates a direct `TI-Nspire(tm) CX II
+Handheld` (USB 2.0, address 2, location `0x00100000`) from the independent
+CalDigit TS4 hub tree. Thus the current evidence is not “the cable is absent”;
+it is “the kernel enumerates E022 but Student Software does not bind a
+handheld session”. No package was uploaded or launched in this probe.
