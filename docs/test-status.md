@@ -2501,6 +2501,12 @@ After the failed launch, a later read-only screen probe again timed out after
 cleanup. USB remained `E022`, but the page was not responsive; no bridge was
 started and no further key was sent.
 
+A later read-only `info` call succeeded, proving that the USB/NavNet node
+itself was still alive. A fresh bridge listener reached `READY service=0x5001`
+and `NODE 1`, waited roughly 28 seconds, and received no calculator-originated
+`CONNECTED`; it was then stopped cleanly. This separates the transport/node
+layer from the frozen standalone page/service path.
+
 ### 2026-09-27 Home teardown guard (local-only candidate)
 
 The NGC page now handles `KEY_NSPIRE_HOME` directly in the matrix scanner and

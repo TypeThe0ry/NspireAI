@@ -834,6 +834,13 @@ seconds, and one `~home~` event timed out inside TI's key API and required the
 wrapper's hard child cleanup. The handheld remained enumerated as `E022`, but
 the page did not respond; no additional bridge or key traffic was attempted.
 
+A subsequent read-only node-info request succeeded, so the USB/NavNet node was
+alive even while the page APIs were hung. A new bridge listener reached
+`READY service=0x5001` and `NODE 1`, waited about 28 seconds without any
+calculator-originated `CONNECTED`, then exited with normal helper cleanup.
+This isolates the failure to the standalone page/service scheduling path rather
+than USB enumeration alone.
+
 ## 2026-09-27 Home teardown guard
 
 The production NGC key loop now checks the direct matrix mapping for
