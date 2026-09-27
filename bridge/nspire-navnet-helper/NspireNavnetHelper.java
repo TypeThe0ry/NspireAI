@@ -235,7 +235,12 @@ public final class NspireNavnetHelper {
                         // startService() returns, or concurrently with this
                         // watcher on a later reconnect. Never enter TI's read
                         // path until the callback has had time to unwind.
-                        Thread.sleep(readerMissing ? 150L : 50L);
+                        /* The calculator enters its first synchronous
+                         * TI_NN_Read immediately after TI_NN_Connect.  Keep
+                         * this handoff short so the host PING is queued before
+                         * that read; the callback itself still performs no
+                         * NavNet I/O. */
+                        Thread.sleep(readerMissing ? 10L : 50L);
                     } catch (InterruptedException ignored) {
                         Thread.currentThread().interrupt();
                         return;

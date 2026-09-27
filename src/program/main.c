@@ -71,6 +71,7 @@
  * before the first calculator write.  Send the first PING immediately after
  * TI_NN_Connect; the NavNet write itself is the handshake readiness gate. */
 #define NAV_PING_DELAY_MS 0
+#define NAV_READ_ARM_DELAY_MS 1000
 #define NAV_HANDSHAKE_TIMEOUT_MS 2500
 /* Timeout units and scheduler progress on CX II 6.2 are unverified. A value
  * of 1 is only a requested timeout, NOT a bound on this synchronous call or
@@ -109,6 +110,7 @@ static int nav_ping_sent;
 static int nav_handshake_pending;
 static uint32_t nav_retry_at;
 static uint32_t nav_ping_at;
+static uint32_t nav_read_at;
 static uint32_t nav_connected_at;
 static uint32_t next_request_id = 1;
 static uint16_t conversation_id = 1;
@@ -578,6 +580,13 @@ static int nav_try_connect(void) {
     nav_handshake_pending = 1;
     nav_connected_at = nav_clock_ms();
     nav_ping_at = nav_connected_at + NAV_PING_DELAY_MS;
+    /* Do not enter the first synchronous Read in the same scheduler tick as
+     * Connect/Write.  The Mac callback needs one turn to queue its handshake
+     * PING; on CX II a missing first packet can otherwise strand the whole
+     * standalone page inside TI_NN_Read even when the requested timeout is 1.
+     * RTC is second-resolution, so one second is the smallest meaningful
+     * cross-side arm window here. */
+    nav_read_at = nav_connected_at + NAV_READ_ARM_DELAY_MS;
     /* Do not let CONNECTED alone count as a usable channel.  The first PING
      * is deliberately eligible in the next nav_poll call: on the NGC RTC
      * backend a 250 ms delay is rounded to the next whole second, allowing the
@@ -757,7 +766,9 @@ static void nav_poll(void) {
     if (!nav_ping_sent && nav_deadline_reached(now, nav_ping_at)) {
         nav_ping_sent = 1;
         if (!nav_write_frame(OP_PING, 0, conversation_id, NULL, 0)) return;
+        return;
     }
+    if (!nav_ping_sent || !nav_deadline_reached(now, nav_read_at)) return;
     /* Ndless's syscall declaration passes the receive-size pointer through
      * the ABI as a uint32_t (the upstream NavNet header uses uint32_t *).
      * Match the SDK declaration used by os.h on the CX II. */
