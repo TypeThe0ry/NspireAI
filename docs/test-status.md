@@ -514,6 +514,17 @@ then produced the expected unregister/`helper: STOPPED` cleanup, with no new
 TI crash log and no Java/RMI child left behind. This records a USB/screen stall
 boundary, not a bridge crash or a successful page launch.
 
+The same run first verified the handheld artifact readback at 26,160 bytes and
+SHA-256
+`31d1d46554d72cf0958a55a84d9e93858cd849cab437f804b5062e640e07edd3`. With
+`READY service=0x5001` and `NODE 1` already present, the user pressed local
+Enter once on the highlighted file. No calculator-side application event was
+seen; a bounded read-only screen probe timed out after 12 seconds while the
+bridge stayed alive. There was no new TI crash log. Normal bridge shutdown
+then emitted unregister/`helper: STOPPED` and left no Java/RMI child. This
+confirms the post-Enter USB/screen stall on the reviewed stage-14 artifact,
+but still does not prove page residency or the requested protocol loop.
+
 ## 2026-09-24 relocation-candidate physical rejection (Computer Use control)
 
 Computer Use (CUA) was used for the desktop interaction and application-state

@@ -659,3 +659,19 @@ normal `unregisterNotifyCallback` and `helper: STOPPED` lines, and no new
 `NN-crash-*` file or Java/RMI child remained. This is a repeatable USB/screen
 stall boundary after the calculator-side open attempt, not a bridge process
 crash and not proof of a running AI page.
+
+## 2026-09-27 stage-14 manual-open checkpoint
+
+Before the manual launch, a bounded Java readback verified that the handheld's
+`/nspire_ai.tns` was exactly the reviewed stage-14 artifact: 26,160 bytes with
+SHA-256 `31d1d46554d72cf0958a55a84d9e93858cd849cab437f804b5062e640e07edd3`.
+With the bridge already at `READY service=0x5001` and `NODE 1`, the user pressed
+the calculator's local Enter once while `nspire_ai` was highlighted. The bridge
+emitted no `CONNECTED`, `RX`, or `TX` event. A separate read-only screen probe
+received the same node callback but timed out after 12 seconds, while the
+original bridge and helper remained alive. There was no new `NN-crash-*` file.
+The bridge was then stopped normally (`unregisterNotifyCallback`,
+`helper: STOPPED`) with no Java/RMI child left behind. This is the strongest
+current evidence that the stage-14 program-open path stalls the handheld USB
+screen channel after the local Enter; it is not evidence of a successful page
+or of a Mac bridge crash.
