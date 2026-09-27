@@ -2269,5 +2269,7 @@ toggle transport. The replacement removes Menu from the scanner entirely and
 uses the first Enter edge to arm transport, preserving typed input; a second
 Enter sends after the bridge is connected. The replacement was rebuilt as
 `e34b356d9e82e8fe3799016f59c9873a1ea77e6a609ff48684e96a7974f7c2eb`, passed
-the static/program/bridge lifecycle tests, and was not uploaded yet. This is
+the static/program/bridge lifecycle tests. An upload was then attempted, but
+the calculator disappeared from USB and the subsequent readback timed out;
+there is no authoritative evidence that this SHA reached the device. This is
 a targeted crash-containment change, not proof of the physical protocol loop.
