@@ -1978,7 +1978,7 @@ Host verification after this source change: `make program-test`,
 `check-ngc-safe-loop.py`, `git diff --check`, 19 bridge tests, Java helper
 lifecycle, and bridge lifecycle all pass. No replacement package was uploaded
 after the crash. A fresh Docker NGC build now produces
-`94bc14667c174925765fdedee82e616c47e7fb48b6dcee9266be9064a1c71327` (26168
+`fc7f3e32dec85b5e860cbd03e080e52d149dbabba63b552137ccf897bd063471` (26300
 bytes, matching manifest) but it remains local and unuploaded. There is still
 no claim of calculator `CONNECTED` → request/RX → same-page response for the
 fixed source until this artifact is separately tested.
@@ -2043,3 +2043,10 @@ NavNet channel is usable. Host lifecycle, Java helper lifecycle, 19 protocol
 tests, and `make program-test` pass; no replacement package was uploaded after
 the crash and the physical `CONNECTED` → request/RX → same-page response gate
 remains unverified.
+
+After the invalid-handle containment change, Docker rebuilt the NGC package
+successfully as `fc7f3e32dec85b5e860cbd03e080e52d149dbabba63b552137ccf897bd063471`
+(26300 bytes; `ui_backend=TRUE`, all experimental service/IRQ flags false).
+This package has not been uploaded or run on the calculator; the previous
+94bc1466 package remains the last physical artifact and is not being reused as
+evidence for the new fix.
