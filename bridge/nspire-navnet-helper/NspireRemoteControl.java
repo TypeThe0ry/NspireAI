@@ -208,9 +208,8 @@ public final class NspireRemoteControl {
                     throw new IllegalArgumentException("refusing get_event scheduler-poll candidate: launch froze before CONNECTED; same path was previously rejected on 2026-09-26");
                 if (artifactSha.equals("ea71bdf2f15c2fdc37c8a91cc9259d5463c4be27cb654c87d50a83c7ce8e2b0f"))
                     throw new IllegalArgumentException("refusing stage-12 long-running post-frame probe: launch froze before CONNECTED on 2026-09-27");
-                if (artifactSha.equals("7afc998f9014236dbf45dd1cb33b74b5437329460c066516a66e25114163ba12")
-                        && !"1".equals(System.getenv("NSPIRE_ALLOW_NGC_ENTRY_STAGE13_UPLOAD")))
-                    throw new IllegalArgumentException("refusing NGC entry stage-13 probe without explicit upload confirmation");
+                if (artifactSha.equals("7afc998f9014236dbf45dd1cb33b74b5437329460c066516a66e25114163ba12"))
+                    throw new IllegalArgumentException("refusing stage-13 production-cadence post-frame probe: launch froze before CONNECTED on 2026-09-27");
                 boolean irqMenu = manifestLines.contains("ngc_irq_menu=TRUE");
                 if (!irqMenu && !manifestLines.contains("ngc_irq_menu=FALSE"))
                     throw new IllegalArgumentException("manifest missing valid ngc_irq_menu");

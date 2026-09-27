@@ -118,16 +118,21 @@ if [[ ! -x "$ROOT/scripts/deploy-ngc-entry-stage13.sh" ]]; then
   echo "FAIL: stage-13 probe upload gate is missing or not executable" >&2
   exit 1
 fi
-if "$ROOT/scripts/deploy-ngc-entry-stage13.sh" >"$ROOT/.build/ngc-stage13-reject-gate.out" 2>&1; then
-  echo "FAIL: stage-13 probe gate did not require a fresh reviewed upload path" >&2
+if NSPIRE_ALLOW_NGC_ENTRY_STAGE13_UPLOAD=1 "$ROOT/scripts/deploy-ngc-entry-stage13.sh" >"$ROOT/.build/ngc-stage13-reject-gate.out" 2>&1; then
+  echo "FAIL: physically frozen stage-13 probe remained uploadable" >&2
   exit 1
 fi
-if ! grep -q 'NSPIRE_ALLOW_NGC_ENTRY_STAGE13_UPLOAD=1' "$ROOT/.build/ngc-stage13-reject-gate.out"; then
-  echo "FAIL: stage-13 gate did not explain the explicit confirmation variable" >&2
+if ! grep -q 'froze after launch before CONNECTED' "$ROOT/.build/ngc-stage13-reject-gate.out"; then
+  echo "FAIL: stage-13 gate did not explain physical rejection" >&2
   cat "$ROOT/.build/ngc-stage13-reject-gate.out" >&2
   exit 1
 fi
 rm -f "$ROOT/.build/ngc-stage13-reject-gate.out"
+if ! grep -q '7afc998f9014236dbf45dd1cb33b74b5437329460c066516a66e25114163ba12' "$ROOT/scripts/deploy-program-nspire.sh" || \
+   ! grep -q '7afc998f9014236dbf45dd1cb33b74b5437329460c066516a66e25114163ba12' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java"; then
+  echo "FAIL: physically frozen stage-13 probe is not blocked in both normal upload paths" >&2
+  exit 1
+fi
 if ! grep -q 'unsupported document format' "$ROOT/.build/ngc-stage8-reject-gate.out"; then
   echo "FAIL: stage-8 gate did not explain physical rejection" >&2
   exit 1

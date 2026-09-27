@@ -141,6 +141,8 @@ case "${ARTIFACT_SHA%% *}" in
     echo "Refusing get_event scheduler-poll candidate: launch froze before CONNECTED; same path was previously rejected on 2026-09-26" >&2; exit 65;;
   ea71bdf2f15c2fdc37c8a91cc9259d5463c4be27cb654c87d50a83c7ce8e2b0f)
     echo "Refusing stage-12 long-running post-frame probe: launch froze before CONNECTED on 2026-09-27" >&2; exit 65;;
+  7afc998f9014236dbf45dd1cb33b74b5437329460c066516a66e25114163ba12)
+    echo "Refusing stage-13 production-cadence post-frame probe: launch froze before CONNECTED on 2026-09-27" >&2; exit 65;;
   9cdf132883b0001259aaee62725ae5b0232cf8e7c477c3b879f5cf27cfffee5a|a88bd700651bac3876a23e4b0e45428535102f1834524169219b04a249b499ef|86b883f680a41f3c034167227ae3b0645d26652a8e8a299b2857b0d17a2f1ea1)
     echo "Refusing NGC candidate: handheld rejected this exact SHA as unsupported document format on 2026-09-24" >&2; exit 65;;
 esac

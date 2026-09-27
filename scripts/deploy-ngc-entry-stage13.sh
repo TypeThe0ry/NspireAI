@@ -6,6 +6,9 @@ ARTIFACT="$ROOT/.build/ngc-entry-stage13/nspire_ai.tns"
 EXPECTED_SHA="7afc998f9014236dbf45dd1cb33b74b5437329460c066516a66e25114163ba12"
 REMOTE_DEST="${REMOTE_DEST:-/nspire_ai.tns}"
 
+echo "Refusing NGC entry stage-13 upload: this exact production-cadence probe froze after launch before CONNECTED on 2026-09-27" >&2
+exit 65
+
 if [[ "${NSPIRE_ALLOW_NGC_ENTRY_STAGE13_UPLOAD:-}" != "1" ]]; then
   echo "Refusing NGC entry stage-13 upload: set NSPIRE_ALLOW_NGC_ENTRY_STAGE13_UPLOAD=1 after reviewing SHA $EXPECTED_SHA" >&2
   exit 65

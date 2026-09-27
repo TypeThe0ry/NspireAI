@@ -523,3 +523,20 @@ failed-startup SHA is explicitly rejected with exit 65 before any USB
 operation. The earlier SDL failed-startup SHA is blocked as well. This
 prevents failed/partial or previously stalled packages from being mistaken for
 deployable packages.
+
+## Production-cadence post-frame probe (stage 13)
+
+To separate stage 12's high-frequency diagnostic clock reads from the real
+NGC scheduler cadence, stage 13 used the production-shaped loop: one LCD/GC
+frame, matrix-key sampling every 512 spins, RTC sampling every 128 spins, no
+NavNet calls, and a 30-second lifetime. The reviewed artifact was
+`7afc998f9014236dbf45dd1cb33b74b5437329460c066516a66e25114163ba12` (26,364
+bytes). It uploaded and read back byte-for-byte on the CX II (`0xE022`).
+
+The calculator stayed enumerable, but the launch/key call timed out and a
+later read-only screen call also timed out while the bridge had no
+`CONNECTED`, `RX`, or response. This is the same post-launch USB/screen stall
+class as stage 12, now reproduced with the production cadence. The exact SHA
+is permanently blocked by the stage wrapper, normal shell deploy path, and
+Java remote-upload path. It is not a usable AI package and does not advance
+the same-page bridge gate.
