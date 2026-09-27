@@ -2703,3 +2703,12 @@ claim that a resident Ndless page can safely schedule USB work.
 Local verification passed after the change: Java helper lifecycle, bridge
 lifecycle, all 19 host protocol/bridge tests, and `git diff --check`. No
 calculator package was built, uploaded, or launched from this change.
+
+The first real USB run with this helper revision was then performed while the
+calculator stayed on Home and TI Student Software remained closed. The gate
+reported `STATE=CX2_USB_CANDIDATE product=0xE022`; the helper reached
+`READY service=0x5001`, emitted no `NODE` (no calculator NavNet client was
+running), and ended with `STOPPED`. The RMI port and helper/server process
+set were empty afterward. This confirms the new host timing and cleanup path
+on the live USB connector, but still is not calculator `CONNECTED`, request/RX,
+or same-page response evidence.
