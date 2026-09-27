@@ -1,4 +1,4 @@
-.PHONY: all program-docker program-docker-ngc program-docker-ngc-menu-local-service program-docker-ngc-auto-transport native-page-docker clean bridge-test program-test
+.PHONY: all program-docker program-docker-ngc program-docker-ngc-menu-local-service program-docker-ngc-auto-transport clean bridge-test program-test
 
 all: program-docker
 
@@ -15,9 +15,6 @@ program-docker-ngc-auto-transport:
 	@echo "auto-transport was removed: build program-docker-ngc and arm once with Menu after bridge READY" >&2
 	@exit 65
 
-native-page-docker:
-	./scripts/build-native-page-docker.sh
-
 bridge-test:
 	./scripts/test-bridge.sh
 
@@ -30,7 +27,6 @@ program-test:
 		python3 scripts/check-ngc-safe-loop.py && \
 		python3 scripts/check-ngc-irq-window.py && \
 		python3 scripts/check-ngc-cpu-irq.py && \
-		python3 scripts/test-native-page-source.py && \
 		python3 scripts/check-navnet-bridge-gate.py && \
 		if test -f src/program/nspire_ai.elf && test -f dist/nspire_ai.tns; then python3 scripts/check-ngc-relocations.py src/program/nspire_ai.elf dist/nspire_ai.tns; fi && \
 		./scripts/test-ngc-lcdinit-candidate.sh && \

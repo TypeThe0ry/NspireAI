@@ -77,6 +77,12 @@
  * of 1 is only a requested timeout, NOT a bound on this synchronous call or
  * a guarantee that the UI cannot freeze. */
 #define NAV_READ_TIMEOUT 1
+/* TI's NavNet client returns these transient statuses while the peer is
+ * still queueing the first packet.  They do not invalidate the connection;
+ * tearing it down here races the host callback and was followed by -257 and
+ * a frozen CX II. */
+#define NAV_ERR_INCOMPLETE_TRANSACTION (-258)
+#define NAV_ERR_BUSY (-269)
 
 /* Newlib's fini object is linked by nspire-ld, while a standalone Ndless
  * process intentionally has no host-style process teardown. */
@@ -782,7 +788,14 @@ static void nav_poll(void) {
         set_status("read failed: %d", status);
         strncpy(detail, status_text, sizeof(detail) - 1);
         detail[sizeof(detail) - 1] = '\0';
-        if (status == -257) {
+        if (status == NAV_ERR_INCOMPLETE_TRANSACTION || status == NAV_ERR_BUSY) {
+            /* Keep the same handle.  The timeout argument is not a verified
+             * wall-clock bound, so do not immediately call Read again in a
+             * tight loop; one RTC tick is the smallest safe retry window on
+             * CX II. */
+            nav_read_at = nav_clock_ms() + NAV_READ_ARM_DELAY_MS;
+            set_status("bridge read=%d; retrying", status);
+        } else if (status == -257) {
             /* -257 is TI_NN_ERR_INVALID_CONNECTION.  The peer has already
              * invalidated this handle; do not call TI_NN_Disconnect on it.
              * That teardown was followed by a calculator flash/freeze in the

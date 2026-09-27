@@ -19,13 +19,16 @@ The current runtime path is the standalone Ndless program
 Mac bridge over project-private NavNet service `0x5001`. The Lua document and file
 exchange path below is legacy compatibility only.
 
-The standalone path is now quarantined after repeated CX II post-launch stalls.
-The replacement under `src/native_page/` is a newly authored TI document page
-plus resident `nspire_ai_nav.luax.tns` module. It uses the same NSAI framing and
-service ID from TI's Lua document scheduler, rather than entering the standalone
-Ndless loader loop. Its Docker build is intentionally offline-only until a
-separate physical test proves the page-open `CONNECTED` and same-page response
-gates. It does not restore the removed file-exchange page or artifacts.
+The previously tested standalone package is quarantined after repeated CX II
+post-launch stalls. The new Ndless candidate is allowed through the build and
+E022 USB gates, but remains physically unverified until the calculator stays
+open through CONNECTED and a request/response round trip.
+The TI Lua/D2Editor resident-page experiment was retired after the operator
+explicitly required an Ndless-only runtime. Its source, build target, deploy
+script, and device artifacts are removed; do not use a resident page as a
+fallback. The remaining physical gate is the standalone Ndless scheduler/USB
+ownership boundary; host tests and a successful upload do not count as that
+round trip.
 
 The file exchange bridge is retained only as a fallback. It cannot provide the
 requested UX because every response upload is a TI document transfer and may
@@ -75,6 +78,14 @@ The calculator calls `TI_NN_Connect(node, 0x5001, ...)`, a project-private
 service accepted by the TI macOS NavNet host. The raw helper supplies USB
 framing but has not demonstrated host-side service acceptance; local writes
 must not be reported as a registered host service or an application connection.
+
+The Ndless client treats TI NavNet `-258` (incomplete transaction) and `-269`
+(busy) as transient receive states. It keeps the existing channel and retries
+after one RTC tick; it does not call `TI_NN_Disconnect` on those results. Only
+`-257` invalid-connection and other confirmed fatal statuses abandon/close the
+channel. This matters during the first host handshake: tearing down a busy
+handle races the TI callback and was observed to turn a usable USB endpoint
+into the `-257`/freeze failure.
 
 The Java service callback stores the host channel; after the callback has
 returned, the helper queues one valid NSAI PING from its watcher thread. This

@@ -2371,3 +2371,20 @@ extension SHA `4f74f2e180a687c0f8b0e35be3f78689610b106e2c6248a42a167100d7418683`
 Source-contract, bridge-session, and program tests pass. It has not been
 uploaded while the authoritative USB gate is still ACE1, and there is no
 physical `CONNECTED -> request/RX -> same-page response` claim yet.
+
+### 2026-09-27 Ndless-only cleanup and transient-read candidate
+
+Per operator instruction, the TI Lua/D2Editor resident-page experiment was
+retired. Its tracked source/build/deploy files and ignored output artifacts
+were removed, the device root was re-listed with no `nspire_ai_nav.luax.tns`
+or legacy page files, and the Java upload path no longer accepts resident-page
+manifest markers.
+
+The Ndless client now preserves its NavNet channel for TI transient read
+statuses `-258` (incomplete transaction) and `-269` (busy), retrying after one
+RTC tick instead of calling disconnect. A clean NGC build produced SHA-256
+`28a7d652cafddb3d08f46d63e4cca4b17bf31e7fad7745af3fd38c89e55a7c4b`; the
+artifact passed the successful-build manifest and authoritative `0xE022` USB
+gate and was uploaded to `/nspire_ai.tns` (26196 bytes). The bridge reached
+`READY service=0x5001`; calculator-originated `CONNECTED`, request/RX, and
+same-page response are still pending physical verification.

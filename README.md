@@ -43,39 +43,14 @@ and never touches a TI document.
 The old Lua page and extension have been removed. Live chat does not use
 request/response document transfers.
 
-## New resident-page recovery path (offline candidate)
+## Ndless-only runtime route
 
-The standalone package is currently quarantined because Ndless's loader masks
-CPU IRQs for the lifetime of a Zehn executable, which prevents a reliable
-screen/USB scheduler loop on the CX II. A separate new backend is now built
-under `src/native_page/`: a TI Lua document page uses `D2Editor` and
-`toolpalette`, while a resident `nspire_ai_nav` extension performs the same
-NSAI/NavNet `0x5001` framing from timer/menu callbacks. This is not the removed
-file-exchange Lua implementation and does not restore any old source or
-artifact.
-
-Build it without touching the calculator:
-
-```sh
-make native-page-docker
-python3 scripts/test-native-page-source.py
-```
-
-The resulting offline artifacts are placed under `dist/native-page/`:
-`nspire_ai.tns` (the document page) and `nspire_ai_nav.luax.tns` (the resident
-NavNet module). They are not the current `dist/nspire_ai.tns`, and the deploy
-script does not upload them automatically. They have only build/static
-evidence so far; they do not count as physical `CONNECTED → request/RX →
-same-page response` evidence.
-
-The two-file upload path is separately gated and installs the extension before
-the page:
-
-```sh
-NSPIRE_ALLOW_NATIVE_PAGE_UPLOAD=1 ./scripts/deploy-native-page-candidate.sh
-```
-
-That command is intentionally not run by the normal deploy script.
+The TI Lua/D2Editor resident-page experiment has been retired and removed from
+the device and active build/deploy paths. It is not an alternative runtime and
+must not be uploaded. The only supported route is the standalone Ndless
+package under `src/program/`; a package is uploadable only when its successful
+manifest and physical safety gate pass. The known USB-wedging SHA remains
+quarantined until the Ndless scheduler/USB ownership issue is fixed.
 
 ## Current verification status
 

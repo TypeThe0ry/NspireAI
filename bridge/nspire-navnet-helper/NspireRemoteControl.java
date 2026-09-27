@@ -175,7 +175,10 @@ public final class NspireRemoteControl {
                         "/AI.tns", "/AI-ui-demo.tns", "/nspire_ai.luax.tns", "/nspire_ai_nav.luax.tns",
                         "/ndless/nspire_ai.luax.tns",
                         "/nspireai/.exchange.body.tmp", "/nspireai/request.tns",
-                        "/nspireai/request.id.tns", "/nspireai/response.tns", "/nspireai/response.id.tns"));
+                        "/nspireai/request.id.tns", "/nspireai/response.tns", "/nspireai/response.id.tns",
+                        // Exact empty legacy directories observed on this device.
+                        // Delete children first; this command never recurses.
+                        "/nspireai/legacy", "/nspireai", "/nspireai-backup-0916"));
                 for (String path : Arrays.copyOfRange(args, 1, args.length)) {
                     if (!allowed.contains(path)) throw new IllegalArgumentException("not an approved legacy artifact: " + path);
                 }
@@ -216,15 +219,6 @@ public final class NspireRemoteControl {
                 if (!manifestLines.contains("build_status=success") ||
                         !manifestLines.contains("sha256=" + artifactSha))
                     throw new IllegalArgumentException("artifact/manifest mismatch");
-                boolean residentLuaPage = manifestLines.contains(
-                        "page_backend=resident-lua-native-controls") ||
-                        manifestLines.contains("page_backend=resident-lua-navnet-extension");
-                if (residentLuaPage) {
-                    proxy.sendFileToNode(node, source.getAbsolutePath(), args[2]);
-                    System.out.println("UPLOADED " + args[2] + " bytes=" + source.length()
-                            + " backend=resident-lua");
-                    return;
-                }
                 if (!manifestLines.contains("ui_backend=TRUE") &&
                         !manifestLines.contains("ui_backend=FALSE"))
                     throw new IllegalArgumentException("manifest missing valid ui_backend");
@@ -253,7 +247,7 @@ public final class NspireRemoteControl {
                 if (artifactSha.equals("e34b356d9e82e8fe3799016f59c9873a1ea77e6a609ff48684e96a7974f7c2eb"))
                     throw new IllegalArgumentException("refusing NGC candidate: Enter-arm run reached CONNECTED then first read returned -257 and the handheld hung on connecting on 2026-09-27");
                 if (artifactSha.equals("45eba3c67e0d52e133d00a3132eea955d0a4ba2ca4dab1571082ac5f4b895091"))
-                    throw new IllegalArgumentException("refusing standalone NGC/RTC candidate: launching nspire_ai dropped the CX II USB endpoint back to the TS4 ACE1 controller; use the resident native-page backend");
+                    throw new IllegalArgumentException("refusing standalone NGC/RTC candidate: launching nspire_ai dropped the CX II USB endpoint back to the TS4 ACE1 controller; Ndless runtime fix required before another upload");
                 if (artifactSha.equals("c45c42b7284f865c19a2dcce618f63410bb250b5e4788d30eb25ab0b7fec0876"))
                     throw new IllegalArgumentException("refusing get_event scheduler-poll candidate: launch froze before CONNECTED; same path was previously rejected on 2026-09-26");
                 if (artifactSha.equals("ea71bdf2f15c2fdc37c8a91cc9259d5463c4be27cb654c87d50a83c7ce8e2b0f"))

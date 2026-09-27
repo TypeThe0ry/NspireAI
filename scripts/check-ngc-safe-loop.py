@@ -36,6 +36,15 @@ def main() -> int:
         raise SystemExit("FAIL: NGC loop lacks its bounded non-WFI scheduler slice")
     if "if (!ngc_transport_armed)" not in text:
         raise SystemExit("FAIL: Enter arm guard is missing")
+    if "#define NAV_ERR_INCOMPLETE_TRANSACTION (-258)" not in main_text or \
+            "#define NAV_ERR_BUSY (-269)" not in main_text:
+        raise SystemExit("FAIL: transient NavNet read statuses are not named")
+    read_body = main_text.split("static void nav_poll", 1)[1].split(
+        "static void append_input", 1)[0]
+    if "status == NAV_ERR_INCOMPLETE_TRANSACTION || status == NAV_ERR_BUSY" not in read_body:
+        raise SystemExit("FAIL: transient NavNet read statuses still tear down the channel")
+    if "nav_read_at = nav_clock_ms() + NAV_READ_ARM_DELAY_MS;" not in read_body:
+        raise SystemExit("FAIL: transient NavNet read statuses lack retry backoff")
     connect_body = main_text.split("static int nav_try_connect", 1)[1].split(
         "static int nav_write_frame", 1)[0]
     enum_done = connect_body.find("TI_NN_NodeEnumDone")
