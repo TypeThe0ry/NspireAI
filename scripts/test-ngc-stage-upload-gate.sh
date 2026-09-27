@@ -87,6 +87,11 @@ if ! grep -q 'c8c7b9977ae933ef4efe2f7fc6f8dad717abc0fe21b7f45fa95a884df991dc06' 
   echo "FAIL: physically failed two-service bootstrap candidate is not blocked in both upload paths" >&2
   exit 1
 fi
+if ! grep -q 'fc7f3e32dec85b5e860cbd03e080e52d149dbabba63b552137ccf897bd063471' "$ROOT/scripts/deploy-program-nspire.sh" || \
+   ! grep -q 'fc7f3e32dec85b5e860cbd03e080e52d149dbabba63b552137ccf897bd063471' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java"; then
+  echo "FAIL: launch-freezing invalid-handle candidate is not blocked in both upload paths" >&2
+  exit 1
+fi
 if NSPIRE_ALLOW_NGC_ENTRY_STAGE8_UPLOAD=1 "$ROOT/scripts/deploy-ngc-entry-stage8.sh" >"$ROOT/.build/ngc-stage8-reject-gate.out" 2>&1; then
   echo "FAIL: physically rejected stage-8 package remained uploadable" >&2
   exit 1

@@ -2050,3 +2050,30 @@ successfully as `fc7f3e32dec85b5e860cbd03e080e52d149dbabba63b552137ccf897bd06347
 This package has not been uploaded or run on the calculator; the previous
 94bc1466 package remains the last physical artifact and is not being reused as
 evidence for the new fix.
+
+### 2026-09-27 fc7f package launch freeze; scheduler-poll candidate prepared
+
+After the USB endpoint recovered to `0xE022`, the `fc7f3e32...` package was
+uploaded and read back byte-for-byte at 26300 bytes. The bridge reached
+`READY service=0x5001` and `NODE 1`. A read-only screen probe showed the
+`Document Received` dialog; after accepting it, the file browser selected
+`nspire_ai` at 26K. Sending one `Enter` to launch it caused TI's remote
+`sendEventToNode` call to block for 15 seconds. A subsequent read-only screen
+probe also blocked for 15 seconds. The bridge produced no `CONNECTED`, no
+calculator `RX`, and no request/response; no new Mac `NN-crash-*` log was
+created. The package is now permanently upload-blocked in both deployment
+paths as a launch-freezing artifact.
+
+Static review points to the NGC production loop's tight NOP-only tail: the
+program can monopolize the standalone task before NavNet ever reaches
+`CONNECTED`. The next offline candidate restores one bounded, documented
+`get_event()` OS poll (without `idle()`, `msleep()`, IRQ writes, or timer
+rewrites) at the existing RTC cadence while retaining matrix-key handling.
+At this stage it had not been built or uploaded and had no physical runtime
+evidence.
+
+The rebuilt scheduler-poll candidate is SHA-256
+`c45c42b7284f865c19a2dcce618f63410bb250b5e4788d30eb25ab0b7fec0876`
+(`dist/nspire_ai.tns`, 26324 bytes). The build and host-side gates pass, but
+it remains offline-only because the calculator was still in the post-launch
+freeze state; this hash is not physical `CONNECTED` evidence.

@@ -202,6 +202,8 @@ public final class NspireRemoteControl {
                     throw new IllegalArgumentException("refusing local-service bootstrap candidate: launch attempt left CX II NavNet screen/info calls unresponsive on 2026-09-25");
                 if (artifactSha.equals("c8c7b9977ae933ef4efe2f7fc6f8dad717abc0fe21b7f45fa95a884df991dc06"))
                     throw new IllegalArgumentException("refusing two-service Menu bootstrap candidate: Menu launch crashed/froze CX II and the channel degraded to -257 on 2026-09-26");
+                if (artifactSha.equals("fc7f3e32dec85b5e860cbd03e080e52d149dbabba63b552137ccf897bd063471"))
+                    throw new IllegalArgumentException("refusing invalid-handle containment candidate: launch froze before CONNECTED on 2026-09-27");
                 boolean irqMenu = manifestLines.contains("ngc_irq_menu=TRUE");
                 if (!irqMenu && !manifestLines.contains("ngc_irq_menu=FALSE"))
                     throw new IllegalArgumentException("manifest missing valid ngc_irq_menu");

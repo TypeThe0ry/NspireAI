@@ -176,6 +176,20 @@ static int ngc_keys(void) {
     return changed;
 }
 
+/* Give the Ndless event/USB dispatcher a documented non-blocking poll point.
+ * The NGC page cannot use idle()/msleep(): those helpers reprogram the CX II
+ * timer and interrupt mask. A tight NOP loop, however, leaves the standalone
+ * task monopolizing the calculator; the latest package froze at launch before
+ * the bridge ever saw CONNECTED. Keep this poll separate from matrix-key
+ * edge detection so the UI still handles Menu/Enter through the existing
+ * hardware path while the OS gets a bounded hand-off.
+ */
+static void ngc_pump_os_event(void) {
+    struct s_ns_event event;
+    memset(&event, 0, sizeof(event));
+    (void)get_event(&event);
+}
+
 int main(void) {
 #ifdef NSPIRE_NGC_PROBE
     /* Incremental entry probe. Stage 0 calls no Ndless UI API; stage 1 adds
@@ -297,6 +311,7 @@ int main(void) {
         if (++scheduler_spin >= 128u) {
             scheduler_spin = 0;
             now = nav_clock_ms();
+            ngc_pump_os_event();
         }
         if (done) break;
 #if defined(NSPIRE_NGC_LOCAL_SERVICE) || defined(NSPIRE_NGC_MENU_LOCAL_SERVICE)
@@ -317,11 +332,10 @@ int main(void) {
          * redrew once per RTC tick even when nothing changed, repeatedly
          * entering the raw GC framebuffer path. */
         if (ngc_ui_dirty) ngc_draw();
-        /* Do not call msleep here.  Ndless's CX II implementation rewrites
+        /* Do not call msleep here. Ndless's CX II implementation rewrites
          * SP804 timer registers and masks every IRQ except timer 19 while it
-         * waits.  This bounded NOP yield keeps the safe startup build
-         * timer-neutral while transport remains explicitly experimental until
-         * a non-blocking NavNet API is proven. */
+         * waits. The get_event() poll above is the cooperative OS/USB handoff;
+         * this short NOP tail only bounds matrix-loop pressure. */
         for (volatile unsigned spin = 0; spin < 256; ++spin)
             __asm volatile("nop");
     }

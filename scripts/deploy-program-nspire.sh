@@ -135,6 +135,8 @@ case "${ARTIFACT_SHA%% *}" in
     echo "Refusing local-service bootstrap candidate: launch attempt left CX II NavNet screen/info calls unresponsive on 2026-09-25" >&2; exit 65;;
   c8c7b9977ae933ef4efe2f7fc6f8dad717abc0fe21b7f45fa95a884df991dc06)
     echo "Refusing two-service Menu bootstrap candidate: Menu launch crashed/froze CX II and the channel degraded to -257 on 2026-09-26" >&2; exit 65;;
+  fc7f3e32dec85b5e860cbd03e080e52d149dbabba63b552137ccf897bd063471)
+    echo "Refusing invalid-handle containment candidate: launch froze before CONNECTED on 2026-09-27" >&2; exit 65;;
   9cdf132883b0001259aaee62725ae5b0232cf8e7c477c3b879f5cf27cfffee5a|a88bd700651bac3876a23e4b0e45428535102f1834524169219b04a249b499ef|86b883f680a41f3c034167227ae3b0645d26652a8e8a299b2857b0d17a2f1ea1)
     echo "Refusing NGC candidate: handheld rejected this exact SHA as unsupported document format on 2026-09-24" >&2; exit 65;;
 esac
