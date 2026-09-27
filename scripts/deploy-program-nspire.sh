@@ -157,6 +157,8 @@ case "${ARTIFACT_SHA%% *}" in
     echo "Refusing stage-12 long-running post-frame probe: launch froze before CONNECTED on 2026-09-27" >&2; exit 65;;
   7afc998f9014236dbf45dd1cb33b74b5437329460c066516a66e25114163ba12)
     echo "Refusing stage-13 production-cadence post-frame probe: launch froze before CONNECTED on 2026-09-27" >&2; exit 65;;
+  e46e13c8ba6a00efea305321378a7014f596792d2b1c5cd1fa20ba5fd3b375f6)
+    echo "Refusing stage-5 probe: it returned immediately on CX II and did not open a visible page" >&2; exit 65;;
   9cdf132883b0001259aaee62725ae5b0232cf8e7c477c3b879f5cf27cfffee5a|a88bd700651bac3876a23e4b0e45428535102f1834524169219b04a249b499ef|86b883f680a41f3c034167227ae3b0645d26652a8e8a299b2857b0d17a2f1ea1)
     echo "Refusing NGC candidate: handheld rejected this exact SHA as unsupported document format on 2026-09-24" >&2; exit 65;;
 esac

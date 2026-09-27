@@ -2415,3 +2415,18 @@ artifact passed the successful-build manifest and authoritative `0xE022` USB
 gate and was uploaded to `/nspire_ai.tns` (26196 bytes). The bridge reached
 `READY service=0x5001`; calculator-originated `CONNECTED`, request/RX, and
 same-page response are still pending physical verification.
+
+### 2026-09-27 stage-5 probe rejected after physical open attempt
+
+The rebuilt stage-5 package (`e46e13c8ba6a00efea305321378a7014f596792d2b1c5cd1fa20ba5fd3b375f6`)
+passed local package checks: successful manifest, RPF/TNS container detection,
+ELF/Zehn relocation audit, NGC startup-order and safe-loop checks, and host
+tests. It was uploaded once while the handheld enumerated as `0xE022`. The
+operator then reported that selecting it caused an immediate return/close and
+that no page could be opened. This matches the source branch: stage-5 draws a
+diagnostic frame, reads the RTC once, and returns `EXIT_SUCCESS`; it is not a
+resident UI. Therefore this SHA is physical-failure evidence, not a successful
+launch, and is now permanently blocked in both upload paths. No replacement
+package is authorized until it passes local validation and has an explicit
+resident-page design that does not rely on the known-failing standalone
+runtime/USB scheduler.

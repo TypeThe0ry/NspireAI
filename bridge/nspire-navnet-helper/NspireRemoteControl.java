@@ -306,9 +306,8 @@ public final class NspireRemoteControl {
                 if (artifactSha.equals("8b713d32771211438be2e4ac28f53d8e80fa4f9bd3aeff2e97cd48a8f2909119")
                         && !"1".equals(System.getenv("NSPIRE_ALLOW_NGC_ENTRY_STAGE5_UPLOAD")))
                     throw new IllegalArgumentException("refusing NGC entry stage-5 probe without explicit upload confirmation");
-                if (artifactSha.equals("e46e13c8ba6a00efea305321378a7014f596792d2b1c5cd1fa20ba5fd3b375f6")
-                        && !"1".equals(System.getenv("NSPIRE_ALLOW_NGC_ENTRY_STAGE5_UPLOAD")))
-                    throw new IllegalArgumentException("refusing rebuilt NGC entry stage-5 probe without explicit upload confirmation");
+                if (artifactSha.equals("e46e13c8ba6a00efea305321378a7014f596792d2b1c5cd1fa20ba5fd3b375f6"))
+                    throw new IllegalArgumentException("refusing stage-5 probe: it returned immediately on CX II and did not open a visible page");
                 if (artifactSha.equals("0bf950738fcd16e69fe97163cbcf69b6edd96057415ddd14b2a2687d522e91ed")
                         && !"1".equals(System.getenv("NSPIRE_ALLOW_NGC_ENTRY_STAGE6_UPLOAD")))
                     throw new IllegalArgumentException("refusing NGC entry stage-6 probe without explicit upload confirmation");

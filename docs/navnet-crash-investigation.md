@@ -763,3 +763,15 @@ still valid source work, but it cannot be physically tested until a standalone
 entry path that preserves CX II USB scheduling is established.  Do not upload
 another unchanged NGC/RTC package or treat `E022` recovery/`READY` as the
 requested page-open protocol loop.
+
+## 2026-09-27 stage-5 local/physical mismatch
+
+The rebuilt stage-5 diagnostic (`e46e13c8ba6a00efea305321378a7014f596792d2b1c5cd1fa20ba5fd3b375f6`)
+passed local container, relocation, startup-order, safe-loop, and manifest
+checks. It was uploaded once after the handheld enumerated as `0xE022`, but
+the operator reported that opening it immediately closed and never produced a
+visible page. This is consistent with the intentionally transient stage-5
+branch, which returns immediately after LCD/GC/frame/RTC work; it is not
+evidence of a working Ndless page. The exact SHA is now blocked in the shell
+and Java upload paths. Further physical tests require a new resident design,
+not another upload of this diagnostic.

@@ -153,6 +153,12 @@ if ! grep -q '7afc998f9014236dbf45dd1cb33b74b5437329460c066516a66e25114163ba12' 
   echo "FAIL: physically frozen stage-13 probe is not blocked in both normal upload paths" >&2
   exit 1
 fi
+if ! grep -q 'e46e13c8ba6a00efea305321378a7014f596792d2b1c5cd1fa20ba5fd3b375f6' "$ROOT/scripts/deploy-program-nspire.sh" || \
+   ! grep -q 'e46e13c8ba6a00efea305321378a7014f596792d2b1c5cd1fa20ba5fd3b375f6' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java" || \
+   ! grep -q 'returned immediately on the CX II' "$ROOT/scripts/deploy-ngc-entry-stage5.sh"; then
+  echo "FAIL: stage-5 probe that returned immediately is not permanently blocked" >&2
+  exit 1
+fi
 if [[ ! -x "$ROOT/scripts/deploy-ngc-entry-stage14.sh" ]]; then
   echo "FAIL: stage-14 probe upload gate is missing or not executable" >&2
   exit 1
