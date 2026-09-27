@@ -829,6 +829,11 @@ stayed at `READY`/`NODE 1` with no calculator-originated `CONNECTED`. This SHA
 is permanently blocked in both upload paths; the result is physical
 entry/scheduling failure evidence, not NavNet request/response success.
 
+Post-failure recovery was also bounded: a screen read timed out after 8
+seconds, and one `~home~` event timed out inside TI's key API and required the
+wrapper's hard child cleanup. The handheld remained enumerated as `E022`, but
+the page did not respond; no additional bridge or key traffic was attempted.
+
 ## 2026-09-27 Home teardown guard
 
 The production NGC key loop now checks the direct matrix mapping for

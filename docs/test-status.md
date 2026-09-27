@@ -2495,6 +2495,12 @@ out after 8 seconds, a subsequent screen read timed out after 15 seconds, and
 the bridge never reported calculator-originated `CONNECTED`. The exact SHA is
 now permanently blocked in both upload paths; do not retry it unchanged.
 
+After the failed launch, a later read-only screen probe again timed out after
+8 seconds. One bounded `~home~` recovery event (4-second TI key-call budget,
+8-second wrapper budget) also timed out and required the wrapper's hard child
+cleanup. USB remained `E022`, but the page was not responsive; no bridge was
+started and no further key was sent.
+
 ### 2026-09-27 Home teardown guard (local-only candidate)
 
 The NGC page now handles `KEY_NSPIRE_HOME` directly in the matrix scanner and
