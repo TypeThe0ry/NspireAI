@@ -102,8 +102,8 @@ static int history_count;
 static char status_text[LINE_CAP];
 
 static nn_ch_t nav_channel;
-static int nav_local_service_started;
 #if defined(NSPIRE_NGC_LOCAL_SERVICE) || defined(NSPIRE_NGC_MENU_LOCAL_SERVICE)
+static int nav_local_service_started;
 /* The NavNet service callback is not a proven context for synchronous
  * TI_NN_Read/TI_NN_Write on CX II.  The candidate callback only hands the
  * channel to the normal page loop; the loop performs the bounded probe. */
@@ -469,6 +469,7 @@ static int nav_start_local_service(void) {
 }
 #endif
 
+#if defined(NSPIRE_NGC_LOCAL_SERVICE) || defined(NSPIRE_NGC_MENU_LOCAL_SERVICE)
 static void nav_stop_local_service(void) {
     if (!nav_local_service_started) return;
     (void)NAV_OS_CALL(TI_NN_StopService(CALC_LOCAL_SERVICE_ID));
@@ -479,6 +480,7 @@ static void nav_stop_local_service(void) {
     nav_local_service_handshake_complete = 0;
 #endif
 }
+#endif
 
 static int nav_try_connect(void) {
     static int last_enum_error;

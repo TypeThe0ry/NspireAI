@@ -456,7 +456,9 @@ int main(void) {
         nav_irq_window_leave(&ngc_menu_irq_window);
 #endif
     if (nav_channel) (void)NAV_OS_CALL(TI_NN_Disconnect(nav_channel));
+#if defined(NSPIRE_NGC_LOCAL_SERVICE) || defined(NSPIRE_NGC_MENU_LOCAL_SERVICE)
     nav_stop_local_service();
+#endif
     return EXIT_SUCCESS;
 #endif
 }

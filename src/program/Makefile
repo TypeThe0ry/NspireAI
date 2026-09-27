@@ -28,6 +28,7 @@ endif
 
 ifeq ($(UI_NGC),TRUE)
 GCCFLAGS += -DNSPIRE_UI_NGC
+GCCFLAGS += -ffunction-sections -fdata-sections
 ifeq ($(NGC_LOCAL_SERVICE),TRUE)
 GCCFLAGS += -DNSPIRE_NGC_LOCAL_SERVICE
 endif
@@ -74,7 +75,7 @@ $(EXE).elf: $(OBJS)
 	# shipped samples.  The hand-written arm-gcc link produced a second .got
 	# after .bss; genzehn warned about that layout and the handheld rejected
 	# the resulting package as an unsupported document.
-	$(LD) $^ -o $@
+	$(LD) -Wl,--gc-sections $^ -o $@
 endif
 
 $(EXE).tns: $(EXE).elf
