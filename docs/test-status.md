@@ -2430,3 +2430,18 @@ launch, and is now permanently blocked in both upload paths. No replacement
 package is authorized until it passes local validation and has an explicit
 resident-page design that does not rely on the known-failing standalone
 runtime/USB scheduler.
+
+### 2026-09-27 offline TCT_Schedule probe (not uploaded)
+
+To test a scheduler mechanism without repeating the rejected IRQ-window
+experiment, an opt-in stage-17 probe was added. It is pinned to the Ndless
+`OS_cascx2-6.2.0.333.idc` symbol `TCT_Schedule=0x10623ABC` and only calls that
+cooperative scheduler from a 30-second no-NavNet/no-key diagnostic loop when
+`nl_osid()==46`. The Docker build produced SHA-256
+`8fd7dacfaa9551e254e0595d21dfe23797f684c1cbb9894b72543a14388a9b94`; the ELF
+contains the expected address and the Zehn relocation audit reported 231
+relocations. `make program-test`, the Java lifecycle test, 19 bridge tests,
+and all upload gates pass. The artifact remains under `.build/ngc-stage17/`
+only; it has not been uploaded or physically tested, so it is not evidence of
+USB scheduling or page residency. Java direct uploads now reject all probe
+manifests unless an explicit diagnostic override is supplied.

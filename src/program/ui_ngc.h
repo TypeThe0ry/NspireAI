@@ -1,5 +1,8 @@
 /* Included by main.c after its shared conversation and transport code. */
 #include <libndls.h>
+#ifdef NSPIRE_NGC_PROBE
+#include "nav_scheduler_probe.h"
+#endif
 #if defined(NSPIRE_NGC_USB_IRQ_WINDOW) || defined(NSPIRE_NGC_USB_IRQ_MENU)
 #include "nav_irq_window.h"
 #endif
@@ -264,6 +267,37 @@ int main(void) {
                 last_tick = nav_clock_ms();
             }
             idle();
+        }
+    }
+#elif NSPIRE_NGC_PROBE_STAGE == 16
+    /* One-call scheduler ABI probe. It does not access NavNet or keys and
+     * returns immediately; its only purpose is to validate the pinned OS
+     * symbol call in a bounded diagnostic package. */
+    if (!ngc_prepare_lcd()) return EXIT_FAILURE;
+    chat_gc = gui_gc_global_GC();
+    if (!chat_gc) return EXIT_FAILURE;
+    set_status("NGC probe stage 16");
+    ngc_draw();
+    if (!nav_scheduler_probe_call()) return EXIT_FAILURE;
+#elif NSPIRE_NGC_PROBE_STAGE == 17
+    /* Resident scheduler probe. This is still diagnostic-only: it exercises
+     * TCT_Schedule without NavNet, RTC, or matrix-key calls for 30 seconds,
+     * then returns so the launcher can reclaim the program. */
+    if (!ngc_prepare_lcd()) return EXIT_FAILURE;
+    chat_gc = gui_gc_global_GC();
+    if (!chat_gc) return EXIT_FAILURE;
+    set_status("NGC probe stage 17");
+    ngc_draw();
+    {
+        uint32_t last_tick = nav_clock_ms();
+        uint32_t probe_until = last_tick + 30000;
+        unsigned scheduler_spin = 0;
+        while (!nav_deadline_reached(last_tick, probe_until)) {
+            nav_scheduler_probe_call();
+            if (++scheduler_spin >= 128u) {
+                scheduler_spin = 0;
+                last_tick = nav_clock_ms();
+            }
         }
     }
 #elif NSPIRE_NGC_PROBE_STAGE >= 1

@@ -159,6 +159,12 @@ if ! grep -q 'e46e13c8ba6a00efea305321378a7014f596792d2b1c5cd1fa20ba5fd3b375f6' 
   echo "FAIL: stage-5 probe that returned immediately is not permanently blocked" >&2
   exit 1
 fi
+if ! grep -q 'manifest missing valid ngc_probe' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java" || \
+   ! grep -q 'NSPIRE_ALLOW_NGC_PROBE_UPLOAD' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java" || \
+   ! grep -q 'non-probe artifact must use ngc_probe_stage=0' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java"; then
+  echo "FAIL: Java direct-upload path does not gate probe manifests" >&2
+  exit 1
+fi
 if [[ ! -x "$ROOT/scripts/deploy-ngc-entry-stage14.sh" ]]; then
   echo "FAIL: stage-14 probe upload gate is missing or not executable" >&2
   exit 1

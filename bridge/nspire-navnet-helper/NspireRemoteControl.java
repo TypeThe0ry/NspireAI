@@ -222,6 +222,22 @@ public final class NspireRemoteControl {
                 if (!manifestLines.contains("ui_backend=TRUE") &&
                         !manifestLines.contains("ui_backend=FALSE"))
                     throw new IllegalArgumentException("manifest missing valid ui_backend");
+                boolean ngcProbe = manifestLines.contains("ngc_probe=TRUE");
+                if (!ngcProbe && !manifestLines.contains("ngc_probe=FALSE"))
+                    throw new IllegalArgumentException("manifest missing valid ngc_probe");
+                String probeStage = null;
+                for (String line : manifestLines) {
+                    if (line.startsWith("ngc_probe_stage=")) {
+                        probeStage = line.substring("ngc_probe_stage=".length());
+                        break;
+                    }
+                }
+                if (probeStage == null || !probeStage.matches("(?:0|[1-9]|1[0-7])"))
+                    throw new IllegalArgumentException("manifest missing valid ngc_probe_stage");
+                if (!ngcProbe && !"0".equals(probeStage))
+                    throw new IllegalArgumentException("non-probe artifact must use ngc_probe_stage=0");
+                if (ngcProbe && !"1".equals(System.getenv("NSPIRE_ALLOW_NGC_PROBE_UPLOAD")))
+                    throw new IllegalArgumentException("refusing diagnostic NGC probe without explicit upload confirmation");
                 boolean irqWindow = manifestLines.contains("ngc_irq_window=TRUE");
                 if (!irqWindow && !manifestLines.contains("ngc_irq_window=FALSE"))
                     throw new IllegalArgumentException("manifest missing valid ngc_irq_window");

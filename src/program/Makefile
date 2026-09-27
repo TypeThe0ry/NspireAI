@@ -60,7 +60,7 @@ OBJS = main.o
 
 all: $(EXE).tns
 
-main.o: main.c nav_os_call.h nav_clock.h nav_fragment.h nav_irq_window.h ui_ngc.h
+main.o: main.c nav_os_call.h nav_clock.h nav_fragment.h nav_irq_window.h nav_scheduler_probe.h ui_ngc.h
 	$(GCC) $(GCCFLAGS) -c $< -o $@
 
 ifneq ($(UI_NGC),TRUE)
