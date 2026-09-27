@@ -908,5 +908,24 @@ bytes), with `alloc_size=59444` against the 60,000-byte budget and 242 Zehn
 relocations. All host/static tests passed. This is a local candidate only; an
 authorized uploader invocation timed out after 45 seconds and the next
 read-only check saw only the TS4 `ACE1` controller, not the direct calculator
-`E022` child. Therefore there is no upload readback, launch, `CONNECTED`,
-request/RX, or same-page response evidence for this SHA.
+`E022` child. Therefore there was no upload readback or launch evidence for
+this SHA at the time of that earlier note; the subsequent controlled physical
+test and rejection are recorded below.
+
+## 2026-09-27 resident task handoff return-through-crt0 physical rejection
+
+After replugging, the old package was read back and classified as the already
+blocked black-page SHA. The return-through-crt0 candidate was then uploaded
+and read back with an exact SHA match:
+
+`4092c01a6010b0e562fb1ca95e5573b0b5ee4cf929fb1281998b93c04398013e`
+
+The handheld showed `Document Received`. One Enter dismissed the dialog and
+left `nspire_ai` highlighted in the document list. The second Enter timed out
+inside `sendEventToNode` after 7 seconds. A subsequent read-only screen probe
+also timed out and required bounded process cleanup. The bridge remained at
+`READY`/`NODE 1` for 90 seconds, never reached `CONNECTED`, and produced no
+calculator PING/PONG, request/RX, or same-page response. USB remained
+enumerated as direct `0x0451:0xE022` during the failure, so this is a physical
+launch/task-handoff rejection rather than a cable disappearance. This exact
+SHA is permanently blocked in the shell and Java upload paths.

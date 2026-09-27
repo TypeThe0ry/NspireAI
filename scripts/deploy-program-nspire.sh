@@ -181,6 +181,8 @@ case "${ARTIFACT_SHA%% *}" in
     echo "Refusing stage-17 probe: CX II Data Abort at raw TCT_Schedule call" >&2; exit 65;;
   1a5c052f6fd68233275451f3c028514c3e2dff1eeecc89da74a2648c97e14e1a)
     echo "Refusing resident task-handoff candidate: physical launch produced a black page, NavNet key/screen calls timed out, and no CONNECTED was observed on 2026-09-27" >&2; exit 65;;
+  4092c01a6010b0e562fb1ca95e5573b0b5ee4cf929fb1281998b93c04398013e)
+    echo "Refusing resident task-handoff return-through-crt0 candidate: second Enter timed out, screen probe hung, and no CONNECTED was observed on 2026-09-27" >&2; exit 65;;
   9cdf132883b0001259aaee62725ae5b0232cf8e7c477c3b879f5cf27cfffee5a|a88bd700651bac3876a23e4b0e45428535102f1834524169219b04a249b499ef|86b883f680a41f3c034167227ae3b0645d26652a8e8a299b2857b0d17a2f1ea1)
     echo "Refusing NGC candidate: handheld rejected this exact SHA as unsupported document format on 2026-09-24" >&2; exit 65;;
 esac

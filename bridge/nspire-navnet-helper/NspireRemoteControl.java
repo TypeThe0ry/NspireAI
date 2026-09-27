@@ -337,6 +337,8 @@ public final class NspireRemoteControl {
                     throw new IllegalArgumentException("refusing stage-17 probe: CX II Data Abort at raw TCT_Schedule call");
                 if (artifactSha.equals("1a5c052f6fd68233275451f3c028514c3e2dff1eeecc89da74a2648c97e14e1a"))
                     throw new IllegalArgumentException("refusing resident task-handoff candidate: physical launch produced a black page and no CONNECTED on 2026-09-27");
+                if (artifactSha.equals("4092c01a6010b0e562fb1ca95e5573b0b5ee4cf929fb1281998b93c04398013e"))
+                    throw new IllegalArgumentException("refusing resident task-handoff return-through-crt0 candidate: second Enter and screen probe timed out before CONNECTED on 2026-09-27");
                 if (artifactSha.equals("0bf950738fcd16e69fe97163cbcf69b6edd96057415ddd14b2a2687d522e91ed")
                         && !"1".equals(System.getenv("NSPIRE_ALLOW_NGC_ENTRY_STAGE6_UPLOAD")))
                     throw new IllegalArgumentException("refusing NGC entry stage-6 probe without explicit upload confirmation");

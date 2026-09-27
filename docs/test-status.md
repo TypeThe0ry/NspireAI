@@ -2806,10 +2806,31 @@ Zehn relocations=242
 lifecycle, upload gates, task-handoff audit, loader-boundary audit, startup
 order audit, and `git diff --check` all passed. The artifact is kept separately
 under `.build/ngc-task-handoff-return/`; it has not produced any physical
-`CONNECTED`, calculator PING/PONG, request/RX, or same-page response evidence.
+`CONNECTED`, calculator PING/PONG, request/RX, or same-page response evidence
+before this controlled physical test.
 
 An explicitly authorized upload attempt on 2026-09-27 did not return a success
 status: the bounded uploader timed out after 45 seconds, and the subsequent
 read-only USB check found that the direct `0x0451:0xE022` child had disappeared,
 leaving only the TS4 `0xACE1` controller. No readback or launch was claimed,
-and the new SHA is not marked successful or promoted over the rejected one.
+and the new SHA was then physically rejected as documented below.
+
+### 2026-09-27 resident-task handoff return-through-crt0 physical rejection
+
+After the calculator was replugged, the old blocked package was read back first
+and identified as `KNOWN_BLOCKED_TASK_HANDOFF_BLACK_PAGE`. The new candidate was
+then uploaded with readback verification; the device returned the exact local
+SHA:
+
+```text
+4092c01a6010b0e562fb1ca95e5573b0b5ee4cf929fb1281998b93c04398013e
+```
+
+The TI `Document Received` dialog appeared. The first Enter dismissed that
+dialog and exposed the document list with `nspire_ai` highlighted. The second
+Enter, which should launch the selected program, timed out in
+`sendEventToNode` after 7 seconds. A read-only screen probe then timed out and
+had to be killed; the bridge stayed at `READY`/`NODE 1` for 90 seconds and
+never emitted `CONNECTED`. No calculator PING/PONG, request/RX, or same-page
+response was observed. The exact SHA is now permanently blocked in both upload
+paths, and the device package must not be retried.
