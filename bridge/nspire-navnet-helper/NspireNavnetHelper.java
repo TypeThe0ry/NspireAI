@@ -28,10 +28,11 @@ import java.nio.charset.StandardCharsets;
  */
 public final class NspireNavnetHelper {
     private static final Object IO_LOCK = new Object();
-    // TI_NN_ERR_INVALID_CONNECTION.  During a handheld-side service startup
-    // the Java host can report this transiently before the connection handle
-    // is usable; the reader must keep the bridge alive and let a later
-    // callback replace the handle instead of terminating on the first read.
+    // TI_NN_ERR_INVALID_CONNECTION.  Once the host returns this status the
+    // handle is stale, not a readable channel.  Retrying the same handle
+    // floods the TI server while the calculator is tearing down its peer and
+    // was followed by a CX II flash/freeze.  Clear the handle and wait for a
+    // fresh service callback instead.
     private static final int ERR_INVALID_CONNECTION = -257;
     private static volatile ConnectionHandle connection;
     private static volatile boolean stopping;
@@ -143,7 +144,6 @@ public final class NspireNavnetHelper {
         reader = new Thread(() -> {
             byte[] buffer = new byte[4096];
             try {
-                boolean invalidReported = false;
                 while (!stopping && connection == handle) {
                     IntegerBox received = new IntegerBox();
                     int status;
@@ -153,22 +153,19 @@ public final class NspireNavnetHelper {
                     if (status < 0) {
                         if (stopping || connection != handle) break;
                         if (status == ERR_INVALID_CONNECTION) {
-                            if (!invalidReported) {
-                                emit("ERR NavNet.read=" + status + "; retrying");
-                                invalidReported = true;
-                            }
-                            try {
-                                Thread.sleep(100L);
-                            } catch (InterruptedException interrupted) {
-                                Thread.currentThread().interrupt();
-                                break;
-                            }
-                            continue;
+                            emit("ERR NavNet.read=" + status + "; handle invalid; waiting for callback");
+                            /* Do not call NavNet.disconnect(handle): TI has
+                             * already rejected the handle and its native
+                             * teardown is not safe on this path.  Clearing
+                             * the volatile reference also prevents the
+                             * watcher from restarting a reader on the same
+                             * stale handle. */
+                            connection = null;
+                            break;
                         }
                         emit("ERR NavNet.read=" + status);
                         break;
                     }
-                    invalidReported = false;
                     int length = received.getValue();
                     if (length > 0) emit("RX " + hex(buffer, Math.min(length, buffer.length)));
                 }

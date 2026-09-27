@@ -365,6 +365,36 @@ static void nav_disconnect(const char *reason) {
 #endif
 }
 
+/* TI_NN_Read can report -257 (invalid connection) after the host has already
+ * discarded the peer-side channel.  On CX II 6.2, calling TI_NN_Disconnect
+ * again on that stale handle is not a safe recovery operation: the page can
+ * flash out or leave the USB endpoint wedged.  Abandon the local pointer and
+ * hold transport instead; the next explicit Menu retry will obtain a fresh
+ * enumeration/connection.  Keeping this separate from nav_disconnect makes
+ * it impossible for the invalid-read path to accidentally re-enter the
+ * teardown syscall.
+ */
+static void nav_abandon_channel(const char *reason) {
+    nav_channel = NULL;
+    nav_connected = 0;
+    nav_ping_sent = 0;
+    nav_handshake_pending = 0;
+    pending = 0;
+    response_len = 0;
+    response_total = 0;
+    response_next_offset = 0;
+    nav_connected_at = 0;
+    nav_ping_at = 0;
+#ifdef NSPIRE_UI_NGC
+    nav_transport_hold();
+    set_status("USB held after invalid channel: %s; Menu retries",
+               reason ? reason : "bridge unavailable");
+#else
+    nav_retry_at = nav_clock_ms() + NAV_DISCONNECT_RETRY_MS;
+    set_status("bridge channel invalid: %s", reason ? reason : "retrying");
+#endif
+}
+
 /* Historical Ndless NavNet calculator tests start a local service before
  * enumerating the computer node.  This appears to be the calculator-side
  * NavNet bootstrap path; it is not a scheduler or interrupt workaround.
@@ -722,7 +752,15 @@ static void nav_poll(void) {
         set_status("read failed: %d", status);
         strncpy(detail, status_text, sizeof(detail) - 1);
         detail[sizeof(detail) - 1] = '\0';
-        nav_disconnect(detail);
+        if (status == -257) {
+            /* -257 is TI_NN_ERR_INVALID_CONNECTION.  The peer has already
+             * invalidated this handle; do not call TI_NN_Disconnect on it.
+             * That teardown was followed by a calculator flash/freeze in the
+             * physical CX II attempt. */
+            nav_abandon_channel(detail);
+        } else {
+            nav_disconnect(detail);
+        }
         return;
     }
     if (received > sizeof(frame)) {

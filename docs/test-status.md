@@ -2019,3 +2019,27 @@ The Java helper lifecycle test now asserts the safe marker, and the bridge
 lifecycle test, `make program-test`, 19 bridge tests, and `git diff --check`
 pass. This is a host crash-prevention change, not evidence of the missing
 physical `CONNECTED` → request/RX → same-page response gate.
+
+### 2026-09-27 first-read invalid handle caused page freeze; retry disabled
+
+The host-side connector fix reached a real `NODE 1` and then a real
+`CONNECTED handle=0x1` with the 94bc1466 package. The calculator briefly
+showed `connecting to the bridge`; the first channel operation then degraded
+to TI's `-257` invalid-connection result, with no calculator `RX`, request, or
+same-page response. The user reported an immediate flash followed by a
+freeze/crash. No new TI `NN-crash-*` log was produced on the Mac, and the
+bridge was stopped cleanly, so this attempt is evidence of a calculator-side
+invalid-channel/teardown failure rather than the earlier duplicate host
+connector abort.
+
+The host helper no longer retries `NavNet.read=-257` on the same handle. It
+clears the volatile handle, emits `handle invalid; waiting for callback`, and
+waits for a fresh service callback; it also avoids calling `NavNet.disconnect`
+on a handle the native library has already rejected. The calculator path now
+similarly abandons the local channel on `TI_NN_Read=-257` without calling
+`TI_NN_Disconnect` on the stale pointer, holds transport, and requires one
+explicit Menu retry. This is a crash-containment change, not proof that the
+NavNet channel is usable. Host lifecycle, Java helper lifecycle, 19 protocol
+tests, and `make program-test` pass; no replacement package was uploaded after
+the crash and the physical `CONNECTED` → request/RX → same-page response gate
+remains unverified.
