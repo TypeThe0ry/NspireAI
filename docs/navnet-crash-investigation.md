@@ -607,3 +607,11 @@ before the reader can reuse the stale handle. The reader exits on that clear,
 and a later `NODE 1` installs a new service connection. The rebuilt helper
 passed the lifecycle test and the 19 host bridge/protocol tests; this is a
 host-side recovery improvement, not physical proof of calculator `CONNECTED`.
+
+The current workspace artifact is independently gated: `dist/nspire_ai.tns`
+has SHA-256 `fc7f3e32dec85b5e860cbd03e080e52d149dbabba63b552137ccf897bd063471`
+and its adjacent manifest declares `ngc_auto_transport=FALSE`. Both upload
+entry points reject this known stale/blocked SHA, so it was not uploaded during
+this audit. Until a newly built, non-blocked package is available and launched
+on the handheld, `READY` on the Mac cannot be expected to produce a calculator
+`CONNECTED` event by itself.
