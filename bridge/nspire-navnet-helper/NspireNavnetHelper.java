@@ -140,10 +140,23 @@ public final class NspireNavnetHelper {
         System.out.flush();
     }
 
-    private static void write(ConnectionHandle handle, byte[] data) {
+    private static int write(ConnectionHandle handle, byte[] data) {
         synchronized (IO_LOCK) {
             int status = NavNet.write(handle, data, data.length);
-            if (status < 0) emit("ERR NavNet.write=" + status);
+            if (status < 0) {
+                if (status == ERR_INVALID_CONNECTION) {
+                    /* The native connector has already rejected this
+                     * pointer. Do not disconnect it again, and do not let
+                     * the stdin SEND path report a false OK or reuse the
+                     * stale handle on the next request. */
+                    if (connection == handle) connection = null;
+                    emit("ERR NavNet.write=" + status
+                            + "; handle invalid; waiting for callback");
+                } else {
+                    emit("ERR NavNet.write=" + status);
+                }
+            }
+            return status;
         }
     }
 
@@ -152,6 +165,7 @@ public final class NspireNavnetHelper {
         reader = new Thread(() -> {
             byte[] buffer = new byte[4096];
             int transientStatus = 0;
+            int transientRetries = 0;
             try {
                 while (!stopping && connection == handle) {
                     IntegerBox received = new IntegerBox();
@@ -176,9 +190,19 @@ public final class NspireNavnetHelper {
                             if (transientStatus != status) {
                                 emit("ERR NavNet.read=" + status + "; retrying");
                                 transientStatus = status;
+                                transientRetries = 0;
                             }
+                            transientRetries++;
+                            if (transientRetries > 20) {
+                                emit("ERR NavNet.read=" + status
+                                        + "; transient retry limit reached");
+                                if (connection == handle) connection = null;
+                                break;
+                            }
+                            long delay = Math.min(400L,
+                                    50L << Math.min(transientRetries - 1, 3));
                             try {
-                                Thread.sleep(50L);
+                                Thread.sleep(delay);
                             } catch (InterruptedException interrupted) {
                                 Thread.currentThread().interrupt();
                                 break;
@@ -189,6 +213,7 @@ public final class NspireNavnetHelper {
                         break;
                     }
                     transientStatus = 0;
+                    transientRetries = 0;
                     int length = received.getValue();
                     if (length > 0) emit("RX " + hex(buffer, Math.min(length, buffer.length)));
                 }
@@ -472,8 +497,8 @@ public final class NspireNavnetHelper {
                     continue;
                 }
                 try {
-                    write(handle, unhex(line.substring(5).trim()));
-                    emit("OK");
+                    int writeStatus = write(handle, unhex(line.substring(5).trim()));
+                    if (writeStatus >= 0) emit("OK");
                 } catch (RuntimeException error) {
                     emit("ERR " + error.getMessage());
                 }

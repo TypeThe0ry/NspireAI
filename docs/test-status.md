@@ -2527,3 +2527,16 @@ or a same-page response. The bridge and helper were stopped cleanly. This
 exact SHA is permanently blocked in both upload paths; do not retry it
 unchanged. `E022` only proves the USB/NavNet node is enumerable, not that the
 standalone page is schedulable.
+
+### 2026-09-27 host stale-handle containment
+
+A read-only helper audit found two bridge-side failure amplifiers independent
+of the frozen calculator page. The Java `SEND` path reported `OK` even when
+`NavNet.write()` returned `-257`, and retained the rejected handle for later
+requests. The reader also retried `-258/-269` every 50 ms without a bound.
+The helper now clears the handle on `-257`, suppresses false `OK`, and applies
+bounded exponential backoff with a 20-attempt transient limit before waiting
+for a fresh service callback. Java helper lifecycle, bridge lifecycle, 19
+bridge tests, `make program-test`, upload gates, and `git diff --check` pass.
+This is host-side hardening only; it does not turn the blocked
+`6430301d…` package into physical `CONNECTED` evidence.
