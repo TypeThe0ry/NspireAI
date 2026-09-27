@@ -1022,3 +1022,31 @@ daemon's containerd metadata I/O error and the host ARM compiler lacking the
 Ndless-pinned newlib/C++ runtime. No patched runtime or new `nspire_ai.tns` was
 uploaded, and the physical `CONNECTED -> request/RX -> same-page response`
 gate remains open.
+
+## 2026-09-27 Ndless runtime-boundary build completed (local-only)
+
+The pinned Ndless GCC 14.2/newlib toolchain was built in a Debian container and
+used to compile the opt-in loader variant. The resulting local runtime is:
+
+```text
+path: .build/runtime-boundary-variant/ndless_resources.tns
+size: 196864 bytes
+sha256: e930ed866d08e44063539ecc7fd40d5611b272b64bfb6621f04f90fd34aadb0f
+```
+
+The ordinary NGC/RTC page was then rebuilt with that same toolchain (plain NGC,
+no task handoff, no IRQ flags, no probe, no local service):
+
+```text
+path: .build/runtime-boundary-variant/nspire_ai.tns
+size: 17044 bytes
+sha256: 4420b04290fc588805ed0439ca1aa6357ab19f57b77ad8bbd5f465a5aaa7baba
+loader allocation: 53372 bytes <= 60000-byte budget
+Zehn relocations: 237
+```
+
+The candidate pair passes the local loader-variant, memory-budget, relocation,
+and NGC safe-loop audits. It is not in `dist`, has not been uploaded, and does
+not change the installed device runtime. Replacing
+`/ndless/ndless_resources.tns` is a separate external write and requires an
+explicit user authorization immediately before the controlled physical test.
