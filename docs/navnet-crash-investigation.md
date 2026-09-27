@@ -1046,7 +1046,16 @@ Zehn relocations: 237
 ```
 
 The candidate pair passes the local loader-variant, memory-budget, relocation,
-and NGC safe-loop audits. It is not in `dist`, has not been uploaded, and does
-not change the installed device runtime. Replacing
-`/ndless/ndless_resources.tns` is a separate external write and requires an
-explicit user authorization immediately before the controlled physical test.
+and NGC safe-loop audits. It remains out of `dist`. After the required user
+authorization, the pair was written through the project's raw libnspire helper
+because the N-Link CLI returned a misleading zero exit with a LibUSB directory
+error. Both writes were independently read back and matched exactly:
+
+```text
+/ndless/ndless_resources.tns 196864 bytes sha256=e930ed866d08e44063539ecc7fd40d5611b272b64bfb6621f04f90fd34aadb0f
+/nspire_ai.tns                 17044 bytes sha256=4420b04290fc588805ed0439ca1aa6357ab19f57b77ad8bbd5f465a5aaa7baba
+```
+
+The runtime replacement is not active until the calculator restarts. This is
+deployment/readback evidence only; the physical `CONNECTED -> request/RX ->
+same-page response` gate is still open and must be tested after that restart.
