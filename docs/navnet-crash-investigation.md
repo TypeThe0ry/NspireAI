@@ -1059,3 +1059,6 @@ error. Both writes were independently read back and matched exactly:
 The runtime replacement is not active until the calculator restarts. This is
 deployment/readback evidence only; the physical `CONNECTED -> request/RX ->
 same-page response` gate is still open and must be tested after that restart.
+The exact opt-in procedure is preserved in
+`scripts/deploy-runtime-boundary-candidate.sh`; it checks both fixed hashes,
+requires `NSPIRE_ALLOW_RUNTIME_BOUNDARY_UPLOAD=1`, and verifies both writes.
