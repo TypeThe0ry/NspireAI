@@ -28,6 +28,8 @@ def main() -> int:
         raise SystemExit("FAIL: NGC loop samples the RTC on every spin")
     if "if (++key_sample_spin >= 512u)" not in production:
         raise SystemExit("FAIL: NGC loop still scans the full key matrix on every spin")
+    if "if (!ngc_transport_armed && !nav_connected)" not in production or "idle();" not in production:
+        raise SystemExit("FAIL: unarmed NGC loop lacks the stage-15 scheduler yield")
     connect_body = main_text.split("static int nav_try_connect", 1)[1].split(
         "static int nav_write_frame", 1)[0]
     enum_done = connect_body.find("TI_NN_NodeEnumDone")

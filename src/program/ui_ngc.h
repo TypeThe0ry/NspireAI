@@ -426,12 +426,19 @@ int main(void) {
          * redrew once per RTC tick even when nothing changed, repeatedly
          * entering the raw GC framebuffer path. */
         if (ngc_ui_dirty) ngc_draw();
-        /* Do not call msleep here. Ndless's CX II implementation rewrites
-         * SP804 timer registers and masks every IRQ except timer 19 while it
-         * waits. This bounded NOP tail keeps the safe startup build
-         * timer-neutral while transport remains explicitly experimental. */
-        for (volatile unsigned spin = 0; spin < 256; ++spin)
-            __asm volatile("nop");
+        /* The stage-15 discriminator showed that a pure NOP tail can starve
+         * the CX II page/screen scheduler even when the loop only samples
+         * RTC.  While transport is still disarmed there is no NavNet syscall
+         * whose IRQs need to be serviced, so yield through Ndless idle().
+         * Once Menu explicitly arms transport, keep idle() out of the path:
+         * idle() masks every IRQ except the Ndless timer interrupt and must
+         * not be allowed to hide a NavNet event. */
+        if (!ngc_transport_armed && !nav_connected) {
+            idle();
+        } else {
+            for (volatile unsigned spin = 0; spin < 256; ++spin)
+                __asm volatile("nop");
+        }
     }
 #ifdef NSPIRE_NGC_USB_IRQ_WINDOW
     nav_irq_window_leave(&irq_window);
