@@ -615,3 +615,25 @@ entry points reject this known stale/blocked SHA, so it was not uploaded during
 this audit. Until a newly built, non-blocked package is available and launched
 on the handheld, `READY` on the Mac cannot be expected to produce a calculator
 `CONNECTED` event by itself.
+
+## Launch-versus-crash audit (2026-09-27)
+
+There is one confirmed macOS-side NavNet crash in the available logs:
+`NN-crash-20260927-082215.log` records `SIGILL` from
+`_pthread_mutex_corruption_abort`, with the native stack ending in
+`navnet-connectors-mac_sc-embedded.dylib!USB_Process_Transactions` and
+`TI_NS_event_timedwait`. This is the shared TI Java/NavNet server crash that
+occurred at 08:41:43; it is not evidence that the calculator program itself
+executed a faulting instruction.
+
+The later launch attempts at approximately 10:51, 10:53, and 11:40 have no
+new `NN-crash-*` file. Their read-only screen artifacts
+(`var/latest-1790477462.png`, `var/goal-check-1790477612.png`, and
+`var/reopen-ti-1790480436.png`) all show the calculator's file browser with
+`nspire_ai` selected at about 26 KB, not the NspireAI page. The corresponding
+logs show host-side `NODE`/screen acquisition only and no calculator
+`CONNECTED`, `RX`, request, or response. Therefore the recent “闪一下后回到
+文件列表/卡住” behavior is best classified as a launch/loader or
+calculator-side program-exit failure, not a new macOS Java crash. The host
+logs cannot distinguish an immediate calculator-side flash-out from a loader
+rejection without a successful page capture or calculator-local crash log.
