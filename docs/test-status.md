@@ -560,6 +560,14 @@ converted into a new TNS or uploaded, so they are not physical-runtime
 evidence. The synchronous NavNet syscall timeout remains unverified as a
 wall-clock bound and is still an open device-side risk.
 
+The guarded source was subsequently built through the Docker Ndless path into
+the production candidate `dist/nspire_ai.tns`: 26,552 bytes,
+SHA-256
+`2a20676747b78f87fab2f2d11d1e56ad70d6390097c3c9319affc60bcf4aefa8`.
+Its manifest reports `build_status=success`, `ui_backend=TRUE`, and all
+auto-transport/IRQ flags disabled. It has not been uploaded or physically
+tested yet; the earlier `fc7f...` package remains stale and must not be used.
+
 ## 2026-09-24 relocation-candidate physical rejection (Computer Use control)
 
 Computer Use (CUA) was used for the desktop interaction and application-state

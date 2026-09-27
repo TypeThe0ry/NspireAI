@@ -707,3 +707,9 @@ safe-loop truth-table checks and host tests, but have not been built into a new
 TNS or uploaded; no physical result is claimed for this follow-up. The
 underlying synchronous `NodeEnumInit`/`Connect`/`Read`/`Write` calls still have
 no verified wall-clock bound on CX II and remain an unresolved runtime risk.
+
+The guarded source was then rebuilt through the Docker Ndless path into a
+production candidate at `dist/nspire_ai.tns`: 26,552 bytes,
+SHA-256 `2a20676747b78f87fab2f2d11d1e56ad70d6390097c3c9319affc60bcf4aefa8`,
+with a successful manifest and all auto-transport/IRQ flags disabled. It has
+not yet been uploaded to the handheld or treated as physical-runtime proof.
