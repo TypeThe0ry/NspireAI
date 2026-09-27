@@ -2860,3 +2860,23 @@ This SHA is local-only and has not been uploaded or physically tested. The
 upload gates deliberately require a new explicit authorization before any
 device action; no physical `CONNECTED`, request/RX, or same-page response may
 be inferred from these offline checks.
+
+### 2026-09-27 resident-task handoff priority-255 physical rejection
+
+With explicit authorization, the priority-255 candidate was uploaded after a
+fresh `STATE=CX2_USB_CANDIDATE product=0xE022` gate. The upload wrapper completed
+an exact device readback:
+
+```text
+sha256=f3e958e3aff470685ca5e5bd545f8a3478097ed8152ca9a8d24c7c5b3e14e822
+bytes=16664
+```
+
+The bridge reached `READY service=0x5001` and `NODE 1`. The first and second
+remote Enter calls both returned successfully, but a read-only screen capture
+still showed the TI document list with `nspire_ai` highlighted; the candidate
+did not open a page. The bounded 90-second bridge run never emitted
+`CONNECTED`, calculator PING/PONG, request/RX, or a same-page response. USB
+remained direct `0x0451:0xE022`; helper, bridge, lock, and port cleanup all
+completed. This exact SHA is now permanently blocked in both upload paths and
+classified as `KNOWN_BLOCKED_TASK_HANDOFF_PRIORITY255_NO_LAUNCH`.

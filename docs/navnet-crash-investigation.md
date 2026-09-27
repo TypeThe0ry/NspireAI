@@ -894,6 +894,22 @@ The USB descriptor remained direct `0x0451:0xE022`, so this run did not reproduc
 the earlier TS4 endpoint drop, but it is still a physical rejection. The exact
 SHA is permanently blocked in the shell and Java upload paths.
 
+## 2026-09-27 resident task handoff priority-255 physical rejection
+
+The priority-255 candidate was uploaded once after explicit authorization and
+an E022 USB gate. Device readback matched the local SHA exactly:
+
+`f3e958e3aff470685ca5e5bd545f8a3478097ed8152ca9a8d24c7c5b3e14e822`
+
+The host bridge reached `READY service=0x5001` and `NODE 1`. Both controlled
+Enter calls returned, but the calculator remained on the document list with
+`nspire_ai` highlighted. A read-only screen call succeeded, confirming that
+the calculator was not in the earlier total screen-hang state, yet the page
+never opened. The bridge timed out after 90 seconds without `CONNECTED`,
+calculator PING/PONG, request/RX, or same-page response. USB stayed at direct
+`0x0451:0xE022`, and all host processes/locks were cleaned up. The exact SHA is
+permanently blocked in both upload entry points.
+
 ## 2026-09-27 resident task handoff return-through-crt0 candidate
 
 The rejected candidate above called `_exit(0)` after `nl_set_resident()`. The
@@ -940,10 +956,10 @@ candidate changes only that boundary to the lowest legal Nucleus priority,
 state before the resident task can preempt it. No explicit IRQ writes,
 `idle()`/`msleep()`, `TCT_Schedule`, or NavNet startup were added.
 
-The clean local build produced
+The pre-test clean local build produced
 `f3e958e3aff470685ca5e5bd545f8a3478097ed8152ca9a8d24c7c5b3e14e822`
 (16,664 bytes), with 59,444 bytes of loader allocation and 242 Zehn
 relocations. The artifact is stored at
-`.build/ngc-task-handoff-priority255/nspire_ai.tns`. It is local-only: there
-is no upload/readback or physical `CONNECTED` evidence for this SHA, and it
-must not be uploaded without fresh explicit authorization.
+`.build/ngc-task-handoff-priority255/nspire_ai.tns`. The later authorized upload
+and physical rejection are recorded above; this offline record by itself never
+counted as `CONNECTED` evidence.
