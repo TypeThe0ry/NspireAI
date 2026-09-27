@@ -141,6 +141,8 @@ case "${ARTIFACT_SHA%% *}" in
     echo "Refusing guarded NGC candidate: user reported handheld frozen during physical run on 2026-09-27; no CONNECTED observed" >&2; exit 65;;
   d30a62b4f96640f0f49acf2813f138910de2e0917d28e9a98c92e946150fb146)
     echo "Refusing NGC candidate: handheld flashed/crashed on Menu during physical run on 2026-09-27" >&2; exit 65;;
+  e34b356d9e82e8fe3799016f59c9873a1ea77e6a609ff48684e96a7974f7c2eb)
+    echo "Refusing NGC candidate: Enter-arm run reached CONNECTED then first read returned -257 and the handheld hung on connecting on 2026-09-27" >&2; exit 65;;
   c45c42b7284f865c19a2dcce618f63410bb250b5e4788d30eb25ab0b7fec0876)
     echo "Refusing get_event scheduler-poll candidate: launch froze before CONNECTED; same path was previously rejected on 2026-09-26" >&2; exit 65;;
   ea71bdf2f15c2fdc37c8a91cc9259d5463c4be27cb654c87d50a83c7ce8e2b0f)

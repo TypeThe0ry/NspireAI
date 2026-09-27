@@ -2273,3 +2273,16 @@ the static/program/bridge lifecycle tests. An upload was then attempted, but
 the calculator disappeared from USB and the subsequent readback timed out;
 there is no authoritative evidence that this SHA reached the device. This is
 a targeted crash-containment change, not proof of the physical protocol loop.
+
+### 2026-09-27 Enter-arm candidate reached CONNECTED then invalidated its channel
+
+The same `e34b356d9e82e8fe3799016f59c9873a1ea77e6a609ff48684e96a7974f7c2eb`
+package was later uploaded and read back directly at 26,108 bytes. With the
+bridge at `READY service=0x5001` and `NODE 1`, the Enter-arm path produced a
+real host callback, `CONNECTED handle=0x1`. The helper's first reader call
+then returned `NavNet.read=-257; handle invalid`; the calculator remained on
+`connecting` and the user reported a hang. No NSAI `PONG`, request, `RX`, or
+same-page response was observed. The exact SHA is now blocked in both upload
+paths. This narrows the failure to the calculator/host NavNet channel lifetime
+after `TI_NN_Connect`; it does not justify another blind upload of unchanged
+source.
