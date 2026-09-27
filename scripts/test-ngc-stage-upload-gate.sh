@@ -101,6 +101,14 @@ if NSPIRE_ALLOW_NGC_ENTRY_STAGE8_UPLOAD=1 "$ROOT/scripts/deploy-ngc-entry-stage8
   echo "FAIL: physically rejected stage-8 package remained uploadable" >&2
   exit 1
 fi
+if [[ ! -x "$ROOT/scripts/deploy-ngc-entry-stage12.sh" ]]; then
+  echo "FAIL: stage-12 probe upload gate is missing or not executable" >&2
+  exit 1
+fi
+if NSPIRE_ALLOW_NGC_ENTRY_STAGE12_UPLOAD=1 "$ROOT/scripts/deploy-ngc-entry-stage12.sh" >"$ROOT/.build/ngc-stage12-reject-gate.out" 2>&1; then
+  echo "FAIL: stage-12 probe upload gate did not reject the current dock-only/unverified state" >&2
+  exit 1
+fi
 if ! grep -q 'unsupported document format' "$ROOT/.build/ngc-stage8-reject-gate.out"; then
   echo "FAIL: stage-8 gate did not explain physical rejection" >&2
   exit 1

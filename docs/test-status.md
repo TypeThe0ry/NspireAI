@@ -2102,3 +2102,10 @@ CalDigit/TS4-side `0xACE1` DMC controller (`STATE=NO_NSPIRE_DOCK_DMC_CONTROLLER`
 and TI Student Software still displayed `No handheld selected`. This is a
 physical-path absence, not a NavNet application result; no stage probe or
 production package was uploaded while only the dock controller was visible.
+
+The stage-12 probe now has its own explicit deployment wrapper,
+`scripts/deploy-ngc-entry-stage12.sh`. It requires
+`NSPIRE_ALLOW_NGC_ENTRY_STAGE12_UPLOAD=1`, checks the exact probe SHA and ELF
+relocations, and then re-runs the CX II USB gate before upload. The gate test
+passes and rejects the current dock-only state; it does not authorize an
+upload by itself.
