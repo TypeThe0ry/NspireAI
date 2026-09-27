@@ -2552,3 +2552,10 @@ observation window and was stopped cleanly with `STOPPED`. A bounded remote
 or RMI child was left behind. This is new transport/node-callback evidence,
 not calculator `CONNECTED` or page-open request/response evidence, and no
 package was uploaded during this probe.
+
+The follow-up desktop audit also found the TI Student Software window in its
+authoritative `No handheld selected... please connect a handheld` state. Five
+USB-tree samples over 10 seconds all reported only the TS4 `TPS DMC Family`
+controller (`0xACE1`); none contained a TI-Nspire `0xE022` child. The earlier
+single `E022` observation was therefore transient enumeration, not a stable
+handheld session. No upload or key event was attempted from this state.
