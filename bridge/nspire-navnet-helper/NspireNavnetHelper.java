@@ -34,6 +34,10 @@ public final class NspireNavnetHelper {
     // was followed by a CX II flash/freeze.  Clear the handle and wait for a
     // fresh service callback instead.
     private static final int ERR_INVALID_CONNECTION = -257;
+    // These statuses describe a transient/incomplete receive on TI's NavNet
+    // implementation. They are not evidence that the service handle is dead.
+    private static final int ERR_INCOMPLETE_TRANSACTION = -258;
+    private static final int ERR_BUSY = -269;
     private static volatile ConnectionHandle connection;
     private static volatile boolean stopping;
     private static volatile Thread reader;
@@ -143,6 +147,7 @@ public final class NspireNavnetHelper {
         if (reader != null && reader.isAlive()) return;
         reader = new Thread(() -> {
             byte[] buffer = new byte[4096];
+            int transientStatus = 0;
             try {
                 while (!stopping && connection == handle) {
                     IntegerBox received = new IntegerBox();
@@ -163,9 +168,23 @@ public final class NspireNavnetHelper {
                             connection = null;
                             break;
                         }
+                        if (status == ERR_INCOMPLETE_TRANSACTION || status == ERR_BUSY) {
+                            if (transientStatus != status) {
+                                emit("ERR NavNet.read=" + status + "; retrying");
+                                transientStatus = status;
+                            }
+                            try {
+                                Thread.sleep(50L);
+                            } catch (InterruptedException interrupted) {
+                                Thread.currentThread().interrupt();
+                                break;
+                            }
+                            continue;
+                        }
                         emit("ERR NavNet.read=" + status);
                         break;
                     }
+                    transientStatus = 0;
                     int length = received.getValue();
                     if (length > 0) emit("RX " + hex(buffer, Math.min(length, buffer.length)));
                 }
