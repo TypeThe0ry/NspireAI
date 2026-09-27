@@ -783,7 +783,10 @@ The next offline-only candidate is stage-17, which calls the CX II CAS
 RTC, and matrix-key syscalls. This is distinct from the rejected CPU-IRQ and
 `idle()`/WFI experiments: it does not change the CPU IRQ mask. The candidate
 build passed local relocation and source gates at SHA
-`8fd7dacfaa9551e254e0595d21dfe23797f684c1cbb9894b72543a14388a9b94`, but no
-upload or physical claim is made. A successful local build cannot establish
-that the OS scheduler call is safe from an Ndless-owned screen task; a separate
-reviewed physical test would still be required.
+`8fd7dacfaa9551e254e0595d21dfe23797f684c1cbb9894b72543a14388a9b94`. The
+controlled `~enter~` launch produced a TI screen-probe crash record:
+`6.2.0.333 CX II CAS Data Abort`, instruction address `0x10623AC0`, data
+address `0x00000096`, subsystem `USB`. USB later recovered to `0xE022` and
+the host helper cleaned up. This permanently rejects the raw scheduler call;
+the stage-17 SHA is blocked in every upload path. A local build cannot prove
+that an OS-internal address is safe from an Ndless-owned screen task.

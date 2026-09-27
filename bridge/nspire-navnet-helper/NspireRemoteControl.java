@@ -324,9 +324,8 @@ public final class NspireRemoteControl {
                     throw new IllegalArgumentException("refusing NGC entry stage-5 probe without explicit upload confirmation");
                 if (artifactSha.equals("e46e13c8ba6a00efea305321378a7014f596792d2b1c5cd1fa20ba5fd3b375f6"))
                     throw new IllegalArgumentException("refusing stage-5 probe: it returned immediately on CX II and did not open a visible page");
-                if (artifactSha.equals("8fd7dacfaa9551e254e0595d21dfe23797f684c1cbb9894b72543a14388a9b94")
-                        && !"1".equals(System.getenv("NSPIRE_ALLOW_NGC_ENTRY_STAGE17_UPLOAD")))
-                    throw new IllegalArgumentException("refusing NGC entry stage-17 probe without explicit upload confirmation");
+                if (artifactSha.equals("8fd7dacfaa9551e254e0595d21dfe23797f684c1cbb9894b72543a14388a9b94"))
+                    throw new IllegalArgumentException("refusing stage-17 probe: CX II Data Abort at raw TCT_Schedule call");
                 if (artifactSha.equals("0bf950738fcd16e69fe97163cbcf69b6edd96057415ddd14b2a2687d522e91ed")
                         && !"1".equals(System.getenv("NSPIRE_ALLOW_NGC_ENTRY_STAGE6_UPLOAD")))
                     throw new IllegalArgumentException("refusing NGC entry stage-6 probe without explicit upload confirmation");

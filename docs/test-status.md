@@ -2441,7 +2441,11 @@ cooperative scheduler from a 30-second no-NavNet/no-key diagnostic loop when
 `8fd7dacfaa9551e254e0595d21dfe23797f684c1cbb9894b72543a14388a9b94`; the ELF
 contains the expected address and the Zehn relocation audit reported 231
 relocations. `make program-test`, the Java lifecycle test, 19 bridge tests,
-and all upload gates pass. The artifact remains under `.build/ngc-stage17/`
-only; it has not been uploaded or physically tested, so it is not evidence of
-USB scheduling or page residency. Java direct uploads now reject all probe
-manifests unless an explicit diagnostic override is supplied.
+and all upload gates passed before the controlled upload. The package was then
+opened once through the correct `~enter~` event. A read-only TI screen probe
+reported `6.2.0.333 CX II CAS Data Abort`, `IA: 0x10623AC0`, `DA: 0x00000096`,
+`USB`, immediately after the raw scheduler call. USB recovered to `0xE022`
+and all helper/RMI processes were cleaned up, but the candidate is a physical
+failure and is now permanently blocked. Java direct uploads now reject all
+probe manifests unless an explicit diagnostic override is supplied, and this
+exact SHA has no override.
