@@ -637,3 +637,12 @@ logs show host-side `NODE`/screen acquisition only and no calculator
 calculator-side program-exit failure, not a new macOS Java crash. The host
 logs cannot distinguish an immediate calculator-side flash-out from a loader
 rejection without a successful page capture or calculator-local crash log.
+
+Package-level inspection matches that runtime boundary: `strings` on the
+workspace `fc7f3e32...` RPF contains the Zehn notice
+`NGC/RTC UI; USB idle until Menu; timer-neutral` and the visible banner
+`NspireAI NGC - EXPERIMENTAL`. This identifies the 26 KB file seen in the
+handheld browser as the experimental USB-idle NGC package, not a production
+package that should auto-register the Mac service. Its selection in the file
+browser is therefore not evidence that the requested AI page ever remained
+running.
