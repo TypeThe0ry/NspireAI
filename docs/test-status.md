@@ -2601,3 +2601,20 @@ Local verification passed: NGC safe-loop/startup/IRQ gates, `make
 program-test`, and all 19 host bridge tests. No package was built or uploaded
 from this source change, because the currently available 6430301d package is
 permanently blocked after its physical launch freeze.
+
+### 2026-09-27 first-PING write-gate candidate physical result
+
+The clean NGC rebuild after the calculator-side first-PING ordering fix
+produced SHA
+`64a29956816428a03b978e24fcfb627bf80a86b738d9ff29045d4d0059c8c602`,
+`bytes=16432`, with `ui_backend=TRUE`, `ngc_auto_transport=FALSE`, and all
+IRQ/local-service flags disabled. Local safe-loop, startup, relocation,
+memory-budget, artifact, lifecycle, program, and 19 bridge tests passed. The
+package was uploaded once after a successful remote readback of the exact
+SHA. The first bounded Enter dismissed the transfer dialog; a second bounded
+Enter on the highlighted file timed out. A concurrent bridge reached
+`READY service=0x5001` and `NODE 1`, but never received calculator
+`CONNECTED`. Read-only screen and one bounded Home recovery both timed out;
+USB remained `0xE022`, so this was a resident-page freeze rather than a cable
+fallback. There is no request/RX or same-page response evidence. The exact
+SHA is now permanently blocked in both upload paths; do not retry it.

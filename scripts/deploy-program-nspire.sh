@@ -147,6 +147,8 @@ case "${ARTIFACT_SHA%% *}" in
     echo "Refusing guarded NGC candidate: user reported handheld frozen during physical run on 2026-09-27; no CONNECTED observed" >&2; exit 65;;
   6430301d3edf5f214854c3f8be6b7c182ec520e832a11d095e7ac9d0e673ffc8)
     echo "Refusing Home-guard candidate: TI Enter timed out and screen API hung before CONNECTED on 2026-09-27" >&2; exit 65;;
+  64a29956816428a03b978e24fcfb627bf80a86b738d9ff29045d4d0059c8c602)
+    echo "Refusing first-PING write-gate candidate: launch froze before CONNECTED and bounded Home/screen recovery timed out on 2026-09-27" >&2; exit 65;;
   d30a62b4f96640f0f49acf2813f138910de2e0917d28e9a98c92e946150fb146)
     echo "Refusing NGC candidate: handheld flashed/crashed on Menu during physical run on 2026-09-27" >&2; exit 65;;
   e34b356d9e82e8fe3799016f59c9873a1ea77e6a609ff48684e96a7974f7c2eb)
