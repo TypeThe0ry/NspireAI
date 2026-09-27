@@ -64,6 +64,16 @@ if ! grep -q 'handle invalid; waiting for callback' "$HELPER_SOURCE"; then
   echo 'Java helper is missing the terminal invalid-handle guard' >&2
   exit 1
 fi
+if ! grep -q 'int writeStatus = write(handle' "$HELPER_SOURCE" ||
+   ! grep -q 'if (writeStatus >= 0) emit("OK")' "$HELPER_SOURCE"; then
+  echo 'Java helper still reports OK after a failed NavNet.write' >&2
+  exit 1
+fi
+if ! grep -q 'transient retry limit reached' "$HELPER_SOURCE" ||
+   ! grep -q 'Math.min(400L' "$HELPER_SOURCE"; then
+  echo 'Java helper transient-read retry backoff is missing or unbounded' >&2
+  exit 1
+fi
 if ! grep -q 'event == NODE_EVENT_ADD' "$HELPER_SOURCE" ||
    grep -q 'nodePresent = event != 0' "$HELPER_SOURCE"; then
   echo 'Java helper misclassifies TI NodeNotify REMOVE event as NODE present' >&2
