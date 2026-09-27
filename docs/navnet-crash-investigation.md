@@ -646,3 +646,16 @@ handheld browser as the experimental USB-idle NGC package, not a production
 package that should auto-register the Mac service. Its selection in the file
 browser is therefore not evidence that the requested AI page ever remained
 running.
+
+## 2026-09-27 bounded screen probe while bridge stayed live
+
+After TI Student Software was closed, a fresh Java bridge reached `READY
+service=0x5001` and `NODE 1`; the helper process remained alive. A separate
+read-only `screen` probe was then bounded to 12 seconds. It received the node
+callback but timed out before producing an image (`NspireRemoteControl timed
+out after 12s`), while the original bridge continued running with no
+`CONNECTED`, `RX`, or `TX` event. Stopping the original bridge produced the
+normal `unregisterNotifyCallback` and `helper: STOPPED` lines, and no new
+`NN-crash-*` file or Java/RMI child remained. This is a repeatable USB/screen
+stall boundary after the calculator-side open attempt, not a bridge process
+crash and not proof of a running AI page.

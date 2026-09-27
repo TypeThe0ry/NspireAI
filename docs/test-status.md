@@ -506,6 +506,14 @@ the previously recorded stage-14 artifact. It is stored only under
 `.build/ngc-stage14/`, was not uploaded, and is not physical-runtime evidence.
 The normal `dist/nspire_ai.tns` artifact was restored after the probe build.
 
+With TI Student Software closed, a fresh bridge again reached `READY
+service=0x5001` and `NODE 1`. A separate read-only screen probe was bounded to
+12 seconds; it timed out before returning an image, while the original bridge
+remained alive and emitted no `CONNECTED`, `RX`, or `TX`. Stopping that bridge
+then produced the expected unregister/`helper: STOPPED` cleanup, with no new
+TI crash log and no Java/RMI child left behind. This records a USB/screen stall
+boundary, not a bridge crash or a successful page launch.
+
 ## 2026-09-24 relocation-candidate physical rejection (Computer Use control)
 
 Computer Use (CUA) was used for the desktop interaction and application-state
