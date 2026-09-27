@@ -2252,3 +2252,22 @@ The candidate now has a separate two-file upload wrapper,
 uploads `nspire_ai_nav.luax.tns` before `nspire_ai.tns`. The Java remote client
 accepts only the explicit `page_backend=resident-lua-*` manifest markers for
 this path. The gate was tested in the default-deny state; no upload was run.
+
+### 2026-09-27 Menu-key crash on clean Ndless NGC candidate
+
+The clean NGC/RTC Ndless package
+`d30a62b4f96640f0f49acf2813f138910de2e0917d28e9a98c92e946150fb146` was
+uploaded and read back at 26,360 bytes. With the bridge at
+`READY service=0x5001` and `NODE 1`, the user opened `nspire_ai` and reported
+that one short physical Menu press flashed/crashed the calculator. No
+`CONNECTED`, `RX`, or `TX` frame was observed. The exact SHA is now blocked in
+both upload paths.
+
+Source inspection found that the default NGC matrix scanner included
+`KEY_NSPIRE_MENU` in its `isKeyPressed()` pointer array and used that edge to
+toggle transport. The replacement removes Menu from the scanner entirely and
+uses the first Enter edge to arm transport, preserving typed input; a second
+Enter sends after the bridge is connected. The replacement was rebuilt as
+`e34b356d9e82e8fe3799016f59c9873a1ea77e6a609ff48684e96a7974f7c2eb`, passed
+the static/program/bridge lifecycle tests, and was not uploaded yet. This is
+a targeted crash-containment change, not proof of the physical protocol loop.
