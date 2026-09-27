@@ -856,3 +856,25 @@ The resulting local-only package is
 the TS4 `ACE1` controller and the package has not been uploaded; the physical
 `E022` and NavNet `CONNECTED -> request/RX -> same-page response` gates remain
 open.
+
+## 2026-09-27 resident task handoff candidate
+
+The loader boundary audit found that a direct document launch can retain its
+Zehn image through the Ndless extension syscall `nl_set_resident()`. This is
+different from the rejected raw `TCT_Schedule` experiment: the candidate
+creates a preemptible Nucleus task at the pinned CAS 6.2.0.333 IDC address
+`TCC_Create_Task=0x1042A8C8`, marks the image resident, and calls `_exit(0)`.
+The loader can then restore IRQs after the entry call while the task owns the
+NGC UI loop. The mode is strictly opt-in, OS-index 46-only, and contains no
+IRQ writes, `idle()`/WFI, `msleep()`, or `TCT_Schedule` call.
+
+The full Docker Ndless build succeeded locally. Candidate SHA is
+`1a5c052f6fd68233275451f3c028514c3e2dff1eeecc89da74a2648c97e14e1a`
+(`16664` bytes); the loader allocation audit reports `59444` bytes against the
+`60000`-byte limit and the Zehn relocation audit reports `242` relocations.
+The task stack is only 6 KiB to stay inside that allocation limit, so this is
+not a hardware stack-safety proof. The artifact remains under
+`.build/ngc-task-handoff/` and is rejected by both upload paths unless the
+separate diagnostic override is supplied. It has not been uploaded or run;
+physical `CONNECTED`, request/RX, and same-page response evidence is still
+missing.

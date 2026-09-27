@@ -3,6 +3,9 @@
 #ifdef NSPIRE_NGC_PROBE
 #include "nav_scheduler_probe.h"
 #endif
+#ifdef NSPIRE_NGC_TASK_HANDOFF
+#include "nav_task_handoff.h"
+#endif
 #if defined(NSPIRE_NGC_USB_IRQ_WINDOW) || defined(NSPIRE_NGC_USB_IRQ_MENU)
 #include "nav_irq_window.h"
 #endif
@@ -161,7 +164,7 @@ static int ngc_keys(void) {
     return changed;
 }
 
-int main(void) {
+static int ngc_run(void) {
 #ifdef NSPIRE_NGC_PROBE
     /* Incremental entry probe. Stage 0 calls no Ndless UI API; stage 1 adds
      * lcd_type/lcd_init; stage 2 acquires the global GUI GC after LCD setup;
@@ -477,3 +480,31 @@ int main(void) {
     return EXIT_SUCCESS;
 #endif
 }
+
+#ifdef NSPIRE_NGC_TASK_HANDOFF
+/* The task owns the resident Zehn image after the loader restores IRQs.  Do
+ * not return into the loader from this callback: terminate the Nucleus task
+ * explicitly after the UI loop has closed. */
+static void ngc_task_entry(unsigned argc, void *argv) {
+    (void)argc;
+    (void)argv;
+    (void)ngc_run();
+    nav_task_finish();
+}
+
+int main(void) {
+    /* Create the task before marking the image resident so a failed private
+     * ABI call still follows the loader's normal cleanup path.  Once creation
+     * succeeds, nl_set_resident() makes the direct TI document hook retain the
+     * Zehn image even though it normally calls ld_exec(path, NULL). The task
+     * is auto-started while the loader still owns the current entry; it becomes
+     * runnable when the loader returns and restores IRQs. */
+    if (!nav_task_create(ngc_task_entry)) return EXIT_FAILURE;
+    nl_set_resident();
+    _exit(EXIT_SUCCESS);
+}
+#else
+int main(void) {
+    return ngc_run();
+}
+#endif

@@ -109,6 +109,20 @@ case "$MENU_LOCAL_SERVICE" in
     exit 65
     ;;
 esac
+TASK_HANDOFF="$(sed -n 's/^ngc_task_handoff=//p' "$META")"
+case "$TASK_HANDOFF" in
+  FALSE) ;;
+  TRUE)
+    if [[ "${NSPIRE_ALLOW_NGC_TASK_HANDOFF_UPLOAD:-}" != "1" ]]; then
+      echo "Refusing private NGC task-handoff candidate without explicit diagnostic confirmation" >&2
+      exit 65
+    fi
+    ;;
+  *)
+    echo "Manifest is missing a valid ngc_task_handoff field; refusing upload" >&2
+    exit 65
+    ;;
+esac
 ARTIFACT_DIGEST="$(shasum -a 256 "$ARTIFACT" | awk '{print $1}')"
 if ! grep -qx "sha256=$ARTIFACT_DIGEST" "$META"; then
   echo "Artifact/manifest SHA mismatch; refusing upload" >&2

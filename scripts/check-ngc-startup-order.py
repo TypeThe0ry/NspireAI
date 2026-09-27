@@ -6,7 +6,10 @@ from pathlib import Path
 def main() -> None:
     source = Path(__file__).resolve().parents[1] / "src/program/ui_ngc.h"
     text = source.read_text()
-    body = text.split("int main(void)", 1)[1]
+    entry_marker = "static int ngc_run(void)"
+    if entry_marker not in text:
+        entry_marker = "int main(void)"
+    body = text.split(entry_marker, 1)[1]
     # Ignore staged probe branches.  They intentionally contain their own
     # RTC reads; this check is for the production branch after the probe
     # preprocessor block has closed.

@@ -175,6 +175,12 @@ if ! grep -q 'manifest missing valid ngc_probe' "$ROOT/bridge/nspire-navnet-help
   echo "FAIL: Java direct-upload path does not gate probe manifests" >&2
   exit 1
 fi
+if ! grep -q 'manifest missing valid ngc_task_handoff' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java" || \
+   ! grep -q 'NSPIRE_ALLOW_NGC_TASK_HANDOFF_UPLOAD' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java" || \
+   ! grep -q 'Refusing private NGC task-handoff candidate' "$ROOT/scripts/deploy-program-nspire.sh"; then
+  echo "FAIL: resident task-handoff candidate is not explicitly upload-gated" >&2
+  exit 1
+fi
 if [[ ! -x "$ROOT/scripts/deploy-ngc-entry-stage17.sh" ]] || \
    ! grep -q 'EXPECTED_SHA="8fd7dacfaa9551e254e0595d21dfe23797f684c1cbb9894b72543a14388a9b94"' "$ROOT/scripts/deploy-ngc-entry-stage17.sh" || \
    ! grep -q 'Data Abort at raw TCT_Schedule' "$ROOT/scripts/deploy-ngc-entry-stage17.sh" || \

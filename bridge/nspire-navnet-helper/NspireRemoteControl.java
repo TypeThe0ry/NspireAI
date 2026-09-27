@@ -292,6 +292,11 @@ public final class NspireRemoteControl {
                     throw new IllegalArgumentException("manifest missing valid ngc_menu_local_service");
                 if (menuLocalService && !"1".equals(System.getenv("NSPIRE_ALLOW_NGC_MENU_LOCAL_SERVICE_UPLOAD")))
                     throw new IllegalArgumentException("refusing Menu-local-service candidate without explicit upload confirmation");
+                boolean taskHandoff = manifestLines.contains("ngc_task_handoff=TRUE");
+                if (!taskHandoff && !manifestLines.contains("ngc_task_handoff=FALSE"))
+                    throw new IllegalArgumentException("manifest missing valid ngc_task_handoff");
+                if (taskHandoff && !"1".equals(System.getenv("NSPIRE_ALLOW_NGC_TASK_HANDOFF_UPLOAD")))
+                    throw new IllegalArgumentException("refusing private NGC task-handoff candidate without explicit diagnostic confirmation");
                 if (artifactSha.equals("ce92ae85e1d60cf9c3d4fea08ff1e897d35e13718cafd0ce23080fddd9e13c6c"))
                     throw new IllegalArgumentException("refusing known-crashing IRQ-scope 0922 build");
                 if (artifactSha.equals("53f5f14965d3c4280f86f82565f22916db7eabbace8f6b7b9a4c410b4d94db2e"))

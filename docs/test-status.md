@@ -2729,3 +2729,37 @@ or listener on port 1099.
 This is another host/USB-topology and cleanup result only. The calculator was
 not running an AI page, so there is still no physical `CONNECTED`, request/RX,
 or same-page response evidence, and no package was uploaded or launched.
+
+### 2026-09-27 resident-task handoff candidate (local-only)
+
+The loader audit found an important distinction from the rejected raw
+`TCT_Schedule` probe: Ndless's public SDK already exposes `nl_set_resident()`,
+and `ld_set_resident()` makes the direct document hook retain the loaded Zehn
+image instead of freeing it after `entry()` returns. A new opt-in candidate
+therefore creates one preemptible Nucleus task through the CX II CAS
+6.2.0.333 IDC address `TCC_Create_Task=0x1042A8C8`, then calls
+`nl_set_resident()` and `_exit(0)` so the loader can restore IRQs before the
+task starts. It does not call `TCT_Schedule`, enable CPU IRQs, call `idle()` or
+`msleep()`, or start NavNet from the entry path. The task ABI remains private
+and is pinned to OS index 46; it is not presented as a public SDK contract.
+
+The candidate was built end-to-end by the Ndless Docker wrapper with
+`NSPIRE_UI_NGC=TRUE NSPIRE_NGC_TASK_HANDOFF=TRUE`. Local evidence:
+
+```text
+sha256=1a5c052f6fd68233275451f3c028514c3e2dff1eeecc89da74a2648c97e14e1a
+bytes=16664
+loader allocation=59444 <= 60000
+Zehn relocations=242
+```
+
+The ARM object passed `-Wall -Wextra -Werror`; the final ELF contains
+`main`, `ngc_task_entry`, `nl_set_resident`, and the public task-termination
+stubs, with no raw `TCT_Schedule` or IRQ-control reference. The artifact is
+stored only under `.build/ngc-task-handoff/`; both upload paths require the
+new `ngc_task_handoff=TRUE` manifest marker plus an explicit diagnostic
+override, and no upload or physical launch was performed. A 6 KiB task stack
+is a memory-budget compromise, not a hardware stack-safety proof. The next
+authoritative gate is still a single controlled physical launch followed by
+`CONNECTED`, calculator PING/PONG, request/RX, and same-page response; do not
+retry any previously frozen SHA.

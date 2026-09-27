@@ -8,6 +8,7 @@ NGC_MENU_LOCAL_SERVICE ?= FALSE
 NGC_CPU_IRQ ?= FALSE
 NGC_USB_IRQ_WINDOW ?= FALSE
 NGC_USB_IRQ_MENU ?= FALSE
+NGC_TASK_HANDOFF ?= FALSE
 
 GCC = nspire-gcc
 AS = nspire-as
@@ -29,6 +30,9 @@ endif
 ifeq ($(UI_NGC),TRUE)
 GCCFLAGS += -DNSPIRE_UI_NGC
 GCCFLAGS += -ffunction-sections -fdata-sections
+ifeq ($(NGC_TASK_HANDOFF),TRUE)
+GCCFLAGS += -DNSPIRE_NGC_TASK_HANDOFF
+endif
 ifeq ($(NGC_LOCAL_SERVICE),TRUE)
 GCCFLAGS += -DNSPIRE_NGC_LOCAL_SERVICE
 endif
@@ -61,7 +65,7 @@ OBJS = main.o
 
 all: $(EXE).tns
 
-main.o: main.c nav_os_call.h nav_clock.h nav_fragment.h nav_irq_window.h nav_scheduler_probe.h ui_ngc.h
+main.o: main.c nav_os_call.h nav_clock.h nav_fragment.h nav_irq_window.h nav_scheduler_probe.h nav_task_handoff.h ui_ngc.h
 	$(GCC) $(GCCFLAGS) -c $< -o $@
 
 ifneq ($(UI_NGC),TRUE)

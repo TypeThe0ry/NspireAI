@@ -25,6 +25,7 @@ program-test:
 		$(CC) -Wall -Wextra -Werror src/program/test_nav_fragment.c -o "$$task_test_dir/nav-fragment" && "$$task_test_dir/nav-fragment" && \
 		python3 scripts/check-ngc-startup-order.py && \
 		python3 scripts/check-ngc-scheduler-probe.py && \
+		python3 scripts/check-ngc-task-handoff.py && \
 		python3 scripts/check-ngc-safe-loop.py && \
 		python3 scripts/check-ngc-irq-window.py && \
 		python3 scripts/check-ngc-cpu-irq.py && \

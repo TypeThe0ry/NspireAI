@@ -14,6 +14,7 @@ def main() -> int:
     loader = (root / ".deps/ndless/ndless/src/resources/ploaderhook.c").read_text()
     decls = (root / ".deps/ndless/ndless-sdk/include/syscall-decls.h").read_text()
     nucleus = (root / ".deps/ndless/ndless-sdk/include/nucleus.h").read_text()
+    handoff = (root / "src/program/nav_task_handoff.h").read_text()
     idc = (root / ".deps/ndless/ndless/src/tools/MakeSyscalls/idc/OS_cascx2-6.2.0.333.idc").read_text()
 
     entry = loader.index("ret = entry(argc, argv);")
@@ -28,10 +29,13 @@ def main() -> int:
         raise SystemExit("FAIL: nucleus.h unexpectedly exposes an undocumented task ABI")
     if "TCC_Create_Task" not in idc or "TCC_Resume_Task" not in idc:
         raise SystemExit("FAIL: target OS IDC task labels are missing; audit input changed")
+    if "nl_set_resident" not in nucleus or "NSPIRE_CX2_CAS_TCC_CREATE_TASK" not in handoff:
+        raise SystemExit("FAIL: resident-task handoff must retain the image and pin the private ABI")
 
     print("PASS: Ndless loader masks IRQs across entry and restores them only after return")
     print("PASS: CX II CAS 6.2 task-create/resume labels exist only in IDC, not the public SDK ABI")
-    print("RESULT: no supported resident-task handoff is proven; do not upload a raw-address candidate")
+    print("PASS: opt-in candidate uses nl_set_resident() before loader return")
+    print("RESULT: private task ABI and physical USB loop remain unverified; do not upload without explicit override")
     return 0
 
 
