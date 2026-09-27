@@ -2810,7 +2810,6 @@ claim that a resident Ndless page can safely schedule USB work.
 Local verification passed after the change: Java helper lifecycle, bridge
 lifecycle, all 19 host protocol/bridge tests, and `git diff --check`. No
 calculator package was built, uploaded, or launched from this change.
-
 The first real USB run with this helper revision was then performed while the
 calculator stayed on Home and TI Student Software remained closed. The gate
 reported `STATE=CX2_USB_CANDIDATE product=0xE022`; the helper reached
@@ -3076,3 +3075,21 @@ E022. This reproduces the USB/OS scheduling freeze even in a program with no
 NavNet, RTC, key scan, resident task, or IRQ experiment. The probe therefore
 does not clear the LCD/GC/first-frame boundary; it is now a documented
 hardware-failure reproduction and must not be relaunched repeatedly.
+
+### 2026-09-27 calculator-first host read gate
+
+The Java helper now waits one RTC tick by default
+(`NSPIRE_NAVNET_INITIAL_READ_DELAY_MS=1000`, bounded to 0--60000 ms) before
+the first synchronous read on a fresh handle. Reconnects retain the shorter
+50 ms handoff. This gives the calculator page time to queue its first NSAI
+PING before the host enters the TI read path.
+
+The `-257` path records the exact stale `ConnectionHandle` for both read and
+write failures. A later SEND cannot reuse it, and the connection watcher
+cannot start another reader for that same object; only a distinct callback
+handle clears the marker. This is host-side containment only and does not
+claim that a resident Ndless page can safely schedule USB work.
+
+Local verification passed after the change: Java helper lifecycle, bridge
+lifecycle, all 19 host protocol/bridge tests, and `git diff --check`. No
+calculator package was built, uploaded, or launched from this change.
