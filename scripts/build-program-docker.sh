@@ -13,7 +13,7 @@ NGC_USB_IRQ_WINDOW="${NSPIRE_NGC_USB_IRQ_WINDOW:-FALSE}"
 NGC_USB_IRQ_MENU="${NSPIRE_NGC_USB_IRQ_MENU:-FALSE}"
 case "$UI_NGC" in TRUE|FALSE) ;; *) echo "NSPIRE_UI_NGC must be TRUE or FALSE" >&2; exit 2;; esac
 case "$NGC_PROBE" in TRUE|FALSE) ;; *) echo "NSPIRE_NGC_PROBE must be TRUE or FALSE" >&2; exit 2;; esac
-case "$NGC_PROBE_STAGE" in 0|1|2|3|4|5|6|7|8|9|10|11|12) ;; *) echo "NSPIRE_NGC_PROBE_STAGE must be 0 through 12" >&2; exit 2;; esac
+case "$NGC_PROBE_STAGE" in 0|1|2|3|4|5|6|7|8|9|10|11|12|13) ;; *) echo "NSPIRE_NGC_PROBE_STAGE must be 0 through 13" >&2; exit 2;; esac
 case "$NGC_AUTO_TRANSPORT" in TRUE|FALSE) ;; *) echo "NSPIRE_NGC_AUTO_TRANSPORT must be TRUE or FALSE" >&2; exit 2;; esac
 if [[ "$NGC_AUTO_TRANSPORT" == TRUE ]]; then
   echo "Refusing auto-transport build: startup NavNet enumeration wedged CX II USB; arm once with Menu after bridge READY" >&2

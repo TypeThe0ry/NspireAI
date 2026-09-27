@@ -188,7 +188,8 @@ int main(void) {
      * the process alive for 30 seconds with RTC+key scanning but no NavNet
      * Read, reproducing the long-running UI scheduler shape; stage 11 adds
      * one real nav_poll (PING/Read) after the bridge connection attempt;
-     * stage 12 combines one frame with the long-running loop and no NavNet.
+     * stage 12 combines one frame with the long-running loop and no NavNet;
+     * stage 13 repeats that test with the production low-frequency RTC cadence.
      * Each stage returns immediately so the first
      * unsupported-document result identifies the failing API boundary. */
 #if NSPIRE_NGC_PROBE_STAGE == 12
@@ -217,6 +218,34 @@ int main(void) {
                 probe_last = nav_clock_ms();
             }
             (void)probe_last;
+            for (volatile unsigned spin = 0; spin < 256; ++spin)
+                __asm volatile("nop");
+        }
+    }
+#elif NSPIRE_NGC_PROBE_STAGE == 13
+    /* Production-shaped post-frame probe. Unlike stage 12, the deadline clock
+     * is sampled only at the same 128-spin cadence as the real loop; this
+     * avoids turning the diagnostic itself into a high-frequency RTC test. */
+    if (!ngc_prepare_lcd()) return EXIT_FAILURE;
+    chat_gc = gui_gc_global_GC();
+    if (!chat_gc) return EXIT_FAILURE;
+    set_status("NGC probe stage 13");
+    ngc_draw();
+    {
+        uint32_t last_tick = nav_clock_ms();
+        uint32_t probe_until = last_tick + 30000;
+        unsigned scheduler_spin = 0;
+        unsigned key_sample_spin = 0;
+        while (!nav_deadline_reached(last_tick, probe_until)) {
+            if (++key_sample_spin >= 512u) {
+                key_sample_spin = 0;
+                if (ngc_keys() && ngc_ui_dirty) ngc_draw();
+            }
+            if (++scheduler_spin >= 128u) {
+                scheduler_spin = 0;
+                last_tick = nav_clock_ms();
+            }
+            if (ngc_ui_dirty) ngc_draw();
             for (volatile unsigned spin = 0; spin < 256; ++spin)
                 __asm volatile("nop");
         }

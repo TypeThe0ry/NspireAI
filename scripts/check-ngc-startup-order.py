@@ -7,6 +7,13 @@ def main() -> None:
     source = Path(__file__).resolve().parents[1] / "src/program/ui_ngc.h"
     text = source.read_text()
     body = text.split("int main(void)", 1)[1]
+    # Ignore staged probe branches.  They intentionally contain their own
+    # RTC reads; this check is for the production branch after the probe
+    # preprocessor block has closed.
+    production = body.split("#else\n    uint32_t last_tick;", 1)
+    if len(production) != 2:
+        raise SystemExit("NGC startup check could not locate production branch")
+    body = "    uint32_t last_tick;" + production[1]
     first_draw = body.index("    ngc_draw();")
     first_clock = body.index("    last_tick = nav_clock_ms();")
     if first_draw >= first_clock:
