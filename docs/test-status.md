@@ -2352,6 +2352,14 @@ calculator interface `0xE022` to the TS4 dock controller `0xACE1`; no claim is
 made that this SHA reached the device.  The physical gate remains
 `CONNECTED -> calculator PING/PONG -> request/RX -> same-page response`.
 
+After that failed deployment, a further user Enter attempt caused another
+flash/crash while the Mac probe still reported only `0xACE1` (TS4 dock
+controller) and no bridge/helper process was running.  Because the
+calculator interface was absent and the deployment had timed out, this run
+was still the previously uploaded host-first artifact; it is not a test of
+the calculator-first helper fix above.  Do not relaunch the old artifact
+until `0xE022` is present and the new package has been uploaded.
+
 ### 2026-09-27 NavNet node-removal event normalization
 
 During resumed hardware probing, TI's `NodeNotifyCallback` logged a physical
