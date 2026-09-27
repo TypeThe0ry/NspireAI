@@ -19,6 +19,14 @@ The current runtime path is the standalone Ndless program
 Mac bridge over project-private NavNet service `0x5001`. The Lua document and file
 exchange path below is legacy compatibility only.
 
+The standalone path is now quarantined after repeated CX II post-launch stalls.
+The replacement under `src/native_page/` is a newly authored TI document page
+plus resident `nspire_ai_nav.luax.tns` module. It uses the same NSAI framing and
+service ID from TI's Lua document scheduler, rather than entering the standalone
+Ndless loader loop. Its Docker build is intentionally offline-only until a
+separate physical test proves the page-open `CONNECTED` and same-page response
+gates. It does not restore the removed file-exchange page or artifacts.
+
 The file exchange bridge is retained only as a fallback. It cannot provide the
 requested UX because every response upload is a TI document transfer and may
 show an “accept new file” prompt.

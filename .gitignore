@@ -6,6 +6,9 @@ bridge/.venv/
 src/extension/*.o
 src/extension/*.elf
 src/extension/*.tns
+src/native_page/*.o
+src/native_page/*.elf
+src/native_page/*.tns
 *.pyc
 .DS_Store
 var/

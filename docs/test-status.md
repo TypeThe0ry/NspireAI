@@ -2232,3 +2232,16 @@ and the static safe-loop check rejects any production `idle()` call. This
 removes one confirmed dead-wait mechanism but does not solve the broader
 post-launch USB/OS scheduling boundary, so no replacement package has been
 uploaded and no physical protocol result is claimed.
+
+### 2026-09-27 new resident Lua/NavNet page candidate (offline)
+
+Because the standalone Zehn entry point cannot safely own the CX II scheduler,
+a new backend was authored under `src/native_page/`. The page uses TI's
+`D2Editor` and `toolpalette` controls; `nspire_ai_nav.c` is a resident Lua
+extension that performs the existing NSAI framing over service `0x5001` from
+document callbacks. It is not a restoration of the removed file-exchange Lua
+source or artifacts. `./scripts/build-native-page-docker.sh` completed and
+produced separate page/module artifacts under `dist/native-page/`; Lua syntax,
+source-contract, and all existing host/program tests pass. No artifact has
+been uploaded, so this is build/static evidence only and does not count as
+physical `CONNECTED → request/RX → same-page response` evidence.
