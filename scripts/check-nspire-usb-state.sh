@@ -4,7 +4,8 @@ set -euo pipefail
 # Read-only gate for the physical acceptance test.  A TPS DMC controller inside
 # a CalDigit/Thunderbolt dock can remain visible on USB while the NavNet helper
 # correctly says "no TI-Nspire USB device"; never mistake that controller for
-# the handheld.
+# the handheld.  The dock does not have to be unplugged: a valid CX II child
+# may enumerate as 0xE022 below the TS4.  Only that handheld descriptor passes.
 USB_TREE="$(ioreg -p IOUSB -l -w0 2>/dev/null || true)"
 
 if [[ -z "$USB_TREE" ]]; then
@@ -23,7 +24,7 @@ if grep -Fq 'TPS DMC Family' <<<"$USB_TREE" || \
    grep -Fq '"idProduct" = 44257' <<<"$USB_TREE"; then
   if grep -Fq 'CalDigit' <<<"$USB_TREE" || grep -Fq 'TS4 USB' <<<"$USB_TREE"; then
     echo 'STATE=NO_NSPIRE_DOCK_DMC_CONTROLLER product=0xACE1 vendor=0x0451'
-    echo 'ACTION=connect-the-calculator-directly-or-through-a-known-good-data-path'
+    echo 'ACTION=attach-the-calculator-to-a-known-good-data-port; TS4-may-remain-connected-if-an-E022-child-is-present'
   else
     echo 'STATE=NON_NSPIRE_DMC_INTERFACE product=0xACE1 vendor=0x0451'
     echo 'ACTION=do-not-deploy-until-a-TI-Nspire-CX-II-interface-appears'
