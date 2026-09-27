@@ -2305,3 +2305,10 @@ remains unchanged. Local static/build checks pass, including the NGC relocation
 audit and lifecycle tests. Current candidate SHA is
 `1564b25eb9fccd64fea22d8080b4b355b39a74b8566d832f6f133e354a9e7da8`; no device
 upload or physical success is claimed yet.
+The helper's candidate bootstrap was also changed to avoid a synchronous
+`NavNet.read` probe: TI's timeout can exceed its requested duration and held
+the sole bootstrap worker while the page was still closed. After a successful
+bootstrap write it now keeps the connection briefly for the calculator-side
+callback, then releases it; the calculator's own successful local read/write
+sets the bootstrap completion state. This host-only lifecycle fix is committed
+as `507e578`'s follow-up and still needs the physical Enter test.
