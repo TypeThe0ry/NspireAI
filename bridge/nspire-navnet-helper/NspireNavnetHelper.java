@@ -373,6 +373,18 @@ public final class NspireNavnetHelper {
             NavNet.registerNotifyCallback(new NodeNotificationListener() {
                 @Override public void nodeNotificationCallback(NodeHandle node, int event) {
                     nodePresent = event != 0;
+                    if (event == 0) {
+                        /* A node removal invalidates every service handle
+                         * associated with that handheld.  Do not leave the
+                         * reader/writer pointing at the old handle while
+                         * the TI connector is tearing USB down: a later
+                         * SEND could otherwise enter NavNet with a stale
+                         * pointer and reproduce the bridge freeze.  The
+                         * reader observes the volatile clear and exits; a
+                         * subsequent ADD callback installs a fresh handle. */
+                        connection = null;
+                        emit("DISCONNECTED reason=node-removed");
+                    }
                     emit("NODE " + event);
                     if (event != 0) startBootstrap(node);
                 }
