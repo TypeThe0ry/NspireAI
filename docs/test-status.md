@@ -2091,3 +2091,8 @@ probe was built with one LCD/GC frame followed by the production-shaped
 (26348 bytes); relocation audit passes. It has not been uploaded, and the
 probe has no physical result yet. The normal tracked production artifact was
 rebuilt afterward and remains the blocked `fc7f3e32...` package.
+
+After rebuilding, the read-only USB gate still reported the CX II descriptor
+`0xE022`. A bounded `run-nspire-remote.sh info` registered the NavNet callback
+but timed out without `NODE`, `CONNECTED`, or any calculator-side frame; no
+upload or calculator file mutation was attempted in that state.
