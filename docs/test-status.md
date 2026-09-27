@@ -547,6 +547,16 @@ new TI crash log appeared. The bridge then shut down with unregister and
 launcher-return evidence only, not page residency or the requested protocol
 loop.
 
+### Unuploaded scheduler follow-up (commit `cdfc74b`)
+
+The stage-15 result motivated a guarded production-loop change: while NGC
+transport is disarmed and no channel exists, the page calls Ndless `idle()` to
+yield the calculator scheduler; once Menu arms transport, the loop keeps the
+idle call out of the NavNet path. `make program-test`, the NGC safe-loop,
+startup-order, relocation, and 19 bridge tests passed after this edit. The
+change has not yet been converted into a new TNS or uploaded, so it is not
+physical-runtime evidence.
+
 ## 2026-09-24 relocation-candidate physical rejection (Computer Use control)
 
 Computer Use (CUA) was used for the desktop interaction and application-state
