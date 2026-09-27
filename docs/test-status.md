@@ -2917,3 +2917,29 @@ A bounded read-only screen probe also timed out and was cleaned up; the bridge
 ran for 90 seconds without `CONNECTED`, PING/PONG, request/RX, or a same-page
 response. USB stayed at direct `0x0451:0xE022`. The exact SHA is now blocked in
 both upload paths and classified as `KNOWN_BLOCKED_TASK_HANDOFF_PRIORITY20_FREEZE`.
+
+### 2026-09-27 loader-boundary pair deployment and current launch probe
+
+The pinned Ndless toolchain produced a paired loader-boundary runtime/page
+candidate outside `dist/`:
+
+```text
+runtime /ndless/ndless_resources.tns: 196864 bytes sha256=e930ed866d08e44063539ecc7fd40d5611b272b64bfb6621f04f90fd34aadb0f
+page    /nspire_ai.tns:                 17044 bytes sha256=4420b04290fc588805ed0439ca1aa6357ab19f57b77ad8bbd5f465a5aaa7baba
+```
+
+Both files were written with the raw libnspire helper and independently read
+back with exact SHA matches. The helper's initial `target/debug` executable
+was then found to be stale: despite current source declaring service `0x5001`,
+it logged `sid=0x4051`. A clean Cargo rebuild corrected the binary, which then
+logged `sid=0x5001` and emitted bounded bootstrap PINGs. The raw bridge
+entrypoint now refreshes the helper in an isolated target with absolute native
+Apple clang/linker paths, preventing the stale service ID and avoiding the
+host's x86_64 xcrun resolution failure.
+
+After dismissing the `Document Sent` dialog with one controlled Enter, the
+current page launch caused the Java screen probe to time out; the screen later
+showed only the black Home surface. E022 and file readback remained healthy,
+but the fresh `0x5001` helper received no calculator-originated frame. The
+bridge therefore still lacks physical `CONNECTED`, request/RX, and same-page
+response evidence. This pair is not claimed as a completed device fix.
