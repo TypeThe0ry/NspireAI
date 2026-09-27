@@ -994,3 +994,31 @@ relocations. The artifact is stored at
 `.build/ngc-task-handoff-priority255/nspire_ai.tns`. The later authorized upload
 and physical rejection are recorded above; this offline record by itself never
 counted as `CONNECTED` evidence.
+
+## 2026-09-27 loader-boundary runtime variant (local-only)
+
+The physical priority-20 run froze while the calculator still enumerated as
+direct `0x0451:0xE022`. The pinned Ndless loader explains that boundary: it
+calls `TCT_Local_Control_Interrupts(-1)` before the standalone Zehn entry point
+and restores the saved mask only after `entry()` returns. A long-lived native
+page therefore cannot depend on the TI OS/USB interrupt pump while it owns that
+entry callback.
+
+The opt-in source change is recorded, but not applied to the installed runtime,
+in `patches/ndless/2026-09-27-restore-loader-irqs-before-entry.patch`. It
+restores the saved mask immediately before `entry()` while retaining the normal
+post-entry cleanup restore. The check is intentionally local and non-mutating:
+
+```text
+./scripts/test-ndless-loader-runtime-variant.sh
+PASS: pinned loader still masks IRQs across the unmodified entry boundary
+PASS: opt-in variant restores the saved mask exactly once before entry()
+PASS: patch applies cleanly; no device upload or runtime replacement performed
+```
+
+This is a runtime-boundary hypothesis, not a completed device fix. Building a
+matching `ndless_resources.tns` is currently blocked on the local Docker
+daemon's containerd metadata I/O error and the host ARM compiler lacking the
+Ndless-pinned newlib/C++ runtime. No patched runtime or new `nspire_ai.tns` was
+uploaded, and the physical `CONNECTED -> request/RX -> same-page response`
+gate remains open.

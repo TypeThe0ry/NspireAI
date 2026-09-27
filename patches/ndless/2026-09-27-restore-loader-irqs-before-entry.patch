@@ -1,0 +1,18 @@
+diff --git a/ndless/src/resources/ploaderhook.c b/ndless/src/resources/ploaderhook.c
+--- a/ndless/src/resources/ploaderhook.c
++++ b/ndless/src/resources/ploaderhook.c
+@@ -396,3 +396,12 @@ int ld_exec_with_args(const char *path, int argsn, char *args[], void **resident_ptr)
+ 	
+ 	clear_cache();
++	/*
++	 * Standalone resident pages need the OS/USB interrupt pump while their
++	 * entry point owns the screen.  The normal loader masks interrupts before
++	 * entry() and restores them only after it returns; that is safe for short
++	 * programs but deadlocks a long-lived page.  Keep the saved mask for the
++	 * cleanup path, but restore it before entering the program.  This patch is
++	 * opt-in and must only be tested with a matching Ndless runtime build.
++	 */
++	TCT_Local_Control_Interrupts(intmask);
+ 	ret = entry(argc, argv); /* run the program */
+ 	if (has_colors)
+ 		lcd_incolor(); // in case not restored by the program
