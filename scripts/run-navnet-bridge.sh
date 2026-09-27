@@ -78,7 +78,12 @@ if [[ "$TRANSPORT" == "raw" && -z "$CUSTOM_USB_HELPER" ]]; then
   # Homebrew's Cargo can inherit an x86_64 `cc` selection from the TI/Rosetta
   # toolchain. Pin the native Apple clang defaults unless the caller supplied
   # an explicit compiler, otherwise a fresh isolated target fails in xcrun.
-  CC="${CC:-clang}" CXX="${CXX:-clang++}" \
+  # Use absolute native Apple tools and pin Cargo's target linker.  On this
+  # host a bare `cc` can be resolved through an x86_64 xcrun shim even though
+  # rustc is native arm64; isolated fresh targets then fail before the helper
+  # can refresh its service ID.
+  CC="${CC:-/usr/bin/clang}" CXX="${CXX:-/usr/bin/clang++}" \
+    CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER="${CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER:-/usr/bin/clang}" \
     cargo build --manifest-path "$ROOT/bridge/nspire-helper/Cargo.toml" \
       --target-dir "$RAW_TARGET_DIR" --quiet
   HELPER_BIN="$RAW_TARGET_DIR/debug/nspireai-usb-helper"
