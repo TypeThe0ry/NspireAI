@@ -50,6 +50,9 @@ Before deployment, `scripts/check-nspire-usb-state.sh` performs a read-only
 USB gate. The current USB topology shows `TPS DMC Family` as a child of a
 CalDigit TS4 hub; the checker classifies it as a non-Nspire dock controller and
 does not permit that state to be mistaken for a usable CX II NavNet device.
+The TS4 itself may remain connected: a valid calculator can enumerate as a
+`0xE022` CX II child below the hub, and that child is the only descriptor the
+gate accepts.
 TI's [TPS257xx-Q1 USB firmware-update guide](https://www.ti.com/lit/ug/slvubx5c/slvubx5c.pdf)
 uses the same `TPS DMC Family` identity for that controller, while
 [Hackspire's USB protocol notes](https://www.hackspire.org/USB_Protocol/)
