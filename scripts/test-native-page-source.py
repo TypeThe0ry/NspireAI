@@ -8,6 +8,7 @@ def main() -> int:
     page = (root / "src/native_page/nspire_ai_page.lua").read_text()
     module = (root / "src/native_page/nspire_ai_nav.c").read_text()
     makefile = (root / "src/native_page/Makefile").read_text()
+    deploy = (root / "scripts/deploy-native-page-candidate.sh").read_text()
 
     required_page = (
         "D2Editor.newRichText()", "toolpalette.register", "timer.start",
@@ -31,6 +32,9 @@ def main() -> int:
             raise SystemExit(f"FAIL: resident Lua module contains standalone scheduler path: {forbidden}")
     if "$(EXE).tns" not in makefile or "nspire_ai.tns" not in makefile:
         raise SystemExit("FAIL: native page Makefile does not build both page and resident module")
+    for needle in ("NSPIRE_ALLOW_NATIVE_PAGE_UPLOAD", "nspire_ai_nav.luax.tns", "nspire_ai.tns"):
+        if needle not in deploy:
+            raise SystemExit(f"FAIL: native page deploy gate missing {needle}")
     print("PASS: new TI document page uses native controls and resident NavNet module")
     return 0
 

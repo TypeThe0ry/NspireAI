@@ -2245,3 +2245,10 @@ produced separate page/module artifacts under `dist/native-page/`; Lua syntax,
 source-contract, and all existing host/program tests pass. No artifact has
 been uploaded, so this is build/static evidence only and does not count as
 physical `CONNECTED → request/RX → same-page response` evidence.
+
+The candidate now has a separate two-file upload wrapper,
+`scripts/deploy-native-page-candidate.sh`, which requires
+`NSPIRE_ALLOW_NATIVE_PAGE_UPLOAD=1`, verifies per-file SHA-256 manifests, and
+uploads `nspire_ai_nav.luax.tns` before `nspire_ai.tns`. The Java remote client
+accepts only the explicit `page_backend=resident-lua-*` manifest markers for
+this path. The gate was tested in the default-deny state; no upload was run.

@@ -216,6 +216,15 @@ public final class NspireRemoteControl {
                 if (!manifestLines.contains("build_status=success") ||
                         !manifestLines.contains("sha256=" + artifactSha))
                     throw new IllegalArgumentException("artifact/manifest mismatch");
+                boolean residentLuaPage = manifestLines.contains(
+                        "page_backend=resident-lua-native-controls") ||
+                        manifestLines.contains("page_backend=resident-lua-navnet-extension");
+                if (residentLuaPage) {
+                    proxy.sendFileToNode(node, source.getAbsolutePath(), args[2]);
+                    System.out.println("UPLOADED " + args[2] + " bytes=" + source.length()
+                            + " backend=resident-lua");
+                    return;
+                }
                 if (!manifestLines.contains("ui_backend=TRUE") &&
                         !manifestLines.contains("ui_backend=FALSE"))
                     throw new IllegalArgumentException("manifest missing valid ui_backend");

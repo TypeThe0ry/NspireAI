@@ -68,6 +68,15 @@ script does not upload them automatically. They have only build/static
 evidence so far; they do not count as physical `CONNECTED → request/RX →
 same-page response` evidence.
 
+The two-file upload path is separately gated and installs the extension before
+the page:
+
+```sh
+NSPIRE_ALLOW_NATIVE_PAGE_UPLOAD=1 ./scripts/deploy-native-page-candidate.sh
+```
+
+That command is intentionally not run by the normal deploy script.
+
 ## Current verification status
 
 | Requirement | Current evidence |

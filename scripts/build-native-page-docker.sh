@@ -38,6 +38,16 @@ cp "$ROOT/src/native_page/nspire_ai.tns" "$OUT/nspire_ai.tns"
 cp "$ROOT/src/native_page/nspire_ai_nav.luax.tns" "$OUT/nspire_ai_nav.luax.tns"
 PAGE_SHA="$(shasum -a 256 "$OUT/nspire_ai.tns" | awk '{print $1}')"
 EXT_SHA="$(shasum -a 256 "$OUT/nspire_ai_nav.luax.tns" | awk '{print $1}')"
+cat > "$OUT/nspire_ai.tns.meta" <<EOF
+sha256=$PAGE_SHA
+page_backend=resident-lua-native-controls
+build_status=success
+EOF
+cat > "$OUT/nspire_ai_nav.luax.tns.meta" <<EOF
+sha256=$EXT_SHA
+page_backend=resident-lua-navnet-extension
+build_status=success
+EOF
 cat > "$OUT/manifest.txt" <<EOF
 page_sha256=$PAGE_SHA
 extension_sha256=$EXT_SHA
