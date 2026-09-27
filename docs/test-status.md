@@ -2517,7 +2517,13 @@ call `idle()`/WFI, or claim to solve the underlying scheduler boundary.
 The clean rebuild produced SHA
 `6430301d3edf5f214854c3f8be6b7c182ec520e832a11d095e7ac9d0e673ffc8`,
 `alloc_size=52032`, and `ngc_probe=FALSE`. `make program-test`, 19 bridge
-tests, Java helper lifecycle, and all upload gates passed. The authoritative
-USB check immediately afterward still reported only TS4 `ACE1`, so this
-candidate has not been uploaded or physically verified; `E022`,
-`CONNECTED`, request/RX, and same-page response remain pending.
+tests, Java helper lifecycle, and all upload gates passed. After `E022`
+returned, the package was uploaded once and the remote screen showed the
+document list with `nspire_ai` highlighted. A single bounded `~enter~` launch
+call then timed out after 6 seconds; the following screen read also timed out
+after 8 seconds. A concurrent clean bridge reached `READY service=0x5001`
+and `NODE 1`, but never received calculator-originated `CONNECTED`, request/RX,
+or a same-page response. The bridge and helper were stopped cleanly. This
+exact SHA is permanently blocked in both upload paths; do not retry it
+unchanged. `E022` only proves the USB/NavNet node is enumerable, not that the
+standalone page is schedulable.
