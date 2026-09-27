@@ -2632,3 +2632,19 @@ unverified ABI, task object layout, stack/lifetime contract, and loader cleanup
 model. It is not a safe replacement for the current resident loop and no such
 candidate was built or uploaded. The reproducible audit is
 `scripts/audit-ndless-task-boundary.py`.
+
+### 2026-09-27 post-replug host cleanup probe
+
+After the user exited the stuck calculator page and replugged the cable, the
+read-only USB gate still reported `STATE=CX2_USB_CANDIDATE product=0xE022`.
+The TI-Nspire Student Software accessibility tree, however, continued to
+show `No handheld selected`. A bounded
+`NSPIRE_REMOTE_TIMEOUT_SECONDS=8 ./scripts/run-nspire-remote.sh info` reached
+NavNet callback registration, then the native child ignored TERM and was
+escalated to KILL (`REMOTE_RC=137`). The wrapper's EXIT cleanup removed the
+newly-created RMI server: port 1099 was closed and no new
+`RemoteNavnetServer`, `NspireNavnetHelper`, or bridge process remained.
+
+This is host lifecycle evidence only. It does not prove a usable handheld
+session, calculator `CONNECTED`, request/RX, or same-page response. No
+package was uploaded or launched during this probe.
