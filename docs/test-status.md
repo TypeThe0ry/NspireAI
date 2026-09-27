@@ -2218,3 +2218,17 @@ a second read-only screen request was issued more than two minutes after the
 launch attempt. It also timed out and required Java child cleanup. Thus the
 stage-12 result is a genuine post-launch page/OS stall, not merely the
 20-second key wrapper expiring before the probe's planned exit.
+
+### 2026-09-27 production `idle()` dead-wait removed
+
+The guarded production candidate froze after launch and is quarantined as
+`2a20676747b78f87fab2f2d11d1e56ad70d6390097c3c9319affc60bcf4aefa8`. Source
+inspection identifies a concrete failure mode: Ndless's standalone loader
+enters Zehn programs with CPU IRQ delivery masked, while the candidate's
+disarmed production loop called `idle()`, whose WFI waits for an interrupt.
+That combination can dead-wait before Menu or USB work runs. `idle()` is now
+removed from the production loop; the stage-15 call remains diagnostic-only,
+and the static safe-loop check rejects any production `idle()` call. This
+removes one confirmed dead-wait mechanism but does not solve the broader
+post-launch USB/OS scheduling boundary, so no replacement package has been
+uploaded and no physical protocol result is claimed.

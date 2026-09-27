@@ -724,3 +724,23 @@ descriptor remained `0xE022`. The host bridge was stopped cleanly with
 unregister and `helper: STOPPED`, leaving no helper/RMI process. The exact
 candidate SHA is quarantined in both upload paths pending root-cause work;
 the requested live protocol loop remains unverified.
+
+## 2026-09-27 production `idle()` dead-wait diagnosis
+
+The latest freeze exposes a concrete standalone-runtime hazard. Ndless's
+`ploaderhook.c` calls `TCT_Local_Control_Interrupts(-1)` before entering a Zehn
+executable. The candidate's production NGC loop then called the SDK `idle()`
+whenever transport was disarmed. Ndless's `idle()` executes ARM WFI and waits
+for an interrupt; with CPU IRQ delivery still masked by the loader, that path
+can dead-wait before the user can press Menu or USB work can progress. The
+stage-15 `idle()` call is diagnostic-only and is not a valid production
+scheduler.
+
+The production source now removes `idle()`/WFI from the live loop and retains
+only a bounded NOP slice. This prevents the newly identified unconditional
+dead-wait, but it is not evidence that a standalone program can share the CX II
+screen/USB scheduler: the earlier no-WFI probes still stalled at the
+post-launch boundary. The frozen candidate SHA
+`2a20676747b78f87fab2f2d11d1e56ad70d6390097c3c9319affc60bcf4aefa8` remains
+blocked and must not be uploaded again. No new TNS is authorized until the
+standalone loader/USB scheduling boundary has a separately reviewed solution.

@@ -437,20 +437,16 @@ int main(void) {
          * redrew once per RTC tick even when nothing changed, repeatedly
          * entering the raw GC framebuffer path. */
         if (ngc_ui_dirty) ngc_draw();
-        /* The stage-15 probe was intended to distinguish NOP-tail starvation
-         * from LCD/GC entry, but the post-test file-list capture did not
-         * establish that the probe page had actually stayed resident. Keep
-         * this yield experimental. While transport is still disarmed there
-         * is no active NavNet channel, so yield through Ndless idle().
-         * Keep idle() out of the active-channel path: it masks every IRQ
-         * except the Ndless timer interrupt and could hide a NavNet event. */
-        if (!nav_connected &&
-            (!ngc_transport_armed || nav_transport_is_blocked())) {
-            idle();
-        } else {
-            for (volatile unsigned spin = 0; spin < 256; ++spin)
-                __asm volatile("nop");
-        }
+        /* Ndless's standalone loader enters this program with CPU IRQs
+         * masked while it owns the screen.  idle() executes WFI and waits
+         * for an interrupt, so calling it from the production path can
+         * dead-wait forever before Menu/USB has any chance to run.  The
+         * stage-15 diagnostic remains available separately, but it must not
+         * be copied into the live loop.  This bounded NOP slice is not a
+         * scheduler fix; it is the least dangerous behavior while the
+         * standalone-runtime/USB boundary remains unresolved. */
+        for (volatile unsigned spin = 0; spin < 256; ++spin)
+            __asm volatile("nop");
     }
 #ifdef NSPIRE_NGC_USB_IRQ_WINDOW
     nav_irq_window_leave(&irq_window);
