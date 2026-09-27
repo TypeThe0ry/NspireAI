@@ -2712,3 +2712,20 @@ running), and ended with `STOPPED`. The RMI port and helper/server process
 set were empty afterward. This confirms the new host timing and cleanup path
 on the live USB connector, but still is not calculator `CONNECTED`, request/RX,
 or same-page response evidence.
+
+### 2026-09-27 user-exited/replugged follow-up probe
+
+The user then exited the calculator program and replugged the same cable. A
+fresh macOS IORegistry snapshot still showed the direct
+`TI-Nspire(tm) CX II Handheld` at location `0x00100000` (`0x0451:0xE022`),
+separate from the CalDigit TS4 hub tree. With no TI Student Software window
+running, a bounded `NSPIRE_REMOTE_TIMEOUT_SECONDS=8
+./scripts/run-nspire-remote.sh info` registered the NavNet callback but saw no
+`NODE`; the native child ignored `TERM` and was escalated to `KILL` with
+`RC=137`. The wrapper removed the newly-created RMI server, and a post-run
+process/port check found no `RemoteNavnetServer`, `NspireNavnetHelper`, bridge,
+or listener on port 1099.
+
+This is another host/USB-topology and cleanup result only. The calculator was
+not running an AI page, so there is still no physical `CONNECTED`, request/RX,
+or same-page response evidence, and no package was uploaded or launched.
