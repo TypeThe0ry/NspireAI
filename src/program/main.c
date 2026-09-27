@@ -622,7 +622,15 @@ static int nav_write_frame(uint8_t opcode, uint32_t request_id,
     if (payload_length) memcpy(frame + HEADER_SIZE, payload, payload_length);
     status = NAV_OS_CALL(TI_NN_Write(nav_channel, frame, (uint32_t)(HEADER_SIZE + payload_length)));
     if (status < 0) {
-        nav_disconnect("write failed");
+        /* A failed write can report -257 after TI has already invalidated the
+         * peer-side handle.  Calling TI_NN_Disconnect on that stale pointer
+         * re-enters the same teardown path that previously froze the CX II.
+         * Keep the invalid-handle containment used by nav_poll consistent for
+         * the first PING, PONG, NEW, and request writes as well. */
+        if (status == -257)
+            nav_abandon_channel("write invalid connection");
+        else
+            nav_disconnect("write failed");
         return 0;
     }
     return 1;

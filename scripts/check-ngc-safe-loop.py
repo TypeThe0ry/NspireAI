@@ -45,6 +45,11 @@ def main() -> int:
         raise SystemExit("FAIL: transient NavNet read statuses still tear down the channel")
     if "nav_read_at = nav_clock_ms() + NAV_READ_ARM_DELAY_MS;" not in read_body:
         raise SystemExit("FAIL: transient NavNet read statuses lack retry backoff")
+    write_body = main_text.split("static int nav_write_frame", 1)[1].split(
+        "static void reset_conversation", 1)[0]
+    if 'if (status == -257)' not in write_body or \
+            'nav_abandon_channel("write invalid connection")' not in write_body:
+        raise SystemExit("FAIL: invalid NavNet write must abandon stale handle without Disconnect")
     connect_body = main_text.split("static int nav_try_connect", 1)[1].split(
         "static int nav_write_frame", 1)[0]
     enum_done = connect_body.find("TI_NN_NodeEnumDone")
