@@ -525,7 +525,7 @@ then emitted unregister/`helper: STOPPED` and left no Java/RMI child. This
 confirms the post-Enter USB/screen stall on the reviewed stage-14 artifact,
 but still does not prove page residency or the requested protocol loop.
 
-### Offline stage-15 scheduler discriminator (not uploaded)
+### Stage-15 scheduler discriminator (uploaded and read back; not a transport test)
 
 Because the stage-14 loop uses only a NOP tail, an offline diagnostic was added
 that removes NavNet and matrix-key work and calls Ndless `idle()` once per loop.
@@ -534,8 +534,18 @@ transport change: `idle()` masks all IRQs except the Ndless timer interrupt and
 its interaction with CX II NavNet is unverified. The Docker build, Zehn
 relocation audit, startup-order check, safe-loop gate, and manifest all passed.
 The isolated artifact is stored under `.build/ngc-stage15/` at SHA-256
-`fe4d9a26dd1bd62cb385da5f9f62df0f82b6f239c2b3f0f2d17e0043fdbe82ec`; it was
-not copied to `dist`, uploaded, or treated as physical-runtime evidence.
+`fe4d9a26dd1bd62cb385da5f9f62df0f82b6f239c2b3f0f2d17e0043fdbe82ec`. With
+explicit authorization it was uploaded to `/nspire_ai.tns` and then read back
+byte-for-byte: 26,280 bytes with the same SHA-256. The bridge was started
+separately and reached `READY service=0x5001` plus `NODE 1`; the user pressed
+local Enter once on the highlighted file. No `CONNECTED`, `RX`, or `TX` event
+was expected or observed because this stage contains no NavNet calls. A
+read-only screen probe taken after the 30-second diagnostic residency showed
+the file list again, consistent with the probe returning to the launcher. No
+new TI crash log appeared. The bridge then shut down with unregister and
+`helper: STOPPED`, leaving no helper/RMI child. This is physical upload and
+launcher-return evidence only, not page residency or the requested protocol
+loop.
 
 ## 2026-09-24 relocation-candidate physical rejection (Computer Use control)
 

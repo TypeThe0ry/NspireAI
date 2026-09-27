@@ -676,7 +676,7 @@ current evidence that the stage-14 program-open path stalls the handheld USB
 screen channel after the local Enter; it is not evidence of a successful page
 or of a Mac bridge crash.
 
-## Offline stage-15 scheduler discriminator (2026-09-27)
+## Stage-15 scheduler discriminator (2026-09-27)
 
 The reviewed stage-14 probe reproduced a post-Enter screen/USB stall while
 using a NOP-only tail and no NavNet calls. To separate loop starvation from
@@ -685,7 +685,15 @@ RTC deadline, and 30-second residency, but with no NavNet or matrix-key work;
 it calls Ndless `idle()` once per loop. The artifact is
 `fe4d9a26dd1bd62cb385da5f9f62df0f82b6f239c2b3f0f2d17e0043fdbe82ec` and is
 isolated under `.build/ngc-stage15/`. It passed the Docker build, relocation,
-startup-order, safe-loop, and manifest checks. It remains unuploaded because
-`idle()` masks all IRQs except the timer interrupt and its CX II NavNet
-interaction is not established; the candidate is a scheduler discriminator,
-not a claimed USB fix or protocol result.
+startup-order, safe-loop, and manifest checks. With explicit authorization it
+was uploaded to `/nspire_ai.tns` (26,280 bytes) and a later readback verified
+the same SHA-256 byte-for-byte. The bridge then reached `READY service=0x5001`
+and `NODE 1`; the user pressed local Enter once while the file was highlighted.
+There was no `CONNECTED`, `RX`, or `TX`, as expected because this diagnostic
+does not call NavNet. A read-only screen probe performed after the probe's
+30-second residency showed the file list again, meaning the diagnostic had
+returned to the launcher; it does not prove page residency or a protocol loop.
+No new TI crash log appeared, and bridge shutdown emitted unregister and
+`helper: STOPPED` cleanly. `idle()` masks all IRQs except the timer interrupt
+and its CX II NavNet interaction remains unestablished; this is a scheduler
+discriminator, not a claimed USB fix or protocol result.
