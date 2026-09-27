@@ -252,6 +252,8 @@ public final class NspireRemoteControl {
                     throw new IllegalArgumentException("refusing NGC candidate: handheld flashed/crashed on Menu during physical run on 2026-09-27");
                 if (artifactSha.equals("e34b356d9e82e8fe3799016f59c9873a1ea77e6a609ff48684e96a7974f7c2eb"))
                     throw new IllegalArgumentException("refusing NGC candidate: Enter-arm run reached CONNECTED then first read returned -257 and the handheld hung on connecting on 2026-09-27");
+                if (artifactSha.equals("45eba3c67e0d52e133d00a3132eea955d0a4ba2ca4dab1571082ac5f4b895091"))
+                    throw new IllegalArgumentException("refusing standalone NGC/RTC candidate: launching nspire_ai dropped the CX II USB endpoint back to the TS4 ACE1 controller; use the resident native-page backend");
                 if (artifactSha.equals("c45c42b7284f865c19a2dcce618f63410bb250b5e4788d30eb25ab0b7fec0876"))
                     throw new IllegalArgumentException("refusing get_event scheduler-poll candidate: launch froze before CONNECTED; same path was previously rejected on 2026-09-26");
                 if (artifactSha.equals("ea71bdf2f15c2fdc37c8a91cc9259d5463c4be27cb654c87d50a83c7ce8e2b0f"))

@@ -2344,3 +2344,30 @@ clears the application channel, and adds a lifecycle regression check. After
 cleaning the prior bridge/server processes, the host still required a fresh
 USB re-enumeration before another physical attempt; no protocol-loop success
 is claimed from this fix alone.
+
+### 2026-09-27 standalone `nspire_ai` confirmed as the USB wedge
+
+The operator reproduced the decisive correlation: with the calculator on the
+normal USB path, launching the standalone `nspire_ai` page causes the TI-Nspire
+endpoint to disappear and leaves only the CalDigit/TS4 DMC controller
+(`product=0xACE1`, `STATE=NO_NSPIRE_DOCK_DMC_CONTROLLER`). The same host state is
+visible to `n-link`, which reports `Couldn't find any device`; TI Student
+Software likewise reports `No handheld selected`. This is not a cable-data
+quality problem and is not evidence of a bridge-side `CONNECTED` failure.
+
+The affected standalone artifact is the host-first handshake package
+`45eba3c67e0d52e133d00a3132eea955d0a4ba2ca4dab1571082ac5f4b895091`. Earlier
+stage-12 and stage-14 probes independently stalled after launch before NavNet
+traffic, so this observation closes the remaining ambiguity: the standalone
+Zehn entry point is unsafe for this CX II scheduler/USB boundary even when
+NavNet is disarmed. The exact SHA is now quarantined in both the shell and Java
+upload paths; no override is provided.
+
+The replacement route is the separately built resident TI-native page plus
+Ndless NavNet extension, not the removed file-exchange Lua implementation. The
+offline candidate remains under `dist/native-page/` with page SHA
+`fb0ee9135217ab2565641c58bd8ffb74b1b0a3e3ae5839ba459d6173fa2e10e5` and
+extension SHA `4f74f2e180a687c0f8b0e35be3f78689610b106e2c6248a42a167100d7418683`.
+Source-contract, bridge-session, and program tests pass. It has not been
+uploaded while the authoritative USB gate is still ACE1, and there is no
+physical `CONNECTED -> request/RX -> same-page response` claim yet.
