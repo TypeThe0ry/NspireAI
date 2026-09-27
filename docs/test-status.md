@@ -2618,3 +2618,17 @@ Enter on the highlighted file timed out. A concurrent bridge reached
 USB remained `0xE022`, so this was a resident-page freeze rather than a cable
 fallback. There is no request/RX or same-page response evidence. The exact
 SHA is now permanently blocked in both upload paths; do not retry it.
+
+### 2026-09-27 Ndless resident-task boundary audit
+
+The local pinned Ndless source was audited without touching the calculator.
+`ploaderhook.c` calls `TCT_Local_Control_Interrupts(-1)` before
+`entry(argc, argv)` and restores the saved mask only after `entry()` returns.
+The public SDK headers expose `TCC_Terminate_Task` and
+`TCC_Current_Task_Pointer`, but do not expose `TCC_Create_Task` or
+`TCC_Resume_Task`; those names appear only as OS-specific IDC labels for
+CX II CAS 6.2.0.333. Therefore a raw `TCC_Create_Task` call would require an
+unverified ABI, task object layout, stack/lifetime contract, and loader cleanup
+model. It is not a safe replacement for the current resident loop and no such
+candidate was built or uploaded. The reproducible audit is
+`scripts/audit-ndless-task-boundary.py`.
