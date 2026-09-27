@@ -125,6 +125,17 @@ static int ngc_keys(void) {
                     previous[i] = down;
                     continue;
                 }
+                /* Never turn an active channel into a hidden stale channel
+                 * by treating Menu as a disconnect button.  The known-safe
+                 * recovery path for an active connection is the normal
+                 * protocol/ESC teardown, not a second synchronous NavNet
+                 * syscall from the key scanner. */
+                if (ngc_transport_armed && nav_connected) {
+                    set_status("USB active; Menu keeps bridge connected");
+                    changed = 1;
+                    previous[i] = down;
+                    continue;
+                }
                 ngc_transport_armed = !ngc_transport_armed;
                 if (ngc_transport_armed) {
 #ifdef NSPIRE_NGC_MENU_LOCAL_SERVICE
@@ -433,7 +444,8 @@ int main(void) {
          * Once Menu explicitly arms transport, keep idle() out of the path:
          * idle() masks every IRQ except the Ndless timer interrupt and must
          * not be allowed to hide a NavNet event. */
-        if (!ngc_transport_armed && !nav_connected) {
+        if (!nav_connected &&
+            (!ngc_transport_armed || nav_transport_is_blocked())) {
             idle();
         } else {
             for (volatile unsigned spin = 0; spin < 256; ++spin)

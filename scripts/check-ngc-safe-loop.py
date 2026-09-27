@@ -28,8 +28,24 @@ def main() -> int:
         raise SystemExit("FAIL: NGC loop samples the RTC on every spin")
     if "if (++key_sample_spin >= 512u)" not in production:
         raise SystemExit("FAIL: NGC loop still scans the full key matrix on every spin")
-    if "if (!ngc_transport_armed && !nav_connected)" not in production or "idle();" not in production:
-        raise SystemExit("FAIL: unarmed NGC loop lacks the stage-15 scheduler yield")
+    if ("if (!nav_connected &&" not in production or
+            "(!ngc_transport_armed || nav_transport_is_blocked())" not in production or
+            "idle();" not in production):
+        raise SystemExit("FAIL: unarmed/held NGC loop lacks the stage-15 scheduler yield")
+    # Keep the intended truth table explicit: a held-but-unconnected
+    # transport must still yield, while an active channel must never enter
+    # idle() (which masks every IRQ except the Ndless timer IRQ).
+    idle_allowed = lambda armed, blocked, connected: (
+        not connected and (not armed or blocked)
+    )
+    if not idle_allowed(False, False, False):
+        raise SystemExit("FAIL: disarmed NGC loop would not yield")
+    if not idle_allowed(True, True, False):
+        raise SystemExit("FAIL: held NGC loop would not yield")
+    if idle_allowed(True, False, True) or idle_allowed(True, True, True):
+        raise SystemExit("FAIL: connected NGC channel could enter idle()")
+    if "USB active; Menu keeps bridge connected" not in text:
+        raise SystemExit("FAIL: Menu can silently stale an active NavNet channel")
     connect_body = main_text.split("static int nav_try_connect", 1)[1].split(
         "static int nav_write_frame", 1)[0]
     enum_done = connect_body.find("TI_NN_NodeEnumDone")
