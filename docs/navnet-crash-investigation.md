@@ -820,6 +820,15 @@ direct key matrix. The local candidate
 offline gates, but was not uploaded because the previous page still held the
 USB endpoint; no physical claim is made.
 
+The replacement Home-guard package
+`6430301d3edf5f214854c3f8be6b7c182ec520e832a11d095e7ac9d0e673ffc8` was later
+uploaded once after `E022` returned. The screen API showed the `Document
+Received` dialog, but the single controlled `~enter~` event timed out after
+8 seconds and a follow-up screen read timed out after 15 seconds. The bridge
+stayed at `READY`/`NODE 1` with no calculator-originated `CONNECTED`. This SHA
+is permanently blocked in both upload paths; the result is physical
+entry/scheduling failure evidence, not NavNet request/response success.
+
 ## 2026-09-27 Home teardown guard
 
 The production NGC key loop now checks the direct matrix mapping for

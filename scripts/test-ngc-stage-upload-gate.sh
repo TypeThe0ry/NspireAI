@@ -97,6 +97,11 @@ if ! grep -q '2a20676747b78f87fab2f2d11d1e56ad70d6390097c3c9319affc60bcf4aefa8' 
   echo "FAIL: physically frozen guarded NGC candidate is not blocked in both upload paths" >&2
   exit 1
 fi
+if ! grep -q '6430301d3edf5f214854c3f8be6b7c182ec520e832a11d095e7ac9d0e673ffc8' "$ROOT/scripts/deploy-program-nspire.sh" || \
+   ! grep -q '6430301d3edf5f214854c3f8be6b7c182ec520e832a11d095e7ac9d0e673ffc8' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java"; then
+  echo "FAIL: physically timed-out Home-guard candidate is not blocked in both upload paths" >&2
+  exit 1
+fi
 if ! grep -q 'd30a62b4f96640f0f49acf2813f138910de2e0917d28e9a98c92e946150fb146' "$ROOT/scripts/deploy-program-nspire.sh" || \
    ! grep -q 'd30a62b4f96640f0f49acf2813f138910de2e0917d28e9a98c92e946150fb146' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java"; then
   echo "FAIL: physically crashed Menu candidate is not blocked in both upload paths" >&2

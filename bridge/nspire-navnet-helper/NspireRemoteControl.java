@@ -258,6 +258,8 @@ public final class NspireRemoteControl {
                     throw new IllegalArgumentException("refusing invalid-handle containment candidate: launch froze before CONNECTED on 2026-09-27");
                 if (artifactSha.equals("2a20676747b78f87fab2f2d11d1e56ad70d6390097c3c9319affc60bcf4aefa8"))
                     throw new IllegalArgumentException("refusing guarded NGC candidate: handheld froze during physical run on 2026-09-27; no CONNECTED observed");
+                if (artifactSha.equals("6430301d3edf5f214854c3f8be6b7c182ec520e832a11d095e7ac9d0e673ffc8"))
+                    throw new IllegalArgumentException("refusing Home-guard candidate: TI Enter timed out and screen API hung before CONNECTED on 2026-09-27");
                 if (artifactSha.equals("d30a62b4f96640f0f49acf2813f138910de2e0917d28e9a98c92e946150fb146"))
                     throw new IllegalArgumentException("refusing NGC candidate: handheld flashed/crashed on Menu during physical run on 2026-09-27");
                 if (artifactSha.equals("e34b356d9e82e8fe3799016f59c9873a1ea77e6a609ff48684e96a7974f7c2eb"))

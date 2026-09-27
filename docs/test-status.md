@@ -2489,6 +2489,12 @@ and the device fell back to the TS4 `ACE1` controller. This candidate remains
 local-only until the device returns to `E022` and the page can be opened under a
 fresh bridge session.
 
+The candidate was later uploaded once after `E022` returned. The TI
+`Document Received` dialog was visible, but one controlled `~enter~` call timed
+out after 8 seconds, a subsequent screen read timed out after 15 seconds, and
+the bridge never reported calculator-originated `CONNECTED`. The exact SHA is
+now permanently blocked in both upload paths; do not retry it unchanged.
+
 ### 2026-09-27 Home teardown guard (local-only candidate)
 
 The NGC page now handles `KEY_NSPIRE_HOME` directly in the matrix scanner and
