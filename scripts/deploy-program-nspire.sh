@@ -191,5 +191,5 @@ esac
 "$ROOT/scripts/check-nspire-usb-state.sh"
 
 echo "Uploading one standalone Ndless program package; runtime chat uses NavNet, not file exchange."
-exec python3 "$ROOT/scripts/run-with-timeout.py" "$UPLOAD_TIMEOUT_SECONDS" \
-  "$N_LINK_BIN" upload "$ARTIFACT" "$REMOTE_DEST"
+exec "$ROOT/scripts/upload-and-verify-nspire.sh" \
+  "$N_LINK_BIN" "$ARTIFACT" "$REMOTE_DEST" "$UPLOAD_TIMEOUT_SECONDS"
