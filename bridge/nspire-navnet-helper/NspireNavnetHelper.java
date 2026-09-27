@@ -38,6 +38,7 @@ public final class NspireNavnetHelper {
     // implementation. They are not evidence that the service handle is dead.
     private static final int ERR_INCOMPLETE_TRANSACTION = -258;
     private static final int ERR_BUSY = -269;
+    private static final long DEFAULT_INITIAL_READ_DELAY_MS = 1000L;
     // TI's NodeNotifyCallback uses 1 for ADD and 2 for REMOVE. It is not a
     // boolean event flag; treating every non-zero value as present leaves the
     // bridge holding a dead node after a USB detach.
@@ -51,6 +52,9 @@ public final class NspireNavnetHelper {
     private static volatile int bootstrapServiceId;
     private static volatile ConnectionHandle bootstrapConnection;
     private static volatile Thread bootstrapThread;
+    private static volatile long initialReadDelayMs = DEFAULT_INITIAL_READ_DELAY_MS;
+    private static volatile ConnectionHandle invalidConnection;
+    private static final Object INVALID_CONNECTION_LOCK = new Object();
 
     /*
      * TI's macOS NavNet 6.2 native server has a reproducible teardown crash:
@@ -76,6 +80,21 @@ public final class NspireNavnetHelper {
     private static boolean shouldShutdownProxy() {
         return "1".equals(System.getenv().getOrDefault(
                 "NSPIRE_NAVNET_PROXY_SHUTDOWN", "0"));
+    }
+
+    private static boolean configureInitialReadDelay() {
+        String raw = System.getenv().getOrDefault(
+                "NSPIRE_NAVNET_INITIAL_READ_DELAY_MS",
+                Long.toString(DEFAULT_INITIAL_READ_DELAY_MS));
+        try {
+            long value = Long.parseLong(raw);
+            if (value < 0L || value > 60000L) throw new NumberFormatException();
+            initialReadDelayMs = value;
+            return true;
+        } catch (NumberFormatException error) {
+            emit("ERR NSPIRE_NAVNET_INITIAL_READ_DELAY_MS must be 0..60000");
+            return false;
+        }
     }
 
     private static void armShutdownWatchdog() {
@@ -140,6 +159,22 @@ public final class NspireNavnetHelper {
         System.out.flush();
     }
 
+    private static boolean isInvalidConnection(ConnectionHandle handle) {
+        synchronized (INVALID_CONNECTION_LOCK) {
+            return handle != null && handle == invalidConnection;
+        }
+    }
+
+    private static void markInvalidConnection(ConnectionHandle handle, String operation) {
+        if (handle == null) return;
+        synchronized (INVALID_CONNECTION_LOCK) {
+            invalidConnection = handle;
+            if (connection == handle) connection = null;
+        }
+        emit("ERR " + operation + "=" + ERR_INVALID_CONNECTION
+                + "; handle invalid; waiting for callback");
+    }
+
     private static int write(ConnectionHandle handle, byte[] data) {
         synchronized (IO_LOCK) {
             int status = NavNet.write(handle, data, data.length);
@@ -149,9 +184,7 @@ public final class NspireNavnetHelper {
                      * pointer. Do not disconnect it again, and do not let
                      * the stdin SEND path report a false OK or reuse the
                      * stale handle on the next request. */
-                    if (connection == handle) connection = null;
-                    emit("ERR NavNet.write=" + status
-                            + "; handle invalid; waiting for callback");
+                    markInvalidConnection(handle, "NavNet.write");
                 } else {
                     emit("ERR NavNet.write=" + status);
                 }
@@ -176,14 +209,13 @@ public final class NspireNavnetHelper {
                     if (status < 0) {
                         if (stopping || connection != handle) break;
                         if (status == ERR_INVALID_CONNECTION) {
-                            emit("ERR NavNet.read=" + status + "; handle invalid; waiting for callback");
                             /* Do not call NavNet.disconnect(handle): TI has
                              * already rejected the handle and its native
                              * teardown is not safe on this path.  Clearing
                              * the volatile reference also prevents the
                              * watcher from restarting a reader on the same
                              * stale handle. */
-                            connection = null;
+                            markInvalidConnection(handle, "NavNet.read");
                             break;
                         }
                         if (status == ERR_INCOMPLETE_TRANSACTION || status == ERR_BUSY) {
@@ -235,23 +267,29 @@ public final class NspireNavnetHelper {
                 ConnectionHandle handle = connection;
                 boolean readerMissing = reader == null || !reader.isAlive();
                 if (handle != null && (handle != observed || readerMissing)) {
+                    boolean newHandle = handle != observed;
                     observed = handle;
                     try {
                         // The service callback may run just before
                         // startService() returns, or concurrently with this
                         // watcher on a later reconnect. Never enter TI's read
                         // path until the callback has had time to unwind.
-                        /* The calculator enters its first synchronous
-                         * TI_NN_Read immediately after TI_NN_Connect.  Keep
-                         * this handoff short so the host PING is queued before
-                         * that read; the callback itself still performs no
+                        /* The calculator owns the first application write
+                         * (NSAI PING) before its first synchronous
+                         * TI_NN_Read; the callback itself still performs no
                          * NavNet I/O. */
-                        Thread.sleep(readerMissing ? 10L : 50L);
+                        /* Give it one RTC tick to queue NSAI PING before the
+                         * host enters its first synchronous read. The delay
+                         * is configurable for controlled hardware tests; the
+                         * default is deliberately 1000 ms because the CX II
+                         * RTC-backed page is only second-resolution. */
+                        Thread.sleep(newHandle ? initialReadDelayMs : 50L);
                     } catch (InterruptedException ignored) {
                         Thread.currentThread().interrupt();
                         return;
                     }
                     if (!stopping && connection == handle &&
+                            !isInvalidConnection(handle) &&
                             (reader == null || !reader.isAlive())) {
                         /* The calculator is the NavNet client and emits the
                          * first NSAI PING after TI_NN_Connect.  Do not write
@@ -402,6 +440,7 @@ public final class NspireNavnetHelper {
                 "NSPIRE_SERVICE_ID", "0x5001"));
         bootstrapServiceId = Integer.decode(System.getenv().getOrDefault(
                 "NSPIRE_BOOTSTRAP_SERVICE_ID", "0"));
+        if (!configureInitialReadDelay()) return;
         String tmp = System.getProperty("java.io.tmpdir");
         String javaHome = System.getProperty("java.home") + "/bin";
         NavNetCommProxy proxy;
@@ -469,6 +508,13 @@ public final class NspireNavnetHelper {
             });
             status = NavNet.startService(serviceId, new Context(), new ServiceCallbackListener() {
                 @Override public void serviceCallback(ConnectionHandle handle, Context context) {
+                    synchronized (INVALID_CONNECTION_LOCK) {
+                        /* A distinct callback handle is a fresh native
+                         * channel. Do not clear the marker for the exact
+                         * object that already returned -257: that callback
+                         * must not restart a reader on the same stale handle. */
+                        if (handle != invalidConnection) invalidConnection = null;
+                    }
                     connection = handle;
                     emit(handle == null
                             ? "CONNECTED handle=null"
@@ -497,6 +543,10 @@ public final class NspireNavnetHelper {
                     continue;
                 }
                 try {
+                    if (isInvalidConnection(handle)) {
+                        emit("ERR not connected; stale handle");
+                        continue;
+                    }
                     int writeStatus = write(handle, unhex(line.substring(5).trim()));
                     if (writeStatus >= 0) emit("OK");
                 } catch (RuntimeException error) {

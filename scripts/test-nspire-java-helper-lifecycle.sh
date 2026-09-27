@@ -80,6 +80,20 @@ if ! grep -q 'event == NODE_EVENT_ADD' "$HELPER_SOURCE" ||
   exit 1
 fi
 
+if ! grep -q 'DEFAULT_INITIAL_READ_DELAY_MS = 1000L' "$HELPER_SOURCE" ||
+   ! grep -q 'NSPIRE_NAVNET_INITIAL_READ_DELAY_MS' "$HELPER_SOURCE" ||
+   grep -q 'Thread.sleep(readerMissing ? 10L' "$HELPER_SOURCE"; then
+  echo 'Java helper does not enforce the configurable 1000 ms calculator-first read delay' >&2
+  exit 1
+fi
+if ! grep -q 'markInvalidConnection(handle, "NavNet.read")' "$HELPER_SOURCE" ||
+   ! grep -q 'markInvalidConnection(handle, "NavNet.write")' "$HELPER_SOURCE" ||
+   ! grep -q '!isInvalidConnection(handle)' "$HELPER_SOURCE" ||
+   ! grep -q 'ERR not connected; stale handle' "$HELPER_SOURCE"; then
+  echo 'Java helper can restart or reuse a handle after NavNet.read=-257' >&2
+  exit 1
+fi
+
 sleep 1
 if ! kill -0 "$HELPER_PID" 2>/dev/null; then
   sed -n '1,160p' "$LOG_FILE" >&2

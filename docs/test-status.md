@@ -2683,3 +2683,23 @@ when the bounded bridge stopped. No `NODE` was emitted because the
 calculator was on Home and no nspire_ai program was running. This proves
 host-side USB opening and cleanup, not calculator `CONNECTED`, request/RX, or
 same-page response. No package was uploaded or launched.
+
+### 2026-09-27 calculator-first host read gate
+
+The Java helper had been starting its first synchronous `NavNet.read` about
+10 ms after the service callback. That allowed the host to enter the TI
+connector before the calculator's first NSAI PING had been queued; the CX II
+failure history includes `CONNECTED` followed by `-257` and a frozen
+`connecting` page. The helper now waits one RTC tick by default
+(`NSPIRE_NAVNET_INITIAL_READ_DELAY_MS=1000`, bounded to 0--60000 ms) before
+the first read on a fresh handle. Reconnects retain the shorter 50 ms handoff.
+
+The `-257` path now records the exact stale `ConnectionHandle` for both read
+and write failures. A later SEND cannot reuse it, and the connection watcher
+cannot start another reader for that same object; only a distinct callback
+handle clears the marker. This is host-side containment only and does not
+claim that a resident Ndless page can safely schedule USB work.
+
+Local verification passed after the change: Java helper lifecycle, bridge
+lifecycle, all 19 host protocol/bridge tests, and `git diff --check`. No
+calculator package was built, uploaded, or launched from this change.
