@@ -910,6 +910,23 @@ calculator PING/PONG, request/RX, or same-page response. USB stayed at direct
 `0x0451:0xE022`, and all host processes/locks were cleaned up. The exact SHA is
 permanently blocked in both upload entry points.
 
+## 2026-09-27 resident task handoff priority-20 local candidate
+
+The priority-255 physical run showed a different failure mode from the earlier
+priority-10 freeze: the calculator stayed responsive enough for screen capture,
+but the resident task never opened the page. A local-only follow-up changes the
+task priority to `20`, preserving the loader-return strategy while giving the
+task a realistic chance to run after the loader callback yields. The source
+still contains no explicit IRQ enable, `idle()`/`msleep()`, `TCT_Schedule`, or
+NavNet startup from the document entry path.
+
+The clean build produced
+`3b6f94808c9e34d920d80a59bfea1ae4aaefc7e9857c98021400fd01b1f25cf1`
+(16,664 bytes), with 59,444 bytes of loader allocation and 242 Zehn
+relocations. The artifact is kept at
+`.build/ngc-task-handoff-priority20/nspire_ai.tns`; it is not on the device and
+has no physical `CONNECTED` evidence.
+
 ## 2026-09-27 resident task handoff return-through-crt0 candidate
 
 The rejected candidate above called `_exit(0)` after `nl_set_resident()`. The

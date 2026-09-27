@@ -2880,3 +2880,23 @@ did not open a page. The bounded 90-second bridge run never emitted
 remained direct `0x0451:0xE022`; helper, bridge, lock, and port cleanup all
 completed. This exact SHA is now permanently blocked in both upload paths and
 classified as `KNOWN_BLOCKED_TASK_HANDOFF_PRIORITY255_NO_LAUNCH`.
+
+### 2026-09-27 resident-task handoff priority-20 candidate (local-only)
+
+The priority-255 run proved that the task no longer preempted the loader, but
+it also never received CPU time: the document list remained visible after both
+Enter calls. A local-only follow-up therefore tested the same private ABI with
+priority `20`, between the rejected preemption-prone value `10` and the
+starved value `255`. It does not enable IRQs, call `idle()`/`msleep()` or
+`TCT_Schedule`, and it has not been uploaded.
+
+```text
+sha256=3b6f94808c9e34d920d80a59bfea1ae4aaefc7e9857c98021400fd01b1f25cf1
+bytes=16664
+loader allocation=59444 <= 60000
+Zehn relocations=242
+task priority=20
+```
+
+This is an offline hypothesis only. It must receive separate explicit
+authorization before any upload or key event.
