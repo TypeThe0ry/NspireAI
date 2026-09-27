@@ -165,6 +165,12 @@ if ! grep -q 'manifest missing valid ngc_probe' "$ROOT/bridge/nspire-navnet-help
   echo "FAIL: Java direct-upload path does not gate probe manifests" >&2
   exit 1
 fi
+if [[ ! -x "$ROOT/scripts/deploy-ngc-entry-stage17.sh" ]] || \
+   ! grep -q 'EXPECTED_SHA="8fd7dacfaa9551e254e0595d21dfe23797f684c1cbb9894b72543a14388a9b94"' "$ROOT/scripts/deploy-ngc-entry-stage17.sh" || \
+   ! grep -q 'NSPIRE_ALLOW_NGC_ENTRY_STAGE17_UPLOAD' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java"; then
+  echo "FAIL: stage-17 probe upload gate is missing or not SHA-pinned" >&2
+  exit 1
+fi
 if [[ ! -x "$ROOT/scripts/deploy-ngc-entry-stage14.sh" ]]; then
   echo "FAIL: stage-14 probe upload gate is missing or not executable" >&2
   exit 1
