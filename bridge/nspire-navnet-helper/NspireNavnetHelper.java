@@ -143,6 +143,29 @@ public final class NspireNavnetHelper {
         }
     }
 
+    /*
+     * TI_NN_Read on the CX II can stop returning to the standalone task when
+     * the calculator has just opened a channel but the host has not queued a
+     * packet yet.  The calculator's first poll used to be the only producer,
+     * so a lost first write left its UI in "connecting" inside that syscall.
+     * Queue a harmless NSAI PING as soon as the service callback has settled;
+     * this gives the calculator a packet to consume and is also a normal
+     * protocol handshake (the calculator answers with PONG).  It is kept out
+     * of the TI callback itself because NavNet is not re-entrant there.
+     */
+    private static void sendHostHandshakePing(ConnectionHandle handle) {
+        byte[] ping = new byte[] {
+                'N', 'S', 'A', 'I', 1, 1,
+                0, 0, 0, 0,       // request id = 0
+                0, 1,             // initial conversation id
+                0, 0, 0, 0        // empty payload
+        };
+        synchronized (IO_LOCK) {
+            int status = NavNet.write(handle, ping, ping.length);
+            emit("HOST PING status=" + status);
+        }
+    }
+
     private static void startReader(ConnectionHandle handle) {
         if (reader != null && reader.isAlive()) return;
         reader = new Thread(() -> {
@@ -218,7 +241,10 @@ public final class NspireNavnetHelper {
                         return;
                     }
                     if (!stopping && connection == handle &&
-                            (reader == null || !reader.isAlive())) startReader(handle);
+                            (reader == null || !reader.isAlive())) {
+                        sendHostHandshakePing(handle);
+                        startReader(handle);
+                    }
                 }
                 try {
                     Thread.sleep(50L);
@@ -312,11 +338,23 @@ public final class NspireNavnetHelper {
                             int writeStatus = NavNet.write(handle, request, request.length);
                             emit("BOOTSTRAP WRITE status=" + writeStatus);
                             if (writeStatus >= 0) {
-                                byte[] response = new byte[64];
-                                IntegerBox received = new IntegerBox();
-                                int readStatus = NavNet.read(handle, 1000L, response, received);
-                                emit("BOOTSTRAP RX status=" + readStatus +
-                                        " length=" + received.getValue());
+                                /* NavNet.read's timeout is not a reliable
+                                 * wall-clock bound on the CX II connector;
+                                 * this probe used to pin the sole bootstrap
+                                 * worker for tens of seconds before the
+                                 * calculator had even opened 0x5002. The
+                                 * calculator owns the authoritative
+                                 * completion bit after it reads and answers
+                                 * this request. Keep the channel briefly so
+                                 * that callback can run, then let the bounded
+                                 * poll retry if the page was not armed yet. */
+                                emit("BOOTSTRAP awaiting calculator callback");
+                                try {
+                                    Thread.sleep(750L);
+                                } catch (InterruptedException interrupted) {
+                                    Thread.currentThread().interrupt();
+                                    return;
+                                }
                             }
                             return;
                         }

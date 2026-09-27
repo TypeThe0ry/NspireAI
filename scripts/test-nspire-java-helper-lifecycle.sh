@@ -54,14 +54,12 @@ if ! grep -qx 'CONNECTORS skipped=server-owned' "$LOG_FILE"; then
   exit 1
 fi
 
-# A -257 result invalidates the native handle. Retrying the same handle
+# A -257 result invalidates the native handle. Retrying that same handle
 # creates an unbounded TI-server loop and was followed by a CX II freeze;
-# keep this terminal-state guard visible in source.
+# keep the terminal-state guard visible in source. Other transient statuses
+# (-258/-269) are intentionally retried, so do not grep for a generic
+# "NavNet.read ... retrying" diagnostic here.
 HELPER_SOURCE="$ROOT/bridge/nspire-navnet-helper/NspireNavnetHelper.java"
-if grep -q 'NavNet.read=.*retrying' "$HELPER_SOURCE"; then
-  echo 'Java helper still retries the invalid NavNet handle' >&2
-  exit 1
-fi
 if ! grep -q 'handle invalid; waiting for callback' "$HELPER_SOURCE"; then
   echo 'Java helper is missing the terminal invalid-handle guard' >&2
   exit 1
