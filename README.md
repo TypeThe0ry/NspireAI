@@ -8,8 +8,8 @@
 
 > 2026-09-24: the user reported a whole-device freeze after opening the NGC
 > AI program and manually reset the calculator. The default replacement build
-> is now timer-neutral and starts with NavNet idle; press Menu to arm the
-> experimental transport. Do not reopen an older freezing package.
+> is now timer-neutral and starts with NavNet idle; the first Enter edge arms
+> the experimental transport. Do not reopen an older freezing package.
 
 > 2026-09-22: the user rejected and requested removal of the legacy Lua path
 > after it froze on the handheld. Its sources, artifacts and build/deploy
@@ -211,8 +211,9 @@ helper: NODE 1
 
 After the bridge prints `helper: READY service=0x5001`, open `nspire_ai.tns`
 on the calculator. The page starts USB-idle and does not enumerate NavNet by
-itself. Press Menu once to arm one transport attempt, then type `Hello` and
-press Enter. The expected answer in the same program page is:
+itself. Type `Hello` and press Enter once to arm transport; press Enter again
+to send after the status reports a connected bridge. The expected answer in
+the same program page is:
 
 ```text
 Mac received: Hello
@@ -221,11 +222,10 @@ Mac received: Hello
 No request/response document should appear and the TI page must stay open.
 
 If the first attempt reports `USB held`, leave the page open and fix the host
-side first; do not keep pressing Menu. The page deliberately stops calling
-the synchronous TI NavNet syscalls after the first error. A later single Menu
-press is the only retry. This prevents the repeated enumeration loop that can
-leave macOS seeing only the TS4 `0xACE1` dock controller until a physical
-replug.
+side first; do not keep pressing Enter. The page deliberately stops calling
+the synchronous TI NavNet syscalls after the first error. A later Enter edge
+is the only retry. This prevents the repeated enumeration loop that can leave
+macOS seeing only the TS4 `0xACE1` dock controller until a physical replug.
 
 ## Run the real model backend
 

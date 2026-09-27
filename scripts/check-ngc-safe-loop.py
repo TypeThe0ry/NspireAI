@@ -14,8 +14,10 @@ def main() -> int:
         raise SystemExit("FAIL: default NGC production loop must not call msleep")
     if "if (ngc_transport_armed && !nav_transport_is_blocked() && now != last_tick)" not in production:
         raise SystemExit("FAIL: NavNet polling is not gated by explicit transport arming")
-    if "ngc_transport_armed = !ngc_transport_armed" not in text:
-        raise SystemExit("FAIL: Menu transport toggle is missing")
+    if "USB armed by Enter; bridge must be READY" not in text:
+        raise SystemExit("FAIL: Enter transport arm is missing")
+    if "&KEY_NSPIRE_MENU" in text:
+        raise SystemExit("FAIL: CX II Menu key must not be read by the NGC matrix scanner")
     if "#define NGC_TRANSPORT_DEFAULT 0" not in text:
         raise SystemExit("FAIL: NGC startup must keep transport disarmed")
     if "nav_transport_is_blocked()" not in production:
@@ -32,8 +34,8 @@ def main() -> int:
         raise SystemExit("FAIL: standalone NGC production loop must not call idle/WFI with loader IRQs masked")
     if "for (volatile unsigned spin = 0; spin < 256; ++spin)" not in production:
         raise SystemExit("FAIL: NGC loop lacks its bounded non-WFI scheduler slice")
-    if "USB active; Menu keeps bridge connected" not in text:
-        raise SystemExit("FAIL: Menu can silently stale an active NavNet channel")
+    if "if (!ngc_transport_armed)" not in text:
+        raise SystemExit("FAIL: Enter arm guard is missing")
     connect_body = main_text.split("static int nav_try_connect", 1)[1].split(
         "static int nav_write_frame", 1)[0]
     enum_done = connect_body.find("TI_NN_NodeEnumDone")

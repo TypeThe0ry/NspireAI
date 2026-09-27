@@ -44,7 +44,7 @@ else ifeq ($(NGC_USB_IRQ_MENU),TRUE)
 GCCFLAGS += -DNSPIRE_NGC_USB_IRQ_MENU
 ZEHNFLAGS += --notice "NGC/RTC UI; Menu-gated experimental IRQ window" --uses-lcd-blit true
 else
-ZEHNFLAGS += --notice "NGC/RTC UI; USB idle until Menu; timer-neutral" --uses-lcd-blit true
+ZEHNFLAGS += --notice "NGC/RTC UI; USB idle until Enter; timer-neutral" --uses-lcd-blit true
 endif
 ifeq ($(NGC_PROBE),TRUE)
 GCCFLAGS += -DNSPIRE_NGC_PROBE -DNSPIRE_NGC_PROBE_STAGE=$(NGC_PROBE_STAGE)

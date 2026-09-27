@@ -17,8 +17,10 @@ static int ngc_menu_irq_window_active;
  * Read are synchronous OS calls and the SDK does not document a wall-clock
  * bound for them.  The old auto-transport candidate called this path before
  * the Mac bridge was READY and repeatedly wedged the USB endpoint.  Transport
- * is now armed only by one explicit Menu press after the host bridge is
- * already running; the first failure is held until the next explicit retry. */
+ * is now armed only by one explicit Enter press after the host bridge is
+ * already running; the first failure is held until the next explicit retry.
+ * The CX II Menu key is deliberately not read here: its physical path
+ * crashed the handheld even with IRQ experiments disabled. */
 #define NGC_TRANSPORT_DEFAULT 0
 
 static int ngc_prepare_lcd(void) {
@@ -81,7 +83,7 @@ static int ngc_keys(void) {
         &KEY_NSPIRE_8, &KEY_NSPIRE_9, &KEY_NSPIRE_SPACE,
         &KEY_NSPIRE_PERIOD, &KEY_NSPIRE_COMMA, &KEY_NSPIRE_PLUS,
         &KEY_NSPIRE_MINUS, &KEY_NSPIRE_EQU,
-        &KEY_NSPIRE_ENTER, &KEY_NSPIRE_DEL, &KEY_NSPIRE_MENU
+        &KEY_NSPIRE_ENTER, &KEY_NSPIRE_DEL
     };
     static const char chars[] = "abcdefghijklmnopqrstuvwxyz0123456789 .,+-=";
     static unsigned char previous[sizeof(keys) / sizeof(keys[0])];
@@ -103,75 +105,20 @@ static int ngc_keys(void) {
         int down = (isKeyPressed)(keys[i]);
         if (initialized && down && !previous[i]) {
             changed = 1;
-            if (keys[i] == &KEY_NSPIRE_ENTER) (void)send_prompt();
+            if (keys[i] == &KEY_NSPIRE_ENTER) {
+                /* Do not read KEY_NSPIRE_MENU on CX II.  Use the first Enter
+                 * edge to arm transport while preserving typed input; the
+                 * next Enter edge sends once the bridge is connected. */
+                if (!ngc_transport_armed) {
+                    ngc_transport_armed = 1;
+                    nav_transport_rearm();
+                    set_status("USB armed by Enter; bridge must be READY");
+                } else {
+                    (void)send_prompt();
+                }
+            }
             else if (keys[i] == &KEY_NSPIRE_DEL) {
                 if (input_len) input_text[--input_len] = 0;
-            } else if (keys[i] == &KEY_NSPIRE_MENU) {
-                /* A held transport remains logically armed after its first
-                 * failed attempt.  Treat the next Menu press as the single
-                 * explicit retry instead of requiring an off/on double press. */
-                if (ngc_transport_armed && nav_transport_is_blocked()) {
-#ifdef NSPIRE_NGC_MENU_LOCAL_SERVICE
-                    if (!nav_start_local_service()) {
-                        nav_transport_hold();
-                        changed = 1;
-                        previous[i] = down;
-                        continue;
-                    }
-#endif
-                    nav_transport_rearm();
-                    set_status("USB retry armed; bridge must be READY");
-                    changed = 1;
-                    previous[i] = down;
-                    continue;
-                }
-                /* Never turn an active channel into a hidden stale channel
-                 * by treating Menu as a disconnect button.  The known-safe
-                 * recovery path for an active connection is the normal
-                 * protocol/ESC teardown, not a second synchronous NavNet
-                 * syscall from the key scanner. */
-                if (ngc_transport_armed && nav_connected) {
-                    set_status("USB active; Menu keeps bridge connected");
-                    changed = 1;
-                    previous[i] = down;
-                    continue;
-                }
-                ngc_transport_armed = !ngc_transport_armed;
-                if (ngc_transport_armed) {
-#ifdef NSPIRE_NGC_MENU_LOCAL_SERVICE
-                    /* Historical NavNet clients start a calculator-side
-                     * service before enumerating the Mac peer.  Keep this
-                     * candidate behind the explicit Menu arm so page launch
-                     * remains USB-idle and the host bridge is already READY. */
-                    if (!nav_start_local_service()) {
-                        nav_transport_hold();
-                        changed = 1;
-                        previous[i] = down;
-                        continue;
-                    }
-#endif
-#ifdef NSPIRE_NGC_USB_IRQ_MENU
-                    if (!ngc_menu_irq_window_active &&
-                        nav_irq_window_enter(&ngc_menu_irq_window)) {
-                        ngc_menu_irq_window_active = 1;
-                    }
-                    set_status(ngc_menu_irq_window_active
-                                   ? "USB armed; IRQ window active; Menu disables"
-                                   : "USB armed; connecting... Menu disables");
-#else
-                    set_status("USB armed once; bridge must already be READY");
-#endif
-                    nav_transport_rearm();
-                } else {
-#ifdef NSPIRE_NGC_USB_IRQ_MENU
-                    if (ngc_menu_irq_window_active) {
-                        nav_irq_window_leave(&ngc_menu_irq_window);
-                        ngc_menu_irq_window_active = 0;
-                    }
-#endif
-                    nav_transport_hold();
-                    set_status("USB idle; Menu enables one retry");
-                }
             }
             else if (keys[i] == &KEY_NSPIRE_N && isKeyPressed(KEY_NSPIRE_CTRL))
                 reset_conversation();
@@ -376,7 +323,7 @@ int main(void) {
     ngc_transport_armed = NGC_TRANSPORT_DEFAULT;
     set_status(ngc_transport_armed
                    ? "NGC/RTC; USB armed by build"
-                   : "NGC/RTC; USB idle; Menu enables");
+                   : "NGC/RTC; USB idle; Enter enables");
     /* Draw the first frame before touching the RTC.  If the CX II's
      * gettimeofday path is the faulting stage, the user must still get a
      * visible startup marker instead of an indistinguishable return to Home.
