@@ -181,6 +181,11 @@ if ! grep -q 'manifest missing valid ngc_task_handoff' "$ROOT/bridge/nspire-navn
   echo "FAIL: resident task-handoff candidate is not explicitly upload-gated" >&2
   exit 1
 fi
+if ! grep -q '1a5c052f6fd68233275451f3c028514c3e2dff1eeecc89da74a2648c97e14e1a' "$ROOT/scripts/deploy-program-nspire.sh" || \
+   ! grep -q '1a5c052f6fd68233275451f3c028514c3e2dff1eeecc89da74a2648c97e14e1a' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java"; then
+  echo "FAIL: physically rejected resident task-handoff SHA is not blocked in both upload paths" >&2
+  exit 1
+fi
 if [[ ! -x "$ROOT/scripts/deploy-ngc-entry-stage17.sh" ]] || \
    ! grep -q 'EXPECTED_SHA="8fd7dacfaa9551e254e0595d21dfe23797f684c1cbb9894b72543a14388a9b94"' "$ROOT/scripts/deploy-ngc-entry-stage17.sh" || \
    ! grep -q 'Data Abort at raw TCT_Schedule' "$ROOT/scripts/deploy-ngc-entry-stage17.sh" || \

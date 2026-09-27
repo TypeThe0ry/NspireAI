@@ -873,8 +873,23 @@ The full Docker Ndless build succeeded locally. Candidate SHA is
 (`16664` bytes); the loader allocation audit reports `59444` bytes against the
 `60000`-byte limit and the Zehn relocation audit reports `242` relocations.
 The task stack is only 6 KiB to stay inside that allocation limit, so this is
-not a hardware stack-safety proof. The artifact remains under
-`.build/ngc-task-handoff/` and is rejected by both upload paths unless the
-separate diagnostic override is supplied. It has not been uploaded or run;
-physical `CONNECTED`, request/RX, and same-page response evidence is still
-missing.
+not a hardware stack-safety proof. The artifact was stored under
+`.build/ngc-task-handoff/` and was rejected by both upload paths unless the
+separate diagnostic override was supplied. The subsequent authorized physical
+run and its rejection are recorded below; physical `CONNECTED`, request/RX,
+and same-page response evidence is still missing.
+
+## 2026-09-27 resident task handoff physical rejection
+
+After explicit authorization, the local-only task-handoff candidate was uploaded
+once to `/nspire_ai.tns`. `n-link ls /` showed the file, and a calculator
+readback matched the local SHA exactly:
+
+`1a5c052f6fd68233275451f3c028514c3e2dff1eeecc89da74a2648c97e14e1a`
+
+The handheld displayed `Document Received`, but the launch sequence led to a
+black page. Later NavNet screen/key calls timed out; the bridge reached only
+`READY` and `NODE 1`, never `CONNECTED`, and no calculator request/RX occurred.
+The USB descriptor remained direct `0x0451:0xE022`, so this run did not reproduce
+the earlier TS4 endpoint drop, but it is still a physical rejection. The exact
+SHA is permanently blocked in the shell and Java upload paths.

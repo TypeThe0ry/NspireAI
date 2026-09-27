@@ -2755,11 +2755,28 @@ Zehn relocations=242
 
 The ARM object passed `-Wall -Wextra -Werror`; the final ELF contains
 `main`, `ngc_task_entry`, `nl_set_resident`, and the public task-termination
-stubs, with no raw `TCT_Schedule` or IRQ-control reference. The artifact is
-stored only under `.build/ngc-task-handoff/`; both upload paths require the
-new `ngc_task_handoff=TRUE` manifest marker plus an explicit diagnostic
-override, and no upload or physical launch was performed. A 6 KiB task stack
-is a memory-budget compromise, not a hardware stack-safety proof. The next
-authoritative gate is still a single controlled physical launch followed by
-`CONNECTED`, calculator PING/PONG, request/RX, and same-page response; do not
-retry any previously frozen SHA.
+stubs, with no raw `TCT_Schedule` or IRQ-control reference. The artifact was
+stored under `.build/ngc-task-handoff/`; both upload paths required the new
+`ngc_task_handoff=TRUE` manifest marker plus an explicit diagnostic override.
+A 6 KiB task stack is a memory-budget compromise, not a hardware stack-safety
+proof. The controlled physical launch and its rejection are recorded below;
+the package did not reach `CONNECTED`, calculator PING/PONG, request/RX, or a
+same-page response.
+
+### 2026-09-27 resident-task handoff physical rejection
+
+With explicit authorization, the candidate above was uploaded once to the CX II
+root and verified by `n-link ls /` plus a calculator readback. The readback SHA
+matched the local artifact exactly:
+
+```text
+1a5c052f6fd68233275451f3c028514c3e2dff1eeecc89da74a2648c97e14e1a
+```
+
+The TI `Document Received` dialog appeared and the file was selected. The
+launch path then produced a black page; subsequent NavNet key/screen calls
+timed out, and a bounded bridge run reached only `READY`/`NODE 1` with no
+`CONNECTED`. USB stayed enumerated as the direct `0x0451:0xE022` handheld, but
+the page never produced a usable service callback or request path. A host-side
+`Home` recovery call also timed out. This exact SHA is now permanently blocked
+in both upload entry points; no retry is allowed.
