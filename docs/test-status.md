@@ -2900,3 +2900,20 @@ task priority=20
 
 This is an offline hypothesis only. It must receive separate explicit
 authorization before any upload or key event.
+
+### 2026-09-27 resident-task handoff priority-20 physical rejection
+
+With explicit authorization, the priority-20 candidate was uploaded after a
+fresh E022 gate and exact readback:
+
+```text
+sha256=3b6f94808c9e34d920d80a59bfea1ae4aaefc7e9857c98021400fd01b1f25cf1
+bytes=16664
+```
+
+The bridge reached `READY service=0x5001` and `NODE 1`. The first Enter
+returned, but the second Enter timed out in `sendEventToNode` after 7 seconds.
+A bounded read-only screen probe also timed out and was cleaned up; the bridge
+ran for 90 seconds without `CONNECTED`, PING/PONG, request/RX, or a same-page
+response. USB stayed at direct `0x0451:0xE022`. The exact SHA is now blocked in
+both upload paths and classified as `KNOWN_BLOCKED_TASK_HANDOFF_PRIORITY20_FREEZE`.

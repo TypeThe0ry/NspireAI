@@ -927,6 +927,20 @@ relocations. The artifact is kept at
 `.build/ngc-task-handoff-priority20/nspire_ai.tns`; it is not on the device and
 has no physical `CONNECTED` evidence.
 
+## 2026-09-27 resident task handoff priority-20 physical rejection
+
+The priority-20 candidate was uploaded once after explicit authorization and an
+E022 gate. Readback matched the local SHA exactly:
+
+`3b6f94808c9e34d920d80a59bfea1ae4aaefc7e9857c98021400fd01b1f25cf1`
+
+The host reached `READY service=0x5001` and `NODE 1`. The second Enter timed
+out after 7 seconds, and a bounded screen probe also timed out. The bridge
+remained alive for 90 seconds without `CONNECTED`, calculator PING/PONG,
+request/RX, or same-page response. USB stayed direct `0x0451:0xE022`, so this
+was another loader/task handoff freeze rather than a cable disappearance. The
+SHA is permanently blocked in both upload entry points.
+
 ## 2026-09-27 resident task handoff return-through-crt0 candidate
 
 The rejected candidate above called `_exit(0)` after `nl_set_resident()`. The

@@ -197,6 +197,12 @@ if ! grep -q 'f3e958e3aff470685ca5e5bd545f8a3478097ed8152ca9a8d24c7c5b3e14e822' 
   echo "FAIL: physically rejected priority-255 task-handoff SHA is not blocked and classified" >&2
   exit 1
 fi
+if ! grep -q '3b6f94808c9e34d920d80a59bfea1ae4aaefc7e9857c98021400fd01b1f25cf1' "$ROOT/scripts/deploy-program-nspire.sh" || \
+   ! grep -q '3b6f94808c9e34d920d80a59bfea1ae4aaefc7e9857c98021400fd01b1f25cf1' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java" || \
+   ! grep -q 'KNOWN_BLOCKED_TASK_HANDOFF_PRIORITY20_FREEZE' "$ROOT/scripts/audit-device-artifact.sh"; then
+  echo "FAIL: physically rejected priority-20 task-handoff SHA is not blocked and classified" >&2
+  exit 1
+fi
 if [[ ! -x "$ROOT/scripts/deploy-ngc-entry-stage17.sh" ]] || \
    ! grep -q 'EXPECTED_SHA="8fd7dacfaa9551e254e0595d21dfe23797f684c1cbb9894b72543a14388a9b94"' "$ROOT/scripts/deploy-ngc-entry-stage17.sh" || \
    ! grep -q 'Data Abort at raw TCT_Schedule' "$ROOT/scripts/deploy-ngc-entry-stage17.sh" || \
