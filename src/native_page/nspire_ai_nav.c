@@ -33,7 +33,7 @@ void _fini(void) {}
 #define HEADER_SIZE 16u
 #define FRAGMENT_HEADER_SIZE 10u
 #define MAX_FRAME_PAYLOAD 224u
-#define MAX_RESPONSE 16384u
+#define MAX_RESPONSE 4096u
 #define MAX_REQUEST 65536u
 #define READ_TIMEOUT 1u
 

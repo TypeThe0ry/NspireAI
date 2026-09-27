@@ -37,12 +37,20 @@ local function ensure()
     answer_editor:setText("NspireAI\n\nBridge: not connected")
     answer_editor:setVisible(true)
 
+    initialized = true
+end
+
+local function load_nav()
+    if nav then return true end
     local ok, extension = pcall(function()
         nrequire "nspire_ai_nav"
         return nspire_ai_nav
     end)
-    if ok then nav = extension end
-    initialized = true
+    if ok and extension then
+        nav = extension
+        return true
+    end
+    return false
 end
 
 local function layout()
@@ -61,7 +69,7 @@ end
 
 local function connect()
     ensure()
-    if not nav then show("NspireAI\n\nNavNet extension unavailable") return end
+    if not load_nav() then show("NspireAI\n\nNavNet extension unavailable") return end
     local ok, connected, status = pcall(function() return nav.connect() end)
     if not ok then show("NspireAI\n\nConnect failed: " .. tostring(connected)); return end
     if connected then
@@ -74,7 +82,7 @@ end
 
 local function send()
     ensure()
-    if not nav then show("NspireAI\n\nNavNet extension unavailable"); return end
+    if not load_nav() then show("NspireAI\n\nNavNet extension unavailable"); return end
     if pending_id then show("NspireAI\n\nA request is already waiting"); return end
     local question = input_editor:getText() or ""
     if question == "" then show("NspireAI\n\nEnter a question first"); return end
