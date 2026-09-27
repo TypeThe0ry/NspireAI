@@ -204,6 +204,8 @@ public final class NspireRemoteControl {
                     throw new IllegalArgumentException("refusing two-service Menu bootstrap candidate: Menu launch crashed/froze CX II and the channel degraded to -257 on 2026-09-26");
                 if (artifactSha.equals("fc7f3e32dec85b5e860cbd03e080e52d149dbabba63b552137ccf897bd063471"))
                     throw new IllegalArgumentException("refusing invalid-handle containment candidate: launch froze before CONNECTED on 2026-09-27");
+                if (artifactSha.equals("c45c42b7284f865c19a2dcce618f63410bb250b5e4788d30eb25ab0b7fec0876"))
+                    throw new IllegalArgumentException("refusing get_event scheduler-poll candidate: launch froze before CONNECTED; same path was previously rejected on 2026-09-26");
                 boolean irqMenu = manifestLines.contains("ngc_irq_menu=TRUE");
                 if (!irqMenu && !manifestLines.contains("ngc_irq_menu=FALSE"))
                     throw new IllegalArgumentException("manifest missing valid ngc_irq_menu");

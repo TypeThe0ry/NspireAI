@@ -2077,3 +2077,17 @@ The rebuilt scheduler-poll candidate is SHA-256
 (`dist/nspire_ai.tns`, 26324 bytes). The build and host-side gates pass, but
 it remains offline-only because the calculator was still in the post-launch
 freeze state; this hash is not physical `CONNECTED` evidence.
+
+The historical record also shows that the same `get_event()` production path
+was built and rejected on 2026-09-26 after a launch-time remote timeout. The
+candidate is therefore permanently blocked in both upload paths, and the
+production source has been returned to the previously reviewed timer-neutral
+loop. No `get_event()` call is treated as a USB scheduling fix.
+
+To separate the production loop from NavNet entirely, an offline stage-12
+probe was built with one LCD/GC frame followed by the production-shaped
+30-second matrix/RTC loop and no NavNet call. Its artifact is
+`ea71bdf2f15c2fdc37c8a91cc9259d5463c4be27cb654c87d50a83c7ce8e2b0f`
+(26348 bytes); relocation audit passes. It has not been uploaded, and the
+probe has no physical result yet. The normal tracked production artifact was
+rebuilt afterward and remains the blocked `fc7f3e32...` package.

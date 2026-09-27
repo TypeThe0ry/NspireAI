@@ -92,6 +92,11 @@ if ! grep -q 'fc7f3e32dec85b5e860cbd03e080e52d149dbabba63b552137ccf897bd063471' 
   echo "FAIL: launch-freezing invalid-handle candidate is not blocked in both upload paths" >&2
   exit 1
 fi
+if ! grep -q 'c45c42b7284f865c19a2dcce618f63410bb250b5e4788d30eb25ab0b7fec0876' "$ROOT/scripts/deploy-program-nspire.sh" || \
+   ! grep -q 'c45c42b7284f865c19a2dcce618f63410bb250b5e4788d30eb25ab0b7fec0876' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java"; then
+  echo "FAIL: rejected get_event scheduler-poll candidate is not blocked in both upload paths" >&2
+  exit 1
+fi
 if NSPIRE_ALLOW_NGC_ENTRY_STAGE8_UPLOAD=1 "$ROOT/scripts/deploy-ngc-entry-stage8.sh" >"$ROOT/.build/ngc-stage8-reject-gate.out" 2>&1; then
   echo "FAIL: physically rejected stage-8 package remained uploadable" >&2
   exit 1

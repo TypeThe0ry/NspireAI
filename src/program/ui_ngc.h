@@ -176,20 +176,6 @@ static int ngc_keys(void) {
     return changed;
 }
 
-/* Give the Ndless event/USB dispatcher a documented non-blocking poll point.
- * The NGC page cannot use idle()/msleep(): those helpers reprogram the CX II
- * timer and interrupt mask. A tight NOP loop, however, leaves the standalone
- * task monopolizing the calculator; the latest package froze at launch before
- * the bridge ever saw CONNECTED. Keep this poll separate from matrix-key
- * edge detection so the UI still handles Menu/Enter through the existing
- * hardware path while the OS gets a bounded hand-off.
- */
-static void ngc_pump_os_event(void) {
-    struct s_ns_event event;
-    memset(&event, 0, sizeof(event));
-    (void)get_event(&event);
-}
-
 int main(void) {
 #ifdef NSPIRE_NGC_PROBE
     /* Incremental entry probe. Stage 0 calls no Ndless UI API; stage 1 adds
@@ -201,10 +187,41 @@ int main(void) {
      * 1000 times to expose a busy-loop/key-syscall failure; stage 10 keeps
      * the process alive for 30 seconds with RTC+key scanning but no NavNet
      * Read, reproducing the long-running UI scheduler shape; stage 11 adds
-     * one real nav_poll (PING/Read) after the bridge connection attempt.
+     * one real nav_poll (PING/Read) after the bridge connection attempt;
+     * stage 12 combines one frame with the long-running loop and no NavNet.
      * Each stage returns immediately so the first
      * unsupported-document result identifies the failing API boundary. */
-#if NSPIRE_NGC_PROBE_STAGE >= 1
+#if NSPIRE_NGC_PROBE_STAGE == 12
+    /* Combined production-shaped probe: initialize LCD/GC, draw exactly one
+     * frame, then keep the page alive for 30 seconds with the same bounded
+     * matrix/RTC cadence but no NavNet call. Stages 0-10 proved these pieces
+     * independently; this stage isolates the long-running post-frame path
+     * from the rejected get_event() experiment and from NavNet ownership. */
+    if (!ngc_prepare_lcd()) return EXIT_FAILURE;
+    chat_gc = gui_gc_global_GC();
+    if (!chat_gc) return EXIT_FAILURE;
+    set_status("NGC probe stage 12");
+    ngc_draw();
+    {
+        uint32_t probe_until = nav_clock_ms() + 30000;
+        unsigned probe_spin = 0;
+        unsigned probe_clock_spin = 0;
+        uint32_t probe_last = nav_clock_ms();
+        while (!nav_deadline_reached(nav_clock_ms(), probe_until)) {
+            if (++probe_spin >= 512u) {
+                probe_spin = 0;
+                if (ngc_keys() && ngc_ui_dirty) ngc_draw();
+            }
+            if (++probe_clock_spin >= 128u) {
+                probe_clock_spin = 0;
+                probe_last = nav_clock_ms();
+            }
+            (void)probe_last;
+            for (volatile unsigned spin = 0; spin < 256; ++spin)
+                __asm volatile("nop");
+        }
+    }
+#elif NSPIRE_NGC_PROBE_STAGE >= 1
     if (!ngc_prepare_lcd()) return EXIT_FAILURE;
 #endif
 #if NSPIRE_NGC_PROBE_STAGE >= 2
@@ -311,7 +328,6 @@ int main(void) {
         if (++scheduler_spin >= 128u) {
             scheduler_spin = 0;
             now = nav_clock_ms();
-            ngc_pump_os_event();
         }
         if (done) break;
 #if defined(NSPIRE_NGC_LOCAL_SERVICE) || defined(NSPIRE_NGC_MENU_LOCAL_SERVICE)
@@ -334,8 +350,8 @@ int main(void) {
         if (ngc_ui_dirty) ngc_draw();
         /* Do not call msleep here. Ndless's CX II implementation rewrites
          * SP804 timer registers and masks every IRQ except timer 19 while it
-         * waits. The get_event() poll above is the cooperative OS/USB handoff;
-         * this short NOP tail only bounds matrix-loop pressure. */
+         * waits. This bounded NOP tail keeps the safe startup build
+         * timer-neutral while transport remains explicitly experimental. */
         for (volatile unsigned spin = 0; spin < 256; ++spin)
             __asm volatile("nop");
     }
