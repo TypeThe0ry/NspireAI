@@ -484,6 +484,28 @@ calculator-side `CONNECTED`/request/response evidence appeared. Keep this
 candidate permanently blocked after the repeat open above produced the dialog;
 it is not a completed physical loop.
 
+## 2026-09-27 launch/flash audit and stage-14 residency candidate
+
+The repeated launches observed on 2026-09-27 do not have a corresponding new
+Mac NavNet crash report. The only crash report created that day is
+`NN-crash-20260927-082215.log` (the earlier host-side mutex/USB crash). The
+10:51, 10:53, and 11:40 helper sessions each reached `NODE 1`, captured the
+handheld screen, and shut down normally; the captured screen remained the
+handheld file browser with `nspire_ai` highlighted. There was no calculator
+page, calculator-originated `CONNECTED`, `RX`, or same-page response. This
+classifies those attempts as launch/loader/program exit or a rejected open,
+not a new Java/NavNet native crash.
+
+To isolate page entry from USB and key-matrix ownership, an offline NGC stage-14
+candidate was rebuilt with `NSPIRE_NGC_PROBE_STAGE=14`. It initializes the LCD
+and GUI GC, draws one frame, then stays resident for 30 seconds using only the
+RTC cadence; it performs no NavNet calls and no matrix-key scans. The build
+produced SHA-256
+`31d1d46554d72cf0958a55a84d9e93858cd849cab437f804b5062e640e07edd3`, matching
+the previously recorded stage-14 artifact. It is stored only under
+`.build/ngc-stage14/`, was not uploaded, and is not physical-runtime evidence.
+The normal `dist/nspire_ai.tns` artifact was restored after the probe build.
+
 ## 2026-09-24 relocation-candidate physical rejection (Computer Use control)
 
 Computer Use (CUA) was used for the desktop interaction and application-state
