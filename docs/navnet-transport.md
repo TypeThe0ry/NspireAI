@@ -73,12 +73,19 @@ service accepted by the TI macOS NavNet host. The raw helper supplies USB
 framing but has not demonstrated host-side service acceptance; local writes
 must not be reported as a registered host service or an application connection.
 
-The Java service callback stores the host channel; the standalone program performs short,
-non-blocking reads and answers subsequent PINGs.
+The Java service callback stores the host channel; after the callback has
+returned, the helper queues one valid NSAI PING from its watcher thread. This
+is deliberately outside callback context because TI's NavNet API is not
+re-entrant there. It gives the calculator a packet to consume before its
+first synchronous read and is also a normal handshake (the calculator answers
+with PONG).
+
 The standalone NGC page is USB-idle at startup. It performs no NavNet
 enumeration until the host bridge has printed `READY service=0x5001` and the
-user presses Menu once. The first failed synchronous NavNet call permanently
-holds transport for that page; a later single Menu press is the only retry.
+user presses Enter once. After `TI_NN_Connect`, the calculator writes its PING
+and waits one RTC tick before the first `TI_NN_Read`, giving the host watcher
+time to queue the handshake PING. The first failed synchronous NavNet call
+holds transport for that page; no Menu key or IRQ workaround is used.
 An offline candidate can additionally start the historical calculator-side
 `TI_NN_StartService(0x5002, ...)` only on that Menu arm, after the host is
 ready (`NSPIRE_NGC_MENU_LOCAL_SERVICE=TRUE`). The Mac helper still exposes

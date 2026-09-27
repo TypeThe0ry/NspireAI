@@ -2312,3 +2312,23 @@ bootstrap write it now keeps the connection briefly for the calculator-side
 callback, then releases it; the calculator's own successful local read/write
 sets the bootstrap completion state. This host-only lifecycle fix is committed
 as `507e578`'s follow-up and still needs the physical Enter test.
+
+### 2026-09-27 host-first handshake candidate (uploaded, physical loop pending)
+
+The helper now queues a normal NSAI PING from its connection-watcher thread
+after the host service callback has returned. This avoids entering TI's
+non-reentrant NavNet API from callback context and removes the race where the
+calculator could enter its first synchronous `TI_NN_Read` before the host had
+queued any packet. The calculator side also defers that first read by one
+RTC tick after its own PING. These changes are committed as `8028853` and
+`ef56fe1` and are covered by the Java lifecycle, NGC static, relocation, and
+bridge protocol tests.
+
+The clean NGC/RTC package was rebuilt without local-service, Menu, or IRQ
+features and uploaded as SHA-256
+`45eba3c67e0d52e133d00a3132eea955d0a4ba2ca4dab1571082ac5f4b895091`.
+Readback from `/nspire_ai.tns` returned exactly the same hash. The live bridge
+has reached `READY service=0x5001` and `NODE 1`, but no calculator-originated
+`CONNECTED`, `HOST PING`, `PONG`, request, or response has yet been observed.
+Therefore the required page-open `CONNECTED -> request/RX -> same-page response`
+gate remains unverified; do not call this candidate physically successful.
