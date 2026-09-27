@@ -2109,3 +2109,13 @@ The stage-12 probe now has its own explicit deployment wrapper,
 relocations, and then re-runs the CX II USB gate before upload. The gate test
 passes and rejects the current dock-only state; it does not authorize an
 upload by itself.
+
+The stage-12 artifact was then uploaded and read back exactly:
+`VERIFIED /nspire_ai.tns bytes=26348 sha256=ea71bdf2...`. A read-only screen
+showed the calculator Home screen, then Browse with `nspire_ai` selected. The
+launch `Enter` was sent while the bridge was live and the bridge held
+`NODE 1`; the remote `sendEventToNode` call blocked for 20 seconds and was
+cleaned up. There was no calculator page frame, no `CONNECTED`, no `RX`, and
+no request/response. This isolates the freeze to the post-launch native page
+before NavNet application traffic and permanently blocks the exact stage-12
+SHA in both normal upload paths.

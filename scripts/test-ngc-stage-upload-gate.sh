@@ -106,7 +106,12 @@ if [[ ! -x "$ROOT/scripts/deploy-ngc-entry-stage12.sh" ]]; then
   exit 1
 fi
 if NSPIRE_ALLOW_NGC_ENTRY_STAGE12_UPLOAD=1 "$ROOT/scripts/deploy-ngc-entry-stage12.sh" >"$ROOT/.build/ngc-stage12-reject-gate.out" 2>&1; then
-  echo "FAIL: stage-12 probe upload gate did not reject the current dock-only/unverified state" >&2
+  echo "FAIL: stage-12 probe upload gate did not reject the physically frozen probe" >&2
+  exit 1
+fi
+if ! grep -q 'ea71bdf2f15c2fdc37c8a91cc9259d5463c4be27cb654c87d50a83c7ce8e2b0f' "$ROOT/scripts/deploy-program-nspire.sh" || \
+   ! grep -q 'ea71bdf2f15c2fdc37c8a91cc9259d5463c4be27cb654c87d50a83c7ce8e2b0f' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java"; then
+  echo "FAIL: physically frozen stage-12 probe is not blocked in both normal upload paths" >&2
   exit 1
 fi
 if ! grep -q 'unsupported document format' "$ROOT/.build/ngc-stage8-reject-gate.out"; then
