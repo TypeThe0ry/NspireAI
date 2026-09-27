@@ -2559,3 +2559,18 @@ USB-tree samples over 10 seconds all reported only the TS4 `TPS DMC Family`
 controller (`0xACE1`); none contained a TI-Nspire `0xE022` child. The earlier
 single `E022` observation was therefore transient enumeration, not a stable
 handheld session. No upload or key event was attempted from this state.
+
+### 2026-09-27 handheld recovered after exit and replug
+
+After the user exited the stuck page and replugged the cable, the USB gate
+reported `0xE022` for three consecutive samples over six seconds. A fresh
+Java bridge reached `READY service=0x5001` and then a real `NODE 1` callback.
+Read-only `info` returned the CX II CAS identity, and a screen capture
+returned the calculator Documents/Browse page, so the handheld session was
+usable again. The remote `/nspire_ai.tns` was verified without uploading:
+`bytes=16424`, SHA-256
+`6430301d3edf5f214854c3f8be6b7c182ec520e832a11d095e7ac9d0e673ffc8`.
+That exact package remains permanently blocked after its launch freeze; it was
+not started. The bridge was then stopped cleanly. No physical
+`CONNECTED`/request/RX/same-page response claim is made from this recovery
+probe.
