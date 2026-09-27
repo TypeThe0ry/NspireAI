@@ -350,17 +350,28 @@ public final class NspireNavnetHelper {
         }
         int status;
         try {
-            /* NavNet.init() establishes the RMI client, but the TI Java API
-             * exposes connector loading as a separate operation.  Student
-             * Software normally performs this during its own startup; a
-             * standalone helper must do it explicitly or it can report READY
-             * while getConnectedNodes() remains empty even though macOS sees
-             * the CX II USB descriptor. */
-            int connectorStatus = NavNet.loadConnectors();
-            emit("CONNECTORS status=" + connectorStatus);
-            if (connectorStatus < 0) {
-                emit("ERR NavNet.loadConnectors=" + connectorStatus);
-                return;
+            /* NavNet.init() establishes the RMI client.  Connector loading is
+             * normally done by RemoteNavnetServer itself (and by TI Student
+             * Software during its startup).  Calling loadConnectors() again
+             * through a second RMI client is not idempotent on the CX II
+             * macOS connector: it can initialize the same USB connector a
+             * second time and abort in TI_NS_event_timedwait with a corrupted
+             * pthread mutex.  The old unconditional call produced exactly
+             * that host crash on 2026-09-27 while the calculator was waiting
+             * for the Menu-arm path.  Keep an explicit opt-in for a controlled
+             * host where the server was started without connectors; the safe
+             * default is to trust the server's own initialization. */
+            boolean loadConnectors = "1".equals(System.getenv().getOrDefault(
+                    "NSPIRE_NAVNET_LOAD_CONNECTORS", "0"));
+            if (loadConnectors) {
+                int connectorStatus = NavNet.loadConnectors();
+                emit("CONNECTORS status=" + connectorStatus);
+                if (connectorStatus < 0) {
+                    emit("ERR NavNet.loadConnectors=" + connectorStatus);
+                    return;
+                }
+            } else {
+                emit("CONNECTORS skipped=server-owned");
             }
             NavNet.registerNotifyCallback(new NodeNotificationListener() {
                 @Override public void nodeNotificationCallback(NodeHandle node, int event) {

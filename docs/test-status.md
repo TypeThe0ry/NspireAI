@@ -1982,3 +1982,40 @@ after the crash. A fresh Docker NGC build now produces
 bytes, matching manifest) but it remains local and unuploaded. There is still
 no claim of calculator `CONNECTED` → request/RX → same-page response for the
 fixed source until this artifact is separately tested.
+
+### 2026-09-27 fixed-package Menu attempt and shared-connector crash guard
+
+The corrected artifact was uploaded through the normal CX II gate and read
+back from `/nspire_ai.tns` byte-for-byte:
+
+```text
+sha256=94bc14667c174925765fdedee82e616c47e7fb48b6dcee9266be9064a1c71327
+bytes=26168
+readback_match=TRUE
+```
+
+With the page open, the Java bridge reached `READY service=0x5001`. The user
+made one short Menu press as required by the USB-idle build; no `NODE`,
+`CONNECTED`, calculator `RX`, request, or same-page response appeared, and
+the user reported a freeze followed by a flash/crash. The bridge was stopped
+immediately and emitted `helper: STOPPED`.
+
+The host-side logs add an independent failure signal for this attempt:
+`NN-crash-20260927-082215.log` reports `SIGILL` in
+`_pthread_mutex_corruption_abort`, with the native stack in
+`navnet-connectors-mac_sc-embedded.dylib!USB_Process_Transactions`. The
+corresponding `navnetlog0.log` shows the shared TI server initializing six
+connectors at 08:41:42 and the crash at 08:41:43, before the later Menu
+press. This cannot prove the handheld's exact faulting instruction, but it
+does prove that the shared macOS NavNet server was already corrupted when the
+calculator attempted the Menu-arm path.
+
+`NspireNavnetHelper` now treats connector loading as server-owned by default
+and emits `CONNECTORS skipped=server-owned`. The previous unconditional
+`NavNet.loadConnectors()` call is available only with the explicit
+`NSPIRE_NAVNET_LOAD_CONNECTORS=1` experiment; repeating connector
+initialization through a second RMI client is unsafe on this TI connector.
+The Java helper lifecycle test now asserts the safe marker, and the bridge
+lifecycle test, `make program-test`, 19 bridge tests, and `git diff --check`
+pass. This is a host crash-prevention change, not evidence of the missing
+physical `CONNECTED` → request/RX → same-page response gate.

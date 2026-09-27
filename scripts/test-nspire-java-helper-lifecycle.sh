@@ -48,6 +48,12 @@ if ! grep -qx 'READY service=0x5001' "$LOG_FILE"; then
   exit 1
 fi
 
+if ! grep -qx 'CONNECTORS skipped=server-owned' "$LOG_FILE"; then
+  sed -n '1,160p' "$LOG_FILE" >&2
+  echo 'Java helper did not take the safe server-owned connector path' >&2
+  exit 1
+fi
+
 sleep 1
 if ! kill -0 "$HELPER_PID" 2>/dev/null; then
   sed -n '1,160p' "$LOG_FILE" >&2
