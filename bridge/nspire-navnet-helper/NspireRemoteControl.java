@@ -21,6 +21,7 @@ public final class NspireRemoteControl {
     private static final int WAIT_MS = positiveEnv("NSPIRE_NODE_WAIT_MS", 30000);
     private static final int POLL_MS = 250;
     private static final int KEY_TIMEOUT_MS = positiveEnv("NSPIRE_KEY_TIMEOUT_MS", 10000);
+    private static volatile boolean keyTimedOut;
 
     private static int positiveEnv(String name, int fallback) {
         String value = System.getenv(name);
@@ -89,8 +90,11 @@ public final class NspireRemoteControl {
             call.get(KEY_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (TimeoutException timeout) {
             call.cancel(true);
-            throw new IllegalStateException("sendEventToNode timed out after "
-                    + KEY_TIMEOUT_MS + " ms for key " + key, timeout);
+            keyTimedOut = true;
+            String message = "sendEventToNode timed out after "
+                    + KEY_TIMEOUT_MS + " ms for key " + key;
+            System.err.println(message);
+            throw new IllegalStateException(message, timeout);
         } finally {
             executor.shutdownNow();
         }
@@ -330,6 +334,12 @@ public final class NspireRemoteControl {
             exitCode = 1;
             throw error;
         } finally {
+            /* A timed-out native event call may leave TI's RMI worker blocked
+             * in the connector. Do not enter proxy.shutdown() on that path:
+             * the shell wrapper owns the detached server and will reap it,
+             * while Runtime.halt keeps this disposable CLI from waiting on a
+             * second unbounded native teardown. */
+            if (keyTimedOut) Runtime.getRuntime().halt(exitCode);
             // RMI leaves non-daemon threads alive even after client shutdown.
             // This JVM is a disposable CLI; the shell preserves shared servers.
             Thread shutdown = new Thread(() -> {

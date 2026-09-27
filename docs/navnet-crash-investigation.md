@@ -570,3 +570,14 @@ not a safe substitute for a local calculator keypress; it is not evidence that
 stage 14 launched or that the calculator crashed. The exact stage-14 SHA stays
 available only for the already-authorized controlled test and is not promoted
 to production.
+
+The same key path was then tested after TI Student Software itself was closed,
+leaving only the independent NavNet server. The helper still enumerated
+`NODE 1`, but `sendEventToNode(~enter~)` timed out inside the TI proxy after
+the configured 8-second key bound, and a subsequent read-only probe could not
+reacquire a node within 15 seconds while USB remained `0xE022`. This A/B
+result rules out the Student Software window as the sole cause of the remote
+key hang. `NspireRemoteControl` now hard-stops on that timeout so its outer
+shell cleanup can reap the detached RMI server without entering a second
+unbounded `proxy.shutdown()` call. This protects the host session; it does not
+claim that a virtual key was delivered to the calculator.
