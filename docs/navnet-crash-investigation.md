@@ -540,3 +540,17 @@ class as stage 12, now reproduced with the production cadence. The exact SHA
 is permanently blocked by the stage wrapper, normal shell deploy path, and
 Java remote-upload path. It is not a usable AI package and does not advance
 the same-page bridge gate.
+
+## Stage 14 no-key residency probe (pending launch)
+
+Stage 14 keeps the same LCD/GC frame and 128-spin RTC cadence as stage 13 but
+removes `ngc_keys()` entirely. The reviewed artifact is
+`31d1d46554d72cf0958a55a84d9e93858cd849cab437f804b5062e640e07edd3` (26,160
+bytes). It has uploaded and read back byte-for-byte on the CX II (`0xE022`).
+
+At the current checkpoint the handheld is still showing TI's `Document Sent`
+dialog with `nspire_ai` selected underneath. The bridge is running and has
+`READY service=0x5001` plus `NODE 1`, but the probe has not been launched, so
+there is no stage-14 runtime or `CONNECTED` claim yet. The user must dismiss
+the dialog and open the selected file locally; the remote virtual-key path is
+not reliable on this TI session.
