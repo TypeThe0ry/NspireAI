@@ -554,3 +554,19 @@ dialog with `nspire_ai` selected underneath. The bridge is running and has
 there is no stage-14 runtime or `CONNECTED` claim yet. The user must dismiss
 the dialog and open the selected file locally; the remote virtual-key path is
 not reliable on this TI session.
+
+## Stage 14 launch checkpoint update (2026-09-27)
+
+The next read-only screen capture after the upload showed the handheld's file
+browser, with `/nspire_ai` (26 KB) selected; it did not show the AI page or a
+Home screen. A fresh Java bridge reached `READY service=0x5001` and `NODE 1`,
+and the screen API returned that same file-browser image. This remains host
+enumeration evidence only. One bounded `key ~enter~` attempt reached the same
+node but blocked inside TI's `sendEventToNode` until the wrapper killed the
+child at 25 seconds; it printed no `KEY` confirmation. A subsequent read-only
+probe could not reacquire a node within 15 seconds, while the USB descriptor
+still remained `0x0451:0xE022`. This is evidence that the remote key path is
+not a safe substitute for a local calculator keypress; it is not evidence that
+stage 14 launched or that the calculator crashed. The exact stage-14 SHA stays
+available only for the already-authorized controlled test and is not promoted
+to production.

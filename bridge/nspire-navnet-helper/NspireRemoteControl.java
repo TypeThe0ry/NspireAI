@@ -9,11 +9,18 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.Arrays;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /** Diagnostic/control client for TI's standard NavNet event and screen APIs. */
 public final class NspireRemoteControl {
     private static final int WAIT_MS = positiveEnv("NSPIRE_NODE_WAIT_MS", 30000);
     private static final int POLL_MS = 250;
+    private static final int KEY_TIMEOUT_MS = positiveEnv("NSPIRE_KEY_TIMEOUT_MS", 10000);
 
     private static int positiveEnv(String name, int fallback) {
         String value = System.getenv(name);
@@ -64,7 +71,29 @@ public final class NspireRemoteControl {
 
     private static void sendKey(NavNetCommProxy proxy, INodeID node, String key) throws Exception {
         IEvent event = new NspireVirtualKeyStroke(key);
-        proxy.sendEventToNode(node, event);
+        // TI's sendEventToNode may block inside the native connector when the
+        // handheld is visible at USB level but has no usable NavNet session.
+        // Keep that call off the CLI thread so a single virtual key cannot
+        // hold the bridge indefinitely. The worker is daemon-only; the
+        // process-level wrapper still performs the final hard cleanup.
+        ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
+            Thread worker = new Thread(r, "nspire-send-key");
+            worker.setDaemon(true);
+            return worker;
+        });
+        Future<?> call = executor.submit((Callable<Void>) () -> {
+            proxy.sendEventToNode(node, event);
+            return null;
+        });
+        try {
+            call.get(KEY_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException timeout) {
+            call.cancel(true);
+            throw new IllegalStateException("sendEventToNode timed out after "
+                    + KEY_TIMEOUT_MS + " ms for key " + key, timeout);
+        } finally {
+            executor.shutdownNow();
+        }
         System.out.println("KEY " + key);
         Thread.sleep(100L);
     }

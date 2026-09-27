@@ -8,3 +8,4 @@ src/extension/*.elf
 src/extension/*.tns
 *.pyc
 .DS_Store
+var/
