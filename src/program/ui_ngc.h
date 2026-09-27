@@ -112,6 +112,15 @@ static int ngc_keys(void) {
                 if (!ngc_transport_armed) {
                     ngc_transport_armed = 1;
                     nav_transport_rearm();
+#ifdef NSPIRE_NGC_MENU_LOCAL_SERVICE
+                    /* Historical Ndless NavNet tests first exercise a
+                     * calculator-local service from the host, then perform
+                     * the calculator-to-host Connect.  Keep that bootstrap
+                     * entirely Enter-gated and finish its I/O in the normal
+                     * loop, never from the service callback. */
+                    if (!nav_start_local_service())
+                        nav_transport_hold();
+#endif
                     set_status("USB armed by Enter; bridge must be READY");
                 } else {
                     (void)send_prompt();
@@ -374,9 +383,19 @@ int main(void) {
         /* RTC supplies at most one poll per second. Avoid a busy NavNet loop;
          * this is not a syscall timeout or scheduling solution. */
         if (ngc_transport_armed && !nav_transport_is_blocked() && now != last_tick) {
-            last_tick = now;
-            (void)nav_try_connect();
-            nav_poll();
+#ifdef NSPIRE_NGC_MENU_LOCAL_SERVICE
+            if (!nav_local_service_handshake_complete) {
+                /* Wait for the host's 0x5002 bootstrap transaction before
+                 * opening the calculator-to-host application channel. */
+                last_tick = now;
+            } else {
+#endif
+                last_tick = now;
+                (void)nav_try_connect();
+                nav_poll();
+#ifdef NSPIRE_NGC_MENU_LOCAL_SERVICE
+            }
+#endif
             changed = 1;
         }
         (void)changed;

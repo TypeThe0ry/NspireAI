@@ -65,7 +65,12 @@
 #define NAV_INITIAL_DELAY_MS 2000
 #define NAV_RETRY_DELAY_MS 3000
 #define NAV_DISCONNECT_RETRY_MS 2000
-#define NAV_PING_DELAY_MS 250
+/* NSPIRE_NAV_CLOCK_RTC is second-resolution on the CX II SDK.  A sub-second
+ * delay therefore becomes an unpredictable wait until the next whole second,
+ * while the host reader's short startup timeout can invalidate the channel
+ * before the first calculator write.  Send the first PING immediately after
+ * TI_NN_Connect; the NavNet write itself is the handshake readiness gate. */
+#define NAV_PING_DELAY_MS 0
 #define NAV_HANDSHAKE_TIMEOUT_MS 2500
 /* Timeout units and scheduler progress on CX II 6.2 are unverified. A value
  * of 1 is only a requested timeout, NOT a bound on this synchronous call or
@@ -97,6 +102,7 @@ static int nav_local_service_started;
  * channel to the normal page loop; the loop performs the bounded probe. */
 static volatile nn_ch_t nav_local_service_channel;
 static volatile int nav_local_service_pending;
+static volatile int nav_local_service_handshake_complete;
 #endif
 static int nav_connected;
 static int nav_ping_sent;
@@ -422,9 +428,20 @@ static void nav_local_service_poll(void) {
     if (!channel) return;
     status = NAV_OS_CALL(TI_NN_Read(channel, NAV_READ_TIMEOUT, request,
                                     sizeof(request), (uint32_t)&received));
-    if (status >= 0 && received > 0)
-        (void)NAV_OS_CALL(TI_NN_Write(channel, (void *)ready,
-                                      (uint32_t)sizeof(ready)));
+    if (status >= 0 && received > 0) {
+        status = NAV_OS_CALL(TI_NN_Write(channel, (void *)ready,
+                                         (uint32_t)sizeof(ready)));
+        if (status >= 0) {
+            nav_local_service_handshake_complete = 1;
+            set_status("USB bootstrap complete; connecting");
+        } else {
+            set_status("USB bootstrap write=%d; held", status);
+            nav_transport_hold();
+        }
+    } else if (status < 0) {
+        set_status("USB bootstrap read=%d; held", status);
+        nav_transport_hold();
+    }
 }
 
 static int nav_start_local_service(void) {
@@ -434,6 +451,7 @@ static int nav_start_local_service(void) {
                                             nav_bootstrap_service_callback));
     if (status >= 0) {
         nav_local_service_started = 1;
+        nav_local_service_handshake_complete = 0;
         set_status("NavNet local service ready; USB armed");
         return 1;
     } else {
@@ -450,6 +468,7 @@ static void nav_stop_local_service(void) {
 #if defined(NSPIRE_NGC_LOCAL_SERVICE) || defined(NSPIRE_NGC_MENU_LOCAL_SERVICE)
     nav_local_service_pending = 0;
     nav_local_service_channel = NULL;
+    nav_local_service_handshake_complete = 0;
 #endif
 }
 
@@ -559,11 +578,11 @@ static int nav_try_connect(void) {
     nav_handshake_pending = 1;
     nav_connected_at = nav_clock_ms();
     nav_ping_at = nav_connected_at + NAV_PING_DELAY_MS;
-    /* Do not write in the same tick as TI_NN_Connect.  On CX II builds the
-     * connect call can return before the host-side service handle is usable;
-     * an immediate PING then creates a callback followed by an invalid
-     * connection.  The short delayed probe also gives the reconnect watchdog
-     * a concrete liveness gate instead of trusting CONNECT alone. */
+    /* Do not let CONNECTED alone count as a usable channel.  The first PING
+     * is deliberately eligible in the next nav_poll call: on the NGC RTC
+     * backend a 250 ms delay is rounded to the next whole second, allowing the
+     * host's short reader-start window to expire before the calculator writes.
+     * The write is the actual readiness gate; only then do we read. */
     set_status("connecting to Mac bridge");
     return 1;
 }

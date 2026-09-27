@@ -2286,3 +2286,22 @@ same-page response was observed. The exact SHA is now blocked in both upload
 paths. This narrows the failure to the calculator/host NavNet channel lifetime
 after `TI_NN_Connect`; it does not justify another blind upload of unchanged
 source.
+
+### 2026-09-27 RTC handshake ordering candidate (not yet uploaded)
+
+The failure had a concrete timing explanation in the current source: the NGC
+RTC clock is second-resolution, so `NAV_PING_DELAY_MS=250` rounded the first
+calculator PING to the next whole second. The Java helper began its reader
+150 ms after `CONNECTED` and used a 200 ms read window, leaving a gap in which
+the host could invalidate the channel before the calculator's first write.
+The historical Ndless NavNet test also performs a host-to-calculator service
+transaction before the reverse application connect.
+
+The next candidate therefore makes the first PING eligible immediately after
+`TI_NN_Connect` and adds an Enter-gated, callback-free 0x5002 bootstrap mode
+(`NSPIRE_NGC_MENU_LOCAL_SERVICE=TRUE`). The host must be started with
+`NSPIRE_BOOTSTRAP_SERVICE_ID=0x5002` for that candidate; the default bridge
+remains unchanged. Local static/build checks pass, including the NGC relocation
+audit and lifecycle tests. Current candidate SHA is
+`1564b25eb9fccd64fea22d8080b4b355b39a74b8566d832f6f133e354a9e7da8`; no device
+upload or physical success is claimed yet.
