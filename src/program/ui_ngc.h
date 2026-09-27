@@ -498,7 +498,9 @@ int main(void) {
      * succeeds, nl_set_resident() makes the direct TI document hook retain the
      * Zehn image even though it normally calls ld_exec(path, NULL). Return
      * through crt0 instead of calling _exit: the loader must regain control to
-     * restore the IRQ mask before the auto-started task owns the UI loop. */
+     * restore the IRQ mask before the auto-started task owns the UI loop. The
+     * lowest legal priority prevents TCC_Create_Task from preempting this
+     * IRQ-masked loader callback before that return path runs. */
     if (!nav_task_create(ngc_task_entry)) return EXIT_FAILURE;
     nl_set_resident();
     return EXIT_SUCCESS;

@@ -45,6 +45,7 @@ typedef int (*nav_tcc_create_task_t)(
 #define NSPIRE_CX2_CAS_OS_ID 46u
 #define NSPIRE_TASK_STACK_SIZE (6u * 1024u)
 #define NSPIRE_TASK_CONTROL_SIZE 1024u
+#define NSPIRE_TASK_PRIORITY 255u
 
 /* Nucleus PLUS constants.  They are intentionally local because the Ndless
  * SDK only exposes the opaque NU_TASK type and not the task-create ABI. */
@@ -69,7 +70,7 @@ static int nav_task_create(nav_task_entry_t entry) {
                     NULL,
                     (void *)nav_task_stack,
                     (unsigned)sizeof(nav_task_stack),
-                    10u,
+                    NSPIRE_TASK_PRIORITY,
                     0u,
                     NSPIRE_NU_PREEMPT,
                     NSPIRE_NU_START);

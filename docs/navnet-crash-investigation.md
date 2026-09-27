@@ -929,3 +929,21 @@ calculator PING/PONG, request/RX, or same-page response. USB remained
 enumerated as direct `0x0451:0xE022` during the failure, so this is a physical
 launch/task-handoff rejection rather than a cable disappearance. This exact
 SHA is permanently blocked in the shell and Java upload paths.
+## 2026-09-27 resident task handoff priority-255 local candidate
+
+The return-through-crt0 candidate still timed out on its second launch Enter,
+even though USB stayed at direct `0x0451:0xE022`. The remaining plausible
+loader-boundary hazard was task priority: the task was created at priority 10
+while the direct document callback still had IRQs masked. The next opt-in source
+candidate changes only that boundary to the lowest legal Nucleus priority,
+`255`, allowing the callback to return through crt0 and restore the loader's IRQ
+state before the resident task can preempt it. No explicit IRQ writes,
+`idle()`/`msleep()`, `TCT_Schedule`, or NavNet startup were added.
+
+The clean local build produced
+`f3e958e3aff470685ca5e5bd545f8a3478097ed8152ca9a8d24c7c5b3e14e822`
+(16,664 bytes), with 59,444 bytes of loader allocation and 242 Zehn
+relocations. The artifact is stored at
+`.build/ngc-task-handoff-priority255/nspire_ai.tns`. It is local-only: there
+is no upload/readback or physical `CONNECTED` evidence for this SHA, and it
+must not be uploaded without fresh explicit authorization.

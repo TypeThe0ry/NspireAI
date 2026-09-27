@@ -26,6 +26,8 @@ def main() -> int:
         raise SystemExit("FAIL: CX II CAS TCC_Create_Task address is not present in pinned IDC")
     if "NSPIRE_CX2_CAS_TCC_CREATE_TASK ((uintptr_t)0x1042A8C8u)" not in header:
         raise SystemExit("FAIL: task ABI is not pinned to the CAS 6.2.0.333 address")
+    if "#define NSPIRE_TASK_PRIORITY 255u" not in header:
+        raise SystemExit("FAIL: task handoff priority must avoid preempting the IRQ-masked loader callback")
     if "nl_set_resident();" not in ui or "return EXIT_SUCCESS;" not in ui:
         raise SystemExit("FAIL: task handoff does not return through crt0 after retaining the Zehn image")
     if "_exit(EXIT_SUCCESS);" in ui:

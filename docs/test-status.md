@@ -2834,3 +2834,29 @@ had to be killed; the bridge stayed at `READY`/`NODE 1` for 90 seconds and
 never emitted `CONNECTED`. No calculator PING/PONG, request/RX, or same-page
 response was observed. The exact SHA is now permanently blocked in both upload
 paths, and the device package must not be retried.
+### 2026-09-27 resident-task handoff priority-255 candidate (local-only)
+
+The previous return-through-crt0 candidate still froze on the second Enter while
+the direct `0x0451:0xE022` device remained enumerated. Static review identified
+one remaining unsafe scheduling window: `TCC_Create_Task` was called with
+priority `10`, which can preempt the IRQ-masked loader callback before crt0
+returns. The new opt-in candidate uses the lowest legal Nucleus priority (`255`)
+so the loader callback can return and restore its IRQ state before the resident
+task is eligible to run. It still contains no explicit IRQ enable, `idle()`/
+`msleep()`, `TCT_Schedule`, or NavNet startup from the document entry path.
+
+The clean Docker build passed all local gates and was kept separately under
+`.build/ngc-task-handoff-priority255/`:
+
+```text
+sha256=f3e958e3aff470685ca5e5bd545f8a3478097ed8152ca9a8d24c7c5b3e14e822
+bytes=16664
+loader allocation=59444 <= 60000
+Zehn relocations=242
+task priority=255 (lowest legal priority)
+```
+
+This SHA is local-only and has not been uploaded or physically tested. The
+upload gates deliberately require a new explicit authorization before any
+device action; no physical `CONNECTED`, request/RX, or same-page response may
+be inferred from these offline checks.
