@@ -38,6 +38,10 @@ public final class NspireNavnetHelper {
     // implementation. They are not evidence that the service handle is dead.
     private static final int ERR_INCOMPLETE_TRANSACTION = -258;
     private static final int ERR_BUSY = -269;
+    // TI's NodeNotifyCallback uses 1 for ADD and 2 for REMOVE. It is not a
+    // boolean event flag; treating every non-zero value as present leaves the
+    // bridge holding a dead node after a USB detach.
+    private static final int NODE_EVENT_ADD = 1;
     private static volatile ConnectionHandle connection;
     private static volatile boolean stopping;
     private static volatile Thread reader;
@@ -434,8 +438,9 @@ public final class NspireNavnetHelper {
             }
             NavNet.registerNotifyCallback(new NodeNotificationListener() {
                 @Override public void nodeNotificationCallback(NodeHandle node, int event) {
-                    nodePresent = event != 0;
-                    if (event == 0) {
+                    boolean added = event == NODE_EVENT_ADD;
+                    nodePresent = added;
+                    if (!added) {
                         /* A node removal invalidates every service handle
                          * associated with that handheld.  Do not leave the
                          * reader/writer pointing at the old handle while
@@ -447,8 +452,10 @@ public final class NspireNavnetHelper {
                         connection = null;
                         emit("DISCONNECTED reason=node-removed");
                     }
-                    emit("NODE " + event);
-                    if (event != 0) startBootstrap(node);
+                    // Normalize TI's ADD/REMOVE values to the bridge's
+                    // boolean node state; do not expose REMOVE as NODE 2.
+                    emit("NODE " + (added ? 1 : 0));
+                    if (added) startBootstrap(node);
                 }
             });
             status = NavNet.startService(serviceId, new Context(), new ServiceCallbackListener() {

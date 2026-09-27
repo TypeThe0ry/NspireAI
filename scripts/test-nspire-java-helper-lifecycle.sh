@@ -64,6 +64,11 @@ if ! grep -q 'handle invalid; waiting for callback' "$HELPER_SOURCE"; then
   echo 'Java helper is missing the terminal invalid-handle guard' >&2
   exit 1
 fi
+if ! grep -q 'event == NODE_EVENT_ADD' "$HELPER_SOURCE" ||
+   grep -q 'nodePresent = event != 0' "$HELPER_SOURCE"; then
+  echo 'Java helper misclassifies TI NodeNotify REMOVE event as NODE present' >&2
+  exit 1
+fi
 
 sleep 1
 if ! kill -0 "$HELPER_PID" 2>/dev/null; then
