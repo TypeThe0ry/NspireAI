@@ -2096,3 +2096,9 @@ After rebuilding, the read-only USB gate still reported the CX II descriptor
 `0xE022`. A bounded `run-nspire-remote.sh info` registered the NavNet callback
 but timed out without `NODE`, `CONNECTED`, or any calculator-side frame; no
 upload or calculator file mutation was attempted in that state.
+
+On the next continuation check the authoritative USB gate changed to the
+CalDigit/TS4-side `0xACE1` DMC controller (`STATE=NO_NSPIRE_DOCK_DMC_CONTROLLER`),
+and TI Student Software still displayed `No handheld selected`. This is a
+physical-path absence, not a NavNet application result; no stage probe or
+production package was uploaded while only the dock controller was visible.
