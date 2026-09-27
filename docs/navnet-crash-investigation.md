@@ -581,3 +581,22 @@ key hang. `NspireRemoteControl` now hard-stops on that timeout so its outer
 shell cleanup can reap the detached RMI server without entering a second
 unbounded `proxy.shutdown()` call. This protects the host session; it does not
 claim that a virtual key was delivered to the calculator.
+
+## Fresh manual-key audit (2026-09-27 11:44--11:46)
+
+The user confirmed that the calculator key was pressed manually; no second
+manual or virtual key was sent by the host during this audit. A bounded,
+read-only screen probe then received a NavNet callback but timed out before a
+screen image was produced. The expected image file was not created. The host
+side TI window listed `TI-Nspire CX II CAS A757` under Connected Handhelds but
+still displayed `No handheld selected... please connect a handheld`.
+
+A fresh Java bridge subsequently reached `NODE 1` and
+`READY service=0x5001`, but produced no `CONNECTED`, `RX`, or `TX` event during
+the observation window. The host USB diagnostic still classified the device
+as `CX2_USB_CANDIDATE product=0xE022`; `system_profiler` did not expose a
+stable USB record, and no new TI `NN-crash-*` report was created at the audit
+time (the newest report was from 08:22). Therefore this checkpoint proves only
+host-side enumeration and bridge readiness. It does not prove that the
+calculator is still on the nspire_ai page, that the manual key reached the
+program, or that the same-page request/response loop works.
