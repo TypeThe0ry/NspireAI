@@ -600,3 +600,10 @@ time (the newest report was from 08:22). Therefore this checkpoint proves only
 host-side enumeration and bridge readiness. It does not prove that the
 calculator is still on the nspire_ai page, that the manual key reached the
 program, or that the same-page request/response loop works.
+
+The helper was hardened at this checkpoint as well: a `NODE 0` callback now
+clears the volatile service handle and emits `DISCONNECTED reason=node-removed`
+before the reader can reuse the stale handle. The reader exits on that clear,
+and a later `NODE 1` installs a new service connection. The rebuilt helper
+passed the lifecycle test and the 19 host bridge/protocol tests; this is a
+host-side recovery improvement, not physical proof of calculator `CONNECTED`.
