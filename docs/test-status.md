@@ -525,6 +525,18 @@ then emitted unregister/`helper: STOPPED` and left no Java/RMI child. This
 confirms the post-Enter USB/screen stall on the reviewed stage-14 artifact,
 but still does not prove page residency or the requested protocol loop.
 
+### Offline stage-15 scheduler discriminator (not uploaded)
+
+Because the stage-14 loop uses only a NOP tail, an offline diagnostic was added
+that removes NavNet and matrix-key work and calls Ndless `idle()` once per loop.
+This is a discriminator for timer-only scheduler progress, not a production
+transport change: `idle()` masks all IRQs except the Ndless timer interrupt and
+its interaction with CX II NavNet is unverified. The Docker build, Zehn
+relocation audit, startup-order check, safe-loop gate, and manifest all passed.
+The isolated artifact is stored under `.build/ngc-stage15/` at SHA-256
+`fe4d9a26dd1bd62cb385da5f9f62df0f82b6f239c2b3f0f2d17e0043fdbe82ec`; it was
+not copied to `dist`, uploaded, or treated as physical-runtime evidence.
+
 ## 2026-09-24 relocation-candidate physical rejection (Computer Use control)
 
 Computer Use (CUA) was used for the desktop interaction and application-state

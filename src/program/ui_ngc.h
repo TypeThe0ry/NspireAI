@@ -191,6 +191,9 @@ int main(void) {
      * stage 12 combines one frame with the long-running loop and no NavNet;
      * stage 13 repeats that test with the production low-frequency RTC cadence;
      * stage 14 removes matrix-key scanning from that long-running path.
+     * stage 15 removes both NavNet and matrix-key work and calls Ndless's
+     * timer-only idle() once per loop, isolating whether a scheduler yield
+     * (rather than the RTC/key code) keeps the USB screen path responsive.
      * Each stage returns immediately so the first
      * unsupported-document result identifies the failing API boundary. */
 #if NSPIRE_NGC_PROBE_STAGE == 12
@@ -272,6 +275,28 @@ int main(void) {
             }
             for (volatile unsigned spin = 0; spin < 256; ++spin)
                 __asm volatile("nop");
+        }
+    }
+#elif NSPIRE_NGC_PROBE_STAGE == 15
+    /* Scheduler-yield probe.  This is deliberately not a production path:
+     * idle() masks every IRQ except Ndless's timer interrupt and its CX II
+     * interaction with NavNet is not established.  It is useful only as a
+     * no-NavNet/no-key discriminator for the stage-14 USB/screen stall. */
+    if (!ngc_prepare_lcd()) return EXIT_FAILURE;
+    chat_gc = gui_gc_global_GC();
+    if (!chat_gc) return EXIT_FAILURE;
+    set_status("NGC probe stage 15");
+    ngc_draw();
+    {
+        uint32_t last_tick = nav_clock_ms();
+        uint32_t probe_until = last_tick + 30000;
+        unsigned scheduler_spin = 0;
+        while (!nav_deadline_reached(last_tick, probe_until)) {
+            if (++scheduler_spin >= 128u) {
+                scheduler_spin = 0;
+                last_tick = nav_clock_ms();
+            }
+            idle();
         }
     }
 #elif NSPIRE_NGC_PROBE_STAGE >= 1
