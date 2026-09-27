@@ -24,7 +24,8 @@ def main() -> int:
         raise SystemExit("FAIL: NGC production loop lacks the transport fault hold")
     if "nav_transport_rearm();" not in text:
         raise SystemExit("FAIL: Menu retry does not explicitly rearm transport")
-    if "if (!any_key_pressed())" not in text or "memset(previous, 0, sizeof(previous));" not in text:
+    if "!any_key_pressed()" not in text or "!is_touchpad && !any_key_pressed()" not in text or \
+            "memset(previous, 0, sizeof(previous));" not in text:
         raise SystemExit("FAIL: NGC key loop lacks the aggregate no-key fast path")
     if "if (++scheduler_spin >= 128u)" not in text:
         raise SystemExit("FAIL: NGC loop samples the RTC on every spin")

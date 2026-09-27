@@ -98,7 +98,13 @@ static int ngc_keys(void) {
      * OS/USB work queue before transport was ever armed.  Use the cheap
      * aggregate test as the fast path.  Clear edge state when no key is down
      * so the next press is still reported after a skipped scan. */
-    if (!any_key_pressed()) {
+    /* On CX II the touchpad implementation of any_key_pressed() performs an
+     * I2C transaction before checking the matrix.  That transaction can wait
+     * on an IRQ-owned touchpad controller while a standalone Ndless page is
+     * holding the USB/display task.  Matrix reads are direct MMIO and are
+     * sufficient for the native text controls, so skip the touchpad fast path
+     * entirely on touchpad hardware. */
+    if (!is_touchpad && !any_key_pressed()) {
         memset(previous, 0, sizeof(previous));
         initialized = 1;
         return 0;
