@@ -2449,3 +2449,24 @@ and all helper/RMI processes were cleaned up, but the candidate is a physical
 failure and is now permanently blocked. Java direct uploads now reject all
 probe manifests unless an explicit diagnostic override is supplied, and this
 exact SHA has no override.
+
+### 2026-09-27 production NGC memory-budget rebuild
+
+The first non-probe production rebuild (`495e6e2315efd71797...`) passed the
+offline checks but TI showed `This document format is not supported.` on open.
+Its Zehn allocation was `61888` bytes. That generic loader error is consistent
+with the earlier `Low memory` observations, so the production path now removes
+unused local-service teardown code and links NGC objects with the SDK sample's
+`--gc-sections`. The clean Docker rebuild produced SHA
+`3b6c2b2cd8d5cb9a34276ce67b05f5117ff64d6e00b8342c912de850a40a2a7a`, Zehn
+allocation `51980` bytes, and a successful `ngc_probe=FALSE` manifest. The new
+`scripts/check-ngc-memory-budget.py` gate keeps production images at or below
+`60000` allocated bytes.
+
+That package was uploaded only after the clean build and all local tests passed.
+The handheld accepted the transfer and remained at the `Document Received`
+dialog, but the remote `~enter~` event timed out and the subsequent read-only
+screen was still the same dialog. USB recovered to `0xE022` and helper/RMI
+cleanup completed. This is not evidence of a resident page or bridge
+`CONNECTED`; do not claim the physical loop is complete or upload another
+variant until the open event can be observed.

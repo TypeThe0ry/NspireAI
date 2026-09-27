@@ -29,6 +29,7 @@ program-test:
 		python3 scripts/check-ngc-irq-window.py && \
 		python3 scripts/check-ngc-cpu-irq.py && \
 		python3 scripts/check-navnet-bridge-gate.py && \
+		if test -f dist/nspire_ai.tns.meta && grep -q '^ui_backend=TRUE$$' dist/nspire_ai.tns.meta; then python3 scripts/check-ngc-memory-budget.py dist/nspire_ai.tns; fi && \
 		if test -f src/program/nspire_ai.elf && test -f dist/nspire_ai.tns; then python3 scripts/check-ngc-relocations.py src/program/nspire_ai.elf dist/nspire_ai.tns; fi && \
 		./scripts/test-ngc-lcdinit-candidate.sh && \
 		./scripts/test-ngc-stage-upload-gate.sh && \

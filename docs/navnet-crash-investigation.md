@@ -790,3 +790,20 @@ address `0x00000096`, subsystem `USB`. USB later recovered to `0xE022` and
 the host helper cleaned up. This permanently rejects the raw scheduler call;
 the stage-17 SHA is blocked in every upload path. A local build cannot prove
 that an OS-internal address is safe from an Ndless-owned screen task.
+
+## 2026-09-27 production NGC memory-budget candidate
+
+The first clean non-probe package used the SDK wrapper without section
+garbage-collection and was rejected by TI with the generic unsupported-document
+dialog. Its Zehn `alloc_size` was `61888` bytes. The production NGC build now
+uses `-ffunction-sections -fdata-sections` and `--gc-sections`, and excludes the
+unused local-service teardown from the default binary. The resulting package
+`3b6c2b2cd8d5cb9a34276ce67b05f5117ff64d6e00b8342c912de850a40a2a7a` has
+`alloc_size=51980` and passes the new `60000`-byte local budget gate.
+
+It was uploaded after the clean local build and host tests. The handheld stayed
+at `Document Received`; the remote `~enter~` event timed out, while a subsequent
+read-only screen still showed that dialog. USB recovered to `0xE022` and helper
+cleanup completed. This narrows the remaining failure to the standalone
+entry/USB scheduling boundary, but does not establish a resident page or any
+`CONNECTED`/request/RX evidence.
