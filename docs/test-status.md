@@ -2664,3 +2664,22 @@ Handheld` (USB 2.0, address 2, location `0x00100000`) from the independent
 CalDigit TS4 hub tree. Thus the current evidence is not “the cable is absent”;
 it is “the kernel enumerates E022 but Student Software does not bind a
 handheld session”. No package was uploaded or launched in this probe.
+
+### 2026-09-27 Student Software release and direct connector probe
+
+After the user exited the calculator page and replugged the cable, the
+Student Software process was still alive but its window reported
+`No handheld selected`. Closing the window did not terminate its detached
+`RemoteNavnetServer`, so the host process pair was then terminated and
+verified absent before starting the project bridge. This released the shared
+desktop NavNet owner without changing any calculator files.
+
+With Student Software absent, a bounded normal Java bridge run reported
+`STATE=CX2_USB_CANDIDATE product=0xE022`, reached `READY service=0x5001`, and
+cleaned up with `STOPPED` and no remaining helper/server processes. The fresh
+TI connector log independently recorded the direct device at location
+`0x00100000`, two endpoints, and `state:Opened`; it then shut down cleanly
+when the bounded bridge stopped. No `NODE` was emitted because the
+calculator was on Home and no nspire_ai program was running. This proves
+host-side USB opening and cleanup, not calculator `CONNECTED`, request/RX, or
+same-page response. No package was uploaded or launched.
