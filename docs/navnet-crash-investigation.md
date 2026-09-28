@@ -1128,3 +1128,22 @@ page-open state itself can hide the calculator endpoint from NavNet; a bridge
 process can be healthy while no calculator peer exists. It is not evidence of
 the requested application channel and does not justify bypassing the USB gate
 for deployment.
+
+## 2026-09-28 delayed-arm candidate physical result
+
+After exiting the previous page, the calculator recovered as `0xE022`. The
+clean delayed-arm candidate was uploaded to an independent path and read back
+exactly:
+
+```text
+/nspire_ai_arm_delay.tns
+sha256=7258211ae47a9e5ef624646d1a619ecbc61f89e277f7a97ebbf6fb4729aa2511
+```
+
+The bridge reached `READY service=0x5001` and `NODE 1`. The first Enter only
+dismissed the TI `Document Received` dialog and returned promptly. A second,
+direct launch from the Browse list then caused `sendEventToNode` to time out
+after 10 seconds; no `CONNECTED`, RX, request, or same-page response appeared.
+The bridge was stopped cleanly with `helper: STOPPED`. Delaying the first
+enumeration therefore did not remove the standalone-page launch stall; this
+candidate is not a successful physical build.
