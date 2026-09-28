@@ -57,6 +57,14 @@ probe briefly returned `Busy` and a bounded retry recovered normal device info.
 No calculator-side launch result is claimed until the user confirms whether
 this stage also flashes/crashes.
 
+The next read-only screen probe captured the handheld's actual state as a
+`Document Sent` dialog for `stage1_probe.tns`; the diagnostic had therefore
+been transferred but had not been launched. One remote Enter dismissed that
+dialog. Later screen/list probes failed to obtain a NavNet node and timed out,
+while the raw E022 USB descriptor and libnspire helper recovered normally.
+This is evidence of an unstable TI remote-NavNet node path, not evidence that
+stage-1 ran or crashed.
+
 ## 2026-09-28 post-reset runtime identity gate
 
 After the stage-3 page froze the USB/OS path, the next read-only probe found
