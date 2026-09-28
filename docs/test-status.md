@@ -1,5 +1,24 @@
 # Verification record
 
+## 2026-09-28 production page opens; Enter leaves host at READY
+
+After the handheld returned as `E022`, the production-named `nspire_ai.tns`
+(the 17044-byte page, not the 3020-byte stage-0 probe) was opened while a
+fresh project bridge was running. The calculator visibly displayed:
+
+```text
+USB idle enter enables
+```
+
+This proves the page stayed open far enough to draw its idle status. The host
+bridge reached `READY service=0x5001` but emitted no `NODE`, `CONNECTED`,
+calculator-originated PING/PONG, RX, or response. After one physical Enter,
+the bridge log remained unchanged; a bounded read-only screen probe then lost
+the NavNet node while the kernel E022 descriptor remained present. The bridge
+and helper exited without residual processes. This is a new physical result:
+the production UI opens, but the Enter-arm path still does not establish the
+calculator application channel. It is not a completed request/response loop.
+
 ## 2026-09-28 correction: stage-0 transferred, different file selected
 
 Evidence correction: the Browse screenshot
