@@ -3575,3 +3575,45 @@ page in a priority-250 task; session in the service callback). Screen and
 keys will be taken over from the task side: point the LCD base
 (0xC0000010) at the page's own framebuffer, scan the key matrix directly,
 and mask the keypad interrupt while the page is active.
+
+### 2026-09-29 Chat page built; heap exhaustion found while testing it
+
+`src/page/page.c` puts the proven pieces together into the real page:
+resident priority-250 task, service 0x5001 with the session inside the
+callback, its own LCD framebuffer, key-matrix input (arrow keys avoided
+because they go through the touchpad I2C path; Tab/Menu scroll), keypad IRQ
+16 masked while visible, and `TCC_Task_Sleep` pacing. `PAGE_AUTOTEST`
+(service 0x5010) sends a prompt by itself once linked, acknowledges the
+response length, then hides.
+
+On the handheld, both page builds and then the previously accepted `navsvc`
+showed `This document format is not supported`. The Zehn loader returns that
+for any load failure, allocation failure included. Two causes:
+
+- The first page build needed 104,416 bytes of Zehn allocation, above the
+  ~60 KB ceiling Codex had measured. The page now stays below it (no
+  `fprintf`, smaller stack and buffers; about 55.6 KB), and
+  `scripts/build-marker-probe.sh` enforces the limit on page builds.
+- Every resident probe launched this boot (`nl_set_resident`) still holds its
+  image, so the OS heap ran out and even `navsvc` now fails. Only a reset
+  clears this.
+
+The page is therefore loaded at most once per boot. Esc hides it (screen and
+keypad IRQ handed back, task sleeping, service still registered, answers
+still collected). Reopening `nspire_ai.tns` finds the hidden page through a
+registry in the last LCD palette words (0xC00003F0: magic, pointer,
+~pointer; unused in 16-bit mode, cleared by reset) and sets its
+`show_request` instead of loading a new copy. The page draws straight into a
+single 150 KB framebuffer (HW-W mapping `x*240+y`) and takes the LCD base
+back if the OS repoints it.
+
+Deployed and read back exactly (`scripts/deploy-page.sh`):
+
+```text
+/nspire_ai.tns           sha256=70872e0147b8f52123777c03b8ff1be8c81633c3fa1bd5415f04bd6a02bcdcfb (alloc 55596)
+/nspire_ai_autotest.tns  sha256=c00b7443050f38b21aae396e02586bc69cf7c36579f30c3417fdaef5fc6ff288 (alloc 56016)
+```
+
+The bridge now defaults to host-as-client on 0x5001 with a 0 ms initial
+read delay. All 19 bridge unit tests and both lifecycle tests pass. The page
+itself has not run on the handheld yet; the next reset is needed first.

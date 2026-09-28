@@ -59,8 +59,10 @@ extern unsigned int nl_osid(void); /* Ndless ext syscall, not in SDK headers */
 #define NU_PREEMPT 10u
 #define NU_START 12u
 
+#ifndef IN_MAIN
 static unsigned char task_control[1024] __attribute__((aligned(8)));
 static unsigned char task_stack[16 * 1024] __attribute__((aligned(8)));
+#endif
 static volatile nn_ch_t service_channel;
 static volatile int service_callbacks;
 
@@ -179,6 +181,7 @@ static void service_callback(nn_ch_t ch, void *data) {
     session_done = 1;
 }
 
+#ifndef IN_MAIN
 static void task_main(unsigned argc, void *argv) {
     (void)argc; (void)argv;
 
@@ -201,12 +204,17 @@ out:
     TCC_Terminate_Task(TCC_Current_Task_Pointer());
 }
 
+#endif
+
+#ifndef IN_MAIN
 static void log_main(const char *text) {
     FILE *f = fopen("/documents/navsvc_log.tns", "ab");
     if (!f) return;
     fputs(text, f);
     fclose(f);
 }
+
+#endif
 
 #ifdef IN_MAIN
 typedef void (*tcc_task_sleep_t)(unsigned ticks);

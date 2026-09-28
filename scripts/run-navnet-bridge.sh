@@ -63,6 +63,14 @@ if [[ "$TRANSPORT" != "java" && "$TRANSPORT" != "raw" ]]; then
 fi
 if [[ "$TRANSPORT" == "java" ]]; then
   export NSPIRE_USB_HELPER="$ROOT/scripts/run-nspire-java-helper.sh"
+  # The calculator page registers NavNet service 0x5001 and the Mac connects
+  # to it (host-as-client); this is the direction that completed a physical
+  # round trip on 2026-09-29.  NSPIRE_CLIENT_SERVICE_ID=0 restores the old
+  # host-as-service mode, whose reads always failed with -257.
+  export NSPIRE_CLIENT_SERVICE_ID="${NSPIRE_CLIENT_SERVICE_ID:-0x5001}"
+  if [[ "$NSPIRE_CLIENT_SERVICE_ID" != "0" ]]; then
+    export NSPIRE_NAVNET_INITIAL_READ_DELAY_MS="${NSPIRE_NAVNET_INITIAL_READ_DELAY_MS:-0}"
+  fi
 else
   export NSPIRE_USB_HELPER="$HELPER_BIN"
 fi

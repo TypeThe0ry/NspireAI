@@ -32,7 +32,7 @@ BRIDGE_PID=$!
 exec 3>"$FIFO_PATH"
 
 for _ in {1..150}; do
-  if grep -q 'helper: READY service=0x5001' "$LOG_FILE"; then
+  if grep -qE 'helper: READY (client )?service=0x5001' "$LOG_FILE"; then
     break
   fi
   if ! kill -0 "$BRIDGE_PID" 2>/dev/null; then
@@ -43,9 +43,9 @@ for _ in {1..150}; do
   sleep 0.1
 done
 
-if ! grep -q 'helper: READY service=0x5001' "$LOG_FILE"; then
+if ! grep -qE 'helper: READY (client )?service=0x5001' "$LOG_FILE"; then
   sed -n '1,220p' "$LOG_FILE" >&2
-  echo 'bridge did not reach helper READY service=0x5001' >&2
+  echo 'bridge did not reach helper READY (client) service=0x5001' >&2
   exit 1
 fi
 

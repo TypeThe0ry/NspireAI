@@ -19,6 +19,7 @@ docker run --rm -v "$ROOT:/work" -v "$ROOT/.deps/ndless/ndless-sdk:/sdk" \
     make -C /sdk/libndls
     make -C /sdk/tools/genzehn
     make -C /sdk/tools/zehn_loader
-    make -C /work/src/probes/marker clean && make -C /work/src/probes/marker STEP=plain && make -C /work/src/probes/marker STEP=lcd && make -C /work/src/probes/marker STEP=gc && make -C /work/src/probes/marker STEP=irq && make -C /work/src/probes/marker STEP=task && make -C /work/src/probes/marker STEP=sleep && make -C /work/src/probes/navtask clean all && make -C /work/src/probes/navsvc clean all && make -C /work/src/probes/osdump clean all
+    make -C /work/src/probes/marker clean && make -C /work/src/probes/marker STEP=plain && make -C /work/src/probes/marker STEP=lcd && make -C /work/src/probes/marker STEP=gc && make -C /work/src/probes/marker STEP=irq && make -C /work/src/probes/marker STEP=task && make -C /work/src/probes/marker STEP=sleep && make -C /work/src/probes/navtask clean all && make -C /work/src/probes/navsvc clean all && make -C /work/src/probes/osdump clean all && make -C /work/src/page clean all
   '
-shasum -a 256 "$ROOT"/src/probes/marker/*.tns "$ROOT"/src/probes/navtask/*.tns "$ROOT"/src/probes/navsvc/*.tns "$ROOT"/src/probes/osdump/*.tns
+shasum -a 256 "$ROOT"/src/probes/marker/*.tns "$ROOT"/src/probes/navtask/*.tns "$ROOT"/src/probes/navsvc/*.tns "$ROOT"/src/probes/osdump/*.tns "$ROOT"/src/page/*.tns
+for f in "$ROOT"/src/page/*.tns; do python3 "$ROOT/scripts/check-ngc-memory-budget.py" "$f"; done
