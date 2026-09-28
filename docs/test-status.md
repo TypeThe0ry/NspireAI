@@ -1,5 +1,23 @@
 # Verification record
 
+## 2026-09-28 post-reset runtime identity gate
+
+After the stage-3 page froze the USB/OS path, the next read-only probe found
+`STATE=UNKNOWN_USB_DEVICE` and the raw helper returned `no TI-Nspire USB
+device`; no upload or key event was attempted. A reset/reinstall can restore
+the stock Ndless runtime and silently remove the previously deployed loader
+boundary variant, so the project now includes
+`scripts/audit-ndless-runtime-device.sh`. It downloads only
+`/ndless/ndless_resources.tns`, classifies the exact SHA as stock
+`5994e509...` or the reviewed loader-boundary variant
+`e930ed866d08e44063539ecc7fd40d5611b272b64bfb6621f04f90fd34aadb0f`, and
+rejects unknown runtimes as not approved. Its read-only behavior is covered by
+`scripts/test-ndless-runtime-audit.sh` and `make program-test`.
+
+The physical page loop remains unverified. Once E022 is back, runtime identity
+must be checked before any page launch; a stock-runtime result requires the
+paired loader-boundary deployment and calculator restart before retesting.
+
 ## 2026-09-26 helper node-state reconciliation
 
 The TI RMI callback does not reliably replay an already-attached handheld to a
