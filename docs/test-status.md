@@ -2944,7 +2944,7 @@ but the fresh `0x5001` helper received no calculator-originated frame. The
 bridge therefore still lacks physical `CONNECTED`, request/RX, and same-page
 response evidence. This pair is not claimed as a completed device fix.
 
-### 2026-09-27 short-lived NGC stage-3 probe (local-only)
+### 2026-09-28 short-lived NGC stage-3 probe (uploaded; USB freeze reproduced)
 
 To separate first-frame setup from the long-lived USB/scheduler boundary, a
 short-lived diagnostic was built with `NGC_PROBE_STAGE=3`. It performs only
@@ -2959,7 +2959,13 @@ loader allocation: 6920 <= 60000
 Zehn relocations: 48
 ```
 
-The local loader, safe-loop, and relocation checks pass. This probe has not
-been uploaded; it is the next controlled diagnostic only if an explicit
-physical test is needed. A passing probe would clear the LCD/GC/first-frame
-boundary while leaving the resident scheduler/USB problem isolated.
+The local loader, safe-loop, and relocation checks pass. With the calculator
+back at Home and E022 visible, the probe was uploaded to the isolated remote
+path `/stage3_probe.tns` (the production `/nspire_ai.tns` was not touched) and
+read back with an exact SHA-256 match. After the user opened that document,
+the raw helper `--info` call and the Java screen probe both stopped responding
+within their bounded 8--12 second windows, while the USB descriptor remained
+E022. This reproduces the USB/OS scheduling freeze even in a program with no
+NavNet, RTC, key scan, resident task, or IRQ experiment. The probe therefore
+does not clear the LCD/GC/first-frame boundary; it is now a documented
+hardware-failure reproduction and must not be relaunched repeatedly.
