@@ -73,6 +73,22 @@ the stage-2 global-GC call and stage-3 first-frame draw as the first failure;
 the production page must not be re-uploaded until the LCD entry ABI is
 resolved.
 
+To separate the loader entry from that LCD boundary, a stage-0 package was
+built locally. It returns immediately without calling any LCD, GC, drawing,
+key, RTC, or NavNet API:
+
+```text
+path: .build/ngc-entry-stage0/nspire_ai.tns
+bytes: 3020
+sha256: 3198cd3b0aa3dcc9b67a46e3b1b2359e66a62ae792255f4da83942d4a3a66f55
+loader allocation: 3340 <= 60000
+Zehn relocations: 11
+```
+
+The isolated upload gate was reviewed and passed, but the first upload attempt
+returned `NoDevice` after the stage-1 crash. No stage-0 file was therefore
+written or claimed as physically tested.
+
 ## 2026-09-28 post-reset runtime identity gate
 
 After the stage-3 page froze the USB/OS path, the next read-only probe found

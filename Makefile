@@ -34,6 +34,7 @@ program-test:
 		if test -f src/program/nspire_ai.elf && test -f dist/nspire_ai.tns; then python3 scripts/check-ngc-relocations.py src/program/nspire_ai.elf dist/nspire_ai.tns; fi && \
 		./scripts/test-ngc-lcdinit-candidate.sh && \
 		./scripts/test-ngc-stage-upload-gate.sh && \
+		./scripts/test-ngc-stage0-probe-gate.sh && \
 		./scripts/test-ngc-stage1-probe-gate.sh && \
 		./scripts/test-ngc-stage2-probe-gate.sh && \
 		./scripts/test-device-artifact-audit.sh && \
