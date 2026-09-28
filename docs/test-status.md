@@ -30,13 +30,17 @@ after LCD initialization and global-GC acquisition without drawing or calling
 NavNet.
 
 The stage-2 and stage-3 diagnostics were also uploaded under isolated names
-(`stage2_probe.tns` and `stage3_probe.tns`); the user reported that neither
-could be opened by the calculator. This is not treated as an API-boundary
-result because Ndless document association may require the production basename
-`nspire_ai.tns`. A controlled basename A/B temporarily wrote the stage-2
-artifact to `/nspire_ai.tns`, but no launch was confirmed; the production
-runtime-boundary page was immediately restored and read back at its exact
-17044-byte SHA `4420b04290fc588805ed0439ca1aa6357ab19f57b77ad8bbd5f465a5aaa7baba`.
+(`stage2_probe.tns` and `stage3_probe.tns`). The user clarified that both
+documents did open and then flashed/crashed, rather than being rejected before
+launch. That is valid entry-path evidence: stage-2 reaches at least its
+`lcd_init()`/global-GC path, while stage-3 adds the first draw and also
+crashes. The isolated filename is therefore not a sufficient explanation for
+the failure. A controlled basename A/B temporarily wrote the stage-2 artifact
+to `/nspire_ai.tns`; no additional screen trace was captured during that
+short test, so it is not used to override the user's direct crash report. The
+production runtime-boundary page was restored and read back at its exact
+17044-byte SHA
+`4420b04290fc588805ed0439ca1aa6357ab19f57b77ad8bbd5f465a5aaa7baba`.
 The stage-2 artifact is not left on the device.
 
 ## 2026-09-28 post-reset runtime identity gate
