@@ -3298,7 +3298,16 @@ ngc_task_handoff=TRUE
 ngc_task_probe=TRUE
 ```
 
-This package is stored only under `.build/ngc-task-abi-probe/`; it was not
-uploaded because the task ABI is still unverified and the operator's physical
-calculator must not be used as a blind probe. The normal `dist/` artifact was
-restored unchanged.
+#### 2026-09-28 device transfer evidence
+
+The guarded probe was built and transferred to the directly attached CX II CAS
+for a controlled entry test.  The exact artifact was
+`.build/ngc-task-abi-probe/nspire_ai.tns`, 7,192 bytes, SHA-256
+`4327c7675d61d679489c04cdd88609b35d33d986e0160c8e2af097ea08f35f1f`.
+The raw USB helper uploaded it as `/task_abi_probe.tns` and downloaded it back;
+the readback was byte-for-byte identical (`UPLOAD_READBACK=EXACT`).  The
+NavNet host still enumerated the handheld as `0xE022`/`NODE`, but the Java
+remote-key helper subsequently encountered a stale RMI endpoint (`-304`,
+`non-JRMP server`) before the probe could be selected and launched.  Therefore
+this is transfer evidence only: no `TASK ABI STARTED` screen or calculator-side
+execution is claimed yet. The normal `dist/` artifact was restored unchanged.
