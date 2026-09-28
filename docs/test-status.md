@@ -124,6 +124,14 @@ leaving a helper or RMI child. This is a host-visible USB/NavNet session stall
 after page exit, not evidence of calculator `CONNECTED`, request RX, or a
 same-page response. No upload was attempted while this preflight was wedged.
 
+The raw helper now also has an explicit `--usb-reset` recovery operation. It
+opens the matching TI USB device, issues one libusb reset, and exits without
+opening NavNet or touching calculator files. On this wedged session even the
+initial raw `open()` remained blocked for the bounded 10-second probe, so the
+reset could not execute; this is recorded as an available recovery path, not
+as a successful device reset. A physical replug (or a calculator-side USB
+state recovery) is still required before another NavNet or upload attempt.
+
 After the user exited the page, the read-only probes recovered E022 and
 `--info` returned normally. The runtime audit then read back the reviewed
 loader-boundary variant exactly:

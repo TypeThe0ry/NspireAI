@@ -80,7 +80,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         d.device_descriptor().map(|x| x.vendor_id() == VID &&
             (x.product_id() == PID || x.product_id() == PID_CX2)).unwrap_or(false)
     }).ok_or("no TI-Nspire USB device")?;
-    let handle = Handle::new(device.open()?)?;
+    let mut raw_handle = device.open()?;
+    if env::args().any(|arg| arg == "--usb-reset") {
+        raw_handle.reset()?;
+        println!("USB reset completed for TI-Nspire device");
+        return Ok(());
+    }
+    let handle = Handle::new(raw_handle)?;
     eprintln!("persistent USB handle open; cx2={} ready={}", handle.is_cx_ii()?, handle.cx2_ready());
 
     if env::args().any(|arg| arg == "--info") {
