@@ -3335,3 +3335,38 @@ Baseline plan after one calculator restart and Ndless reactivation: launch
 `stage0_probe`, then confirm the raw helper `--info` and NavNet `NODE` still
 respond. If a do-nothing Ndless program already stalls USB, the page-open
 design cannot rely on the TI OS USB stack under stock Ndless.
+
+### 2026-09-28 stock-runtime marker probe: USB stays usable while a program runs
+
+After the calculator reset (stock runtime `5994e509...`, Ndless reactivated,
+screen showed `Ndless successfully installed!`), a new baseline probe
+`src/probes/marker` (`scripts/build-marker-probe.sh`) was uploaded as
+`/marker_probe.tns`:
+
+```text
+sha256=14fa2d5135ce356ed7bb103bed169f19509cc3c142e28bb710483253eb8e37e0
+behavior: write /documents/marker_a.tns, volatile busy-wait, write marker_b, return
+no LCD, GC, key scan, RTC, NavNet, task, or IRQ call
+```
+
+Unlike stage0, the markers make execution observable from the host. Second
+run timeline (Java bridge stopped after the key so only the raw helper
+touched USB):
+
+```text
+20:46:27 remote Enter sent
+20:46:41 Java key call timed out (UI task busy with the running program)
+20:46:49 raw --info ready=true; marker_a downloaded; marker_b absent  <- program still running
+20:46:57 raw --info ready=true; marker_b present                      <- clean return
+```
+
+A first run showed the same result (both markers, USB healthy afterwards,
+no replug). Conclusion: under stock Ndless the TI OS USB file service keeps
+answering while a standalone program busy-waits. The "Ndless masks IRQs and
+starves USB" explanation does not hold for a plain program; earlier freezes
+must come from something the NGC page adds (LCD setup, NavNet calls) or from
+the custom loader-boundary runtime. The remote key timeout is expected: the
+key acknowledgement waits for the UI task, which is blocked by the program.
+
+Next: re-add one step at a time to this probe under the stock runtime,
+starting with `lcd_type`/`lcd_init`, and watch the same markers and USB poll.
