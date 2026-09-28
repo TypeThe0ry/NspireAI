@@ -134,8 +134,11 @@ static int ngc_ui_dirty = 1;
  * wall-clock bound for NodeEnumInit/Connect/Read; repeated retries were
  * observed to leave the handheld visible only as the TS4's 0xACE1 DMC
  * controller until the cable was physically replugged.  Hold this page's
- * transport after the first failure and let the explicit Menu action retry
- * only after the host bridge has been started. */
+ * transport after unsafe channel failures.  An empty node list (-274),
+ * however, is a normal startup race while the host helper is still
+ * publishing service 0x5001, so that one is retried on the RTC cadence
+ * instead of requiring a Menu action (which has been observed to wedge CX II).
+ */
 static int nav_transport_blocked;
 
 static void nav_transport_hold(void) {
@@ -524,8 +527,13 @@ static int nav_try_connect(void) {
             set_status("NavNet enumeration init: %d", status);
         }
 #ifdef NSPIRE_UI_NGC
-        nav_transport_hold();
-        set_status("USB held: enum init=%d; Menu retries", status);
+        if (status == -274) {
+            nav_retry_at = nav_clock_ms() + NAV_RETRY_DELAY_MS;
+            set_status("USB peer absent; retrying enum -274");
+        } else {
+            nav_transport_hold();
+            set_status("USB held: enum init=%d; Menu retries", status);
+        }
 #else
         nav_retry_at = nav_clock_ms() + NAV_RETRY_DELAY_MS;
 #endif

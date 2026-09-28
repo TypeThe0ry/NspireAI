@@ -1062,3 +1062,26 @@ same-page response` gate is still open and must be tested after that restart.
 The exact opt-in procedure is preserved in
 `scripts/deploy-runtime-boundary-candidate.sh`; it checks both fixed hashes,
 requires `NSPIRE_ALLOW_RUNTIME_BOUNDARY_UPLOAD=1`, and verifies both writes.
+
+## 2026-09-28 enum -274 retry candidate (local build; upload timed out)
+
+The production NGC page opened and displayed `USB idle enter enables`, but the
+first Enter arm did not produce `NODE`/`CONNECTED`. The host bridge remained
+`READY service=0x5001` while the calculator reported `enum -274`. In the NGC
+path, that empty-node result was incorrectly routed through
+`nav_transport_hold()`, making the page depend on the crash-prone Menu retry.
+
+The fix keeps protection for other NavNet failures but schedules `-274` for an
+RTC retry, so a helper that becomes visible slightly later can be discovered
+without pressing Menu. `make program-test` passes, and a clean Docker NGC build
+produced the isolated candidate:
+
+```text
+.build/ngc-enum-retry/nspire_ai_enum_retry.tns
+sha256=75c00b5ed6ff518378ff3486bc2f0fd7e4d82af6ec378211df522977692259e2
+```
+
+The formal `dist/nspire_ai.tns` remains the prior verified package
+(`4420b042...a7baba`). An attempted isolated upload timed out after the device
+changed from `0xE022` to `UNKNOWN_USB_DEVICE`; no readback was obtained and the
+candidate is not counted as deployed or physically tested.

@@ -71,7 +71,16 @@ def main() -> int:
         callback = callback.split("static void nav_local_service_poll", 1)[0]
         if "TI_NN_Read" in callback or "TI_NN_Write" in callback:
             raise SystemExit("FAIL: NavNet service callback must not synchronously read/write on CX II")
-    print("PASS: NGC startup is USB-idle and first NavNet failure is held")
+    connect_body = main_text.split("static int nav_try_connect", 1)[1].split(
+        "static int nav_write_frame", 1
+    )[0]
+    if 'if (status == -274)' not in connect_body or \
+            'USB peer absent; retrying enum -274' not in connect_body:
+        raise SystemExit("FAIL: empty NavNet enumeration must retry without Menu")
+    retry_block = connect_body.split('if (status == -274)', 1)[1].split('} else {', 1)[0]
+    if 'nav_transport_hold()' in retry_block:
+        raise SystemExit("FAIL: enum -274 still holds transport")
+    print("PASS: NGC startup is USB-idle and empty NavNet enumeration retries automatically")
     return 0
 
 
