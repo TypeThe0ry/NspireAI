@@ -45,6 +45,13 @@ stock Ndless runtime. The remaining fault is in the active loader/runtime
 boundary or the generated Zehn/RPF entry package itself; no production bridge
 test is justified until that boundary is repaired.
 
+The read-only `/ndless` directory listing also shows the installer and
+resource files present (`ndless_installer_4.5.5-6.2.0-6.4.0.tns`,
+`ndless_resources.tns`, and `ndless.cfg.tns`). Presence of these files is not
+proof that the resident loader hook is active in RAM after the calculator's
+latest reset; the earlier loader-hook oracle requires opening the resource and
+seeing Ndless's own confirmation rather than the generic TI document failure.
+
 ## 2026-09-28 historical attempt (superseded by correction above)
 
 After the handheld returned as a verified `E022` device, the isolated stage-0
