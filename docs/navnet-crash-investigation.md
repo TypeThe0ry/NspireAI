@@ -1105,3 +1105,26 @@ out. USB still enumerated as `0xE022`, so this is a calculator-page launch
 freeze rather than a cable-detach result. The bridge was then stopped cleanly
 and emitted `helper: STOPPED`. This SHA is not evidence of the requested
 request/response loop and must not be promoted to the formal package.
+
+## 2026-09-28 page-open diagnostic: ACE1 with bridge READY, no NODE
+
+The operator confirmed that the calculator was visibly inside the NspireAI
+interface. A diagnostic bridge was started with the USB gate bypassed only for
+observation (no upload and no key injection). It reached:
+
+```text
+helper: READY service=0x5001
+```
+
+but never emitted `NODE 1`, `CONNECTED`, RX, or a response. The authoritative
+USB probe simultaneously reported only the TS4 controller:
+
+```text
+STATE=NO_NSPIRE_DOCK_DMC_CONTROLLER product=0xACE1 vendor=0x0451
+```
+
+The bridge was stopped cleanly with `helper: STOPPED`. This confirms that the
+page-open state itself can hide the calculator endpoint from NavNet; a bridge
+process can be healthy while no calculator peer exists. It is not evidence of
+the requested application channel and does not justify bypassing the USB gate
+for deployment.
