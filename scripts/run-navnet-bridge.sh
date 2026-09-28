@@ -122,6 +122,24 @@ if [[ "${NSPIRE_SKIP_USB_GATE:-0}" != "1" ]]; then
     echo "TI-Nspire CX II handheld is not enumerated; bridge not started" >&2
     exit 69
   fi
+
+  # NavNet's RMI server can be present while Phoenix (the TI desktop app) is
+  # not running.  In that state the helper prints READY but never receives a
+  # NODE event, so the calculator appears to be missing even though libusb
+  # can read the E022 device.  Start the installed desktop runtime on the host
+  # when needed; this does not touch USB or reset the calculator.  Tests that
+  # bypass the physical gate remain fully headless.
+  if [[ "$TRANSPORT" == "java" ]] && [[ "${NSPIRE_START_TI_APP:-1}" != "0" ]]; then
+    TI_APP="/Applications/TI-Nspire CX CAS Student Software.app"
+    if [[ -d "$TI_APP" ]] && ! pgrep -f '/Applications/TI-Nspire CX CAS Student Software\.app/Contents/MacOS/JavaAppLauncher' >/dev/null 2>&1; then
+      echo "starting TI-Nspire desktop runtime for NavNet node discovery" >&2
+      open -ga "$TI_APP" || true
+      for _ in {1..40}; do
+        pgrep -f '/Applications/TI-Nspire CX CAS Student Software\.app/Contents/MacOS/JavaAppLauncher' >/dev/null 2>&1 && break
+        sleep 0.25
+      done
+    fi
+  fi
 fi
 
 # TI's NavNetCommProxy may launch RemoteNavnetServer as a detached JVM.  It
