@@ -65,6 +65,14 @@ while the raw E022 USB descriptor and libnspire helper recovered normally.
 This is evidence of an unstable TI remote-NavNet node path, not evidence that
 stage-1 ran or crashed.
 
+The subsequent hands-on launch of `/stage1_probe.tns` changed that boundary:
+the document opened and immediately closed on the calculator. Stage-1 contains
+only `lcd_type()`/`lcd_init()` before returning, so this is direct physical
+evidence that the failure occurs at or before LCD initialization. It rules out
+the stage-2 global-GC call and stage-3 first-frame draw as the first failure;
+the production page must not be re-uploaded until the LCD entry ABI is
+resolved.
+
 ## 2026-09-28 post-reset runtime identity gate
 
 After the stage-3 page froze the USB/OS path, the next read-only probe found
