@@ -26,6 +26,11 @@ def main() -> int:
         raise SystemExit("FAIL: NGC production loop lacks the transport fault hold")
     if "nav_transport_rearm();" not in text:
         raise SystemExit("FAIL: Menu retry does not explicitly rearm transport")
+    rearm = main_text.split("static void nav_transport_rearm", 1)[1].split(
+        "static int nav_transport_is_blocked", 1
+    )[0]
+    if "nav_retry_at = nav_clock_ms() + NAV_RETRY_DELAY_MS;" not in rearm:
+        raise SystemExit("FAIL: Enter arm must defer synchronous NavNet enumeration")
     if "!any_key_pressed()" not in text or "!is_touchpad && !any_key_pressed()" not in text or \
             "memset(previous, 0, sizeof(previous));" not in text:
         raise SystemExit("FAIL: NGC key loop lacks the aggregate no-key fast path")

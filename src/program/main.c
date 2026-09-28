@@ -147,7 +147,12 @@ static void nav_transport_hold(void) {
 
 static void nav_transport_rearm(void) {
     nav_transport_blocked = 0;
-    nav_retry_at = nav_clock_ms();
+    /* Do not enter synchronous NodeEnumInit in the same scheduler turn as
+     * the Enter edge.  On CX II the remote key acknowledgement and the first
+     * LCD/USB service work otherwise remain blocked behind that syscall.  A
+     * full retry cadence gives the arm edge a chance to return before the
+     * transport path is attempted. */
+    nav_retry_at = nav_clock_ms() + NAV_RETRY_DELAY_MS;
 }
 
 static int nav_transport_is_blocked(void) {
