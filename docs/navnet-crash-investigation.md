@@ -1085,3 +1085,23 @@ The formal `dist/nspire_ai.tns` remains the prior verified package
 (`4420b042...a7baba`). An attempted isolated upload timed out after the device
 changed from `0xE022` to `UNKNOWN_USB_DEVICE`; no readback was obtained and the
 candidate is not counted as deployed or physically tested.
+
+## 2026-09-28 enum-retry candidate physical result
+
+The isolated candidate was later uploaded and independently read back while
+the calculator enumerated as `0xE022`:
+
+```text
+/nspire_ai_enum_retry.tns
+size=17104
+sha256=75c00b5ed6ff518378ff3486bc2f0fd7e4d82af6ec378211df522977692259e2
+```
+
+The host bridge reached `READY service=0x5001` and `NODE 1`. A screen probe
+showed the file list with `nspire_ai_enum_retry` present. Selecting it and
+sending one Enter caused TI's remote key call to time out after 10 seconds;
+the bridge never received `CONNECTED`, and a bounded screen probe also timed
+out. USB still enumerated as `0xE022`, so this is a calculator-page launch
+freeze rather than a cable-detach result. The bridge was then stopped cleanly
+and emitted `helper: STOPPED`. This SHA is not evidence of the requested
+request/response loop and must not be promoted to the formal package.
