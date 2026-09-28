@@ -107,6 +107,23 @@ remains unverified; the package itself contains no observable marker.
 
 ## 2026-09-28 loader-boundary runtime A/B: page launch still drops USB
 
+### 2026-09-28 post-exit NavNet preflight remains wedged
+
+After the user exited `nspire_ai`, the read-only USB gate again reported the
+handheld descriptor:
+
+```text
+STATE=CX2_USB_CANDIDATE product=0xE022
+```
+
+That descriptor is not sufficient to prove a usable NavNet session. A bounded
+`run-nspire-remote.sh info` probe initialized TI's NavNet client and registered
+its notify callback, but produced no device/node result within 10 seconds. The
+wrapper then sent `TERM`, waited, and sent `KILL`; its cleanup completed without
+leaving a helper or RMI child. This is a host-visible USB/NavNet session stall
+after page exit, not evidence of calculator `CONNECTED`, request RX, or a
+same-page response. No upload was attempted while this preflight was wedged.
+
 After the user exited the page, the read-only probes recovered E022 and
 `--info` returned normally. The runtime audit then read back the reviewed
 loader-boundary variant exactly:
