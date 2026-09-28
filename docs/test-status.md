@@ -3311,3 +3311,27 @@ remote-key helper subsequently encountered a stale RMI endpoint (`-304`,
 `non-JRMP server`) before the probe could be selected and launched.  Therefore
 this is transfer evidence only: no `TASK ABI STARTED` screen or calculator-side
 execution is claimed yet. The normal `dist/` artifact was restored unchanged.
+
+### 2026-09-28 stock Ndless runtime restored for a clean baseline
+
+Every later physical result was confounded by the custom loader-boundary
+runtime (`e930ed86...`) sitting in `/ndless/ndless_resources.tns`; whether it
+was active depended on an unconfirmed calculator restart. The stock r2022
+runtime from `var/ndless-r2022/verified/` was written back with the raw helper
+and read back exactly:
+
+```text
+/ndless/ndless_resources.tns 193356 bytes sha256=5994e5096d16e2c4289bc9bc976f0e50f6703c6c603cf9476e043c5a41a41330
+```
+
+Obsolete device probes were deleted (`nspire_ai_arm_delay`,
+`nspire_ai_enum_retry`, `stage1_probe`, `stage2_probe`, `stage3_probe`,
+`task_abi_probe`). Kept: `stage0_probe` (`3198cd3b...`, returns immediately,
+no LCD/NavNet), `task_abi_probe_hold` (`34300b73...`, task marker with a short
+hold), and `nspire_ai`. The hold probe's source change (a volatile delay after
+the `TASK ABI STARTED` frame) is committed with this entry.
+
+Baseline plan after one calculator restart and Ndless reactivation: launch
+`stage0_probe`, then confirm the raw helper `--info` and NavNet `NODE` still
+respond. If a do-nothing Ndless program already stalls USB, the page-open
+design cannot rely on the TI OS USB stack under stock Ndless.

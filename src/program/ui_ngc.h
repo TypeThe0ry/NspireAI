@@ -85,10 +85,11 @@ static void ngc_draw(void) {
 }
 
 #ifdef NSPIRE_NGC_TASK_PROBE
-/* Minimal task-handoff diagnostic.  It deliberately stops after one frame:
- * no RTC, NavNet, key scan, scheduler call, or resident loop is involved.
- * A visible marker proves that TCC_Create_Task started the entry and that the
- * task can use the NGC LCD/GC after the loader returns. */
+/* Minimal task-handoff diagnostic.  It deliberately stops after one frame and
+ * a short volatile hold: no RTC, NavNet, key scan, scheduler call, or
+ * resident loop is involved.  The hold leaves the marker on-screen long
+ * enough for a remote screenshot to prove that TCC_Create_Task started the
+ * entry and that the task can use the NGC LCD/GC after the loader returns. */
 static void ngc_task_probe_run(void) {
     if (!ngc_prepare_lcd()) return;
     chat_gc = gui_gc_global_GC();
@@ -98,6 +99,7 @@ static void ngc_task_probe_run(void) {
     }
     set_status("TASK ABI STARTED");
     ngc_draw();
+    for (volatile unsigned long i = 0; i < 20000000UL; ++i) { }
 }
 #endif
 
