@@ -3461,3 +3461,38 @@ timed out, and by 22:04:37 the handheld had disappeared from USB (only the
 TS4 `0xACE1` controller was left); it did not come back within 30 s. So a
 NavNet call from the task most likely wedged or crashed the OS. The navlog
 survives in flash; after a reset it will show the last step reached.
+
+### 2026-09-28 First end-to-end NavNet CONNECTED from a calculator task
+
+After a reset, a rebuilt `navtask` (sha `d431704b...`, fputs-only logger,
+with a log line before every NavNet call) ran with the echo bridge at
+`READY`/`NODE 1`. Calculator navlog:
+
+```text
+task running prio=250 service=0x5001
+enum_init=1, enum_next=2, connect=1
+ping write=1
+read status=-257 (pong wait), request write=-257, read -257
+disconnect=1, task done
+```
+
+Bridge: `CONNECTED handle=0x7`, then the helper's first `NavNet.read`
+returned -257 ("handle invalid"). The handheld stayed on USB (E022) and did
+not crash. This is the first time `CONNECTED` has come from a program whose
+page stays resident; the remaining gap is the NavNet read/write handshake.
+
+Observations since then:
+
+- The "first Enter is swallowed" quirk has a simple cause: every file write
+  by a probe raises a `Document Sent` dialog, and the next Enter only closes
+  it. Use `~esc~` to close such dialogs; it can never launch a file.
+- Running a second resident-task probe in the same boot dropped the
+  handheld off USB twice (marker_task then navtask; navtask then navtask).
+  The only clean navtask run came right after a reset. The Ndless loader
+  keeps a resident image (`ld_exec` returns before `ld_free` when
+  `nl_set_resident` was called), so freed-memory reuse is ruled out. The
+  navlog after the next reset should show which call hung.
+- Hypothesis for -257: the helper waited `NSPIRE_NAVNET_INITIAL_READ_DELAY_MS`
+  (1000 ms) before its first read, while the calculator had already written
+  its PING and was reading. The test with 0 ms delay coincided with the
+  second-run crash, so it is still open.
