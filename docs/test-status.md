@@ -29,6 +29,16 @@ next physical discriminator is the existing stage-2 package, which stops
 after LCD initialization and global-GC acquisition without drawing or calling
 NavNet.
 
+The stage-2 and stage-3 diagnostics were also uploaded under isolated names
+(`stage2_probe.tns` and `stage3_probe.tns`); the user reported that neither
+could be opened by the calculator. This is not treated as an API-boundary
+result because Ndless document association may require the production basename
+`nspire_ai.tns`. A controlled basename A/B temporarily wrote the stage-2
+artifact to `/nspire_ai.tns`, but no launch was confirmed; the production
+runtime-boundary page was immediately restored and read back at its exact
+17044-byte SHA `4420b04290fc588805ed0439ca1aa6357ab19f57b77ad8bbd5f465a5aaa7baba`.
+The stage-2 artifact is not left on the device.
+
 ## 2026-09-28 post-reset runtime identity gate
 
 After the stage-3 page froze the USB/OS path, the next read-only probe found
