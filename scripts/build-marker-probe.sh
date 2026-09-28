@@ -19,6 +19,6 @@ docker run --rm -v "$ROOT:/work" -v "$ROOT/.deps/ndless/ndless-sdk:/sdk" \
     make -C /sdk/libndls
     make -C /sdk/tools/genzehn
     make -C /sdk/tools/zehn_loader
-    make -C /work/src/probes/marker clean && make -C /work/src/probes/marker STEP=plain && make -C /work/src/probes/marker STEP=lcd && make -C /work/src/probes/marker STEP=gc
+    make -C /work/src/probes/marker clean && make -C /work/src/probes/marker STEP=plain && make -C /work/src/probes/marker STEP=lcd && make -C /work/src/probes/marker STEP=gc && make -C /work/src/probes/marker STEP=irq && make -C /work/src/probes/marker STEP=task
   '
 shasum -a 256 "$ROOT"/src/probes/marker/*.tns

@@ -3404,3 +3404,46 @@ Conclusions:
   a Java key timeout, because the UI task is blocked.
 
 Host tooling: `scripts/marker-probe-host.sh screen|keys|launch`.
+
+### 2026-09-28 BREAKTHROUGH: resident priority-250 task keeps USB alive
+
+Two more clean marker runs under the stock runtime isolate the cause and a
+working architecture:
+
+```text
+marker_irq   a41d520b...  CPU IRQs re-enabled (TCT_Local_Control_Interrupts(0)) during the hold
+             -> no crash; markers a,i,b; in-run --info still timed out
+marker_task  707bc663...  main: marker_a, TCC_Create_Task(prio 250, no time slice,
+             NU_PREEMPT, NU_START) at 0x1042A8C8 (Ndless IDC, OS id 46),
+             nl_set_resident(), marker_c, return 0
+             task: marker_t, ~2.5 min busy-wait, marker_b, TCC_Terminate_Task(self)
+```
+
+marker_task timeline (launch 21:50:23):
+
+```text
+21:51:01 marker_a (entry)
+21:51:18 marker_t (task running), marker_c (main returned), --info ready=true
+21:51:18-21:53:46 task busy-waiting: --info ready=true and file downloads keep
+                  working (occasional Busy is poller self-contention)
+21:53:46 marker_b (done); no crash, OS file browser healthy, no replug
+```
+
+Conclusions:
+
+- The Ndless loader keeps IRQs masked for the whole `main()`. Re-enabling IRQs
+  does not help, because the TI USB/NavNet work needs the UI task that is
+  running `main()` to get back to the OS event loop (or it runs below that
+  task's priority).
+- A resident Nucleus task at priority 250 (below the OS worker tasks, above
+  idle) gets scheduled after `main()` returns, can run indefinitely, and does
+  not starve USB. Codex's handoff failed only because of its priorities:
+  255 is never scheduled (idle level, no time slice) and 20 starves the OS.
+- The page architecture is therefore: `main()` sets up state, creates the
+  priority-250 task, calls `nl_set_resident()` and returns. The task owns the
+  page loop and the NavNet I/O.
+
+Open design issue: once `main()` returns, the OS document browser is live
+again, so it also receives keys and redraws. The next steps are NavNet
+CONNECTED/PING from the task (the core goal), then screen ownership and key
+isolation (for example by filtering `get_internal_event`).

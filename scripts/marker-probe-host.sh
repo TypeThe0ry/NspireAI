@@ -14,7 +14,7 @@ H=bridge/nspire-helper/target/debug/nspireai-usb-helper
 R=./scripts/run-nspire-remote.sh
 TMP="$(mktemp -d)"
 export NSPIRE_REMOTE_TIMEOUT_SECONDS="${NSPIRE_REMOTE_TIMEOUT_SECONDS:-12}"
-MARKERS=(marker_a marker_l marker_g marker_b marker_c)
+MARKERS=(marker_a marker_l marker_g marker_i marker_t marker_b marker_c)
 
 with_bridge() {
   ./scripts/run-navnet-bridge.sh echo >"$TMP/bridge.log" 2>&1 &
