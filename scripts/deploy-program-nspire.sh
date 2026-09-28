@@ -187,6 +187,8 @@ case "${ARTIFACT_SHA%% *}" in
     echo "Refusing resident task-handoff priority-255 candidate: two Enter calls returned but the document list remained visible, no CONNECTED was observed, and no same-page response was produced on 2026-09-27" >&2; exit 65;;
   3b6f94808c9e34d920d80a59bfea1ae4aaefc7e9857c98021400fd01b1f25cf1)
     echo "Refusing resident task-handoff priority-20 candidate: second Enter and screen probe timed out before CONNECTED on 2026-09-27" >&2; exit 65;;
+  4a2c20db2ab3e574d2dba5aa36a8c3bf41578446c1403df65e966771a0f1173c)
+    echo "Refusing NGC LCD-teardown candidate: second Enter timed out and follow-up NavNet info stalled before CONNECTED on 2026-09-28" >&2; exit 65;;
   9cdf132883b0001259aaee62725ae5b0232cf8e7c477c3b879f5cf27cfffee5a|a88bd700651bac3876a23e4b0e45428535102f1834524169219b04a249b499ef|86b883f680a41f3c034167227ae3b0645d26652a8e8a299b2857b0d17a2f1ea1)
     echo "Refusing NGC candidate: handheld rejected this exact SHA as unsupported document format on 2026-09-24" >&2; exit 65;;
 esac

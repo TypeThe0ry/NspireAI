@@ -203,6 +203,12 @@ if ! grep -q '3b6f94808c9e34d920d80a59bfea1ae4aaefc7e9857c98021400fd01b1f25cf1' 
   echo "FAIL: physically rejected priority-20 task-handoff SHA is not blocked and classified" >&2
   exit 1
 fi
+if ! grep -q '4a2c20db2ab3e574d2dba5aa36a8c3bf41578446c1403df65e966771a0f1173c' "$ROOT/scripts/deploy-program-nspire.sh" || \
+   ! grep -q '4a2c20db2ab3e574d2dba5aa36a8c3bf41578446c1403df65e966771a0f1173c' "$ROOT/bridge/nspire-navnet-helper/NspireRemoteControl.java" || \
+   ! grep -q 'KNOWN_BLOCKED_LCD_TEARDOWN_LAUNCH_STALL' "$ROOT/scripts/audit-device-artifact.sh"; then
+  echo "FAIL: physically rejected LCD-teardown SHA is not blocked and classified" >&2
+  exit 1
+fi
 if [[ ! -x "$ROOT/scripts/deploy-ngc-entry-stage17.sh" ]] || \
    ! grep -q 'EXPECTED_SHA="8fd7dacfaa9551e254e0595d21dfe23797f684c1cbb9894b72543a14388a9b94"' "$ROOT/scripts/deploy-ngc-entry-stage17.sh" || \
    ! grep -q 'Data Abort at raw TCT_Schedule' "$ROOT/scripts/deploy-ngc-entry-stage17.sh" || \

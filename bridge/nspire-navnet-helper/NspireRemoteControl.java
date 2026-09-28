@@ -343,6 +343,8 @@ public final class NspireRemoteControl {
                     throw new IllegalArgumentException("refusing resident task-handoff priority-255 candidate: two Enter calls left the document list visible and no CONNECTED was observed on 2026-09-27");
                 if (artifactSha.equals("3b6f94808c9e34d920d80a59bfea1ae4aaefc7e9857c98021400fd01b1f25cf1"))
                     throw new IllegalArgumentException("refusing resident task-handoff priority-20 candidate: second Enter and screen probe timed out before CONNECTED on 2026-09-27");
+                if (artifactSha.equals("4a2c20db2ab3e574d2dba5aa36a8c3bf41578446c1403df65e966771a0f1173c"))
+                    throw new IllegalArgumentException("refusing NGC LCD-teardown candidate: second Enter timed out and follow-up NavNet info stalled before CONNECTED on 2026-09-28");
                 if (artifactSha.equals("0bf950738fcd16e69fe97163cbcf69b6edd96057415ddd14b2a2687d522e91ed")
                         && !"1".equals(System.getenv("NSPIRE_ALLOW_NGC_ENTRY_STAGE6_UPLOAD")))
                     throw new IllegalArgumentException("refusing NGC entry stage-6 probe without explicit upload confirmation");

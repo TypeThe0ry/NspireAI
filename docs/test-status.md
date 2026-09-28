@@ -3223,3 +3223,29 @@ claim that a resident Ndless page can safely schedule USB work.
 Local verification passed after the change: Java helper lifecycle, bridge
 lifecycle, all 19 host protocol/bridge tests, and `git diff --check`. No
 calculator package was built, uploaded, or launched from this change.
+### 2026-09-28 NGC LCD teardown candidate physical result
+
+The NGC page now restores `SCR_TYPE_INVALID` on every normal and early exit,
+matching the Ndless SDK's LCD sample teardown. A clean Docker build produced
+the exact package SHA:
+
+```text
+sha256=4a2c20db2ab3e574d2dba5aa36a8c3bf41578446c1403df65e966771a0f1173c
+ui_backend=TRUE
+ngc_task_handoff=FALSE
+```
+
+The package was uploaded to `/nspire_ai.tns` and read back with the exact SHA.
+With the Java NavNet bridge already at `READY service=0x5001` and `NODE 1`,
+the first Enter dismissed the transfer dialog and left `nspire_ai` selected.
+The second Enter, which should launch the document, timed out in
+`sendEventToNode` after 5 seconds. A subsequent read-only `info` call also
+timed out; the bridge log contained no calculator `CONNECTED`, PING/PONG,
+request/RX, or same-page response. The host USB descriptor remained E022
+before the launch and became unusable to NavNet after it.
+
+This rejects the LCD-teardown change as a complete physical fix: the program
+does not reach its exit path before the launch-time stall. The failure remains
+at or before the NGC LCD-entry boundary, so this SHA must not be retried.
+The exact package is kept in the deployment blocklist, and no claim of a
+calculator-side request/response loop is made.
