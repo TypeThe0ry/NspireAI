@@ -1,5 +1,34 @@
 # Verification record
 
+## 2026-09-28 loader-boundary runtime A/B: page launch still drops USB
+
+After the user exited the page, the read-only probes recovered E022 and
+`--info` returned normally. The runtime audit then read back the reviewed
+loader-boundary variant exactly:
+
+```text
+/ndless/ndless_resources.tns 196864 bytes
+sha256=e930ed866d08e44063539ecc7fd40d5611b272b64bfb6621f04f90fd34aadb0f
+```
+
+The device page audit also read back the matching plain NGC page:
+
+```text
+/nspire_ai.tns 17044 bytes
+sha256=4420b04290fc588805ed0439ca1aa6357ab19f57b77ad8bbd5f465a5aaa7baba
+```
+
+With that runtime/page pair present, the raw bridge registered service
+`0x5001` and sent its bootstrap PING. After the user opened `nspire_ai`, the
+bridge exited with `NoDevice`; the USB gate then reported
+`UNKNOWN_USB_DEVICE`, and the raw helper returned `no TI-Nspire USB device`.
+After the page was exited, E022 and `--info` recovered again. This A/B rules
+out the stock-runtime explanation and confirms that the page startup/drawing
+path still drops the USB session even under the loader-boundary runtime. The
+next physical discriminator is the existing stage-2 package, which stops
+after LCD initialization and global-GC acquisition without drawing or calling
+NavNet.
+
 ## 2026-09-28 post-reset runtime identity gate
 
 After the stage-3 page froze the USB/OS path, the next read-only probe found
