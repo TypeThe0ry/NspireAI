@@ -100,8 +100,23 @@ if [[ "${NSPIRE_SKIP_USB_GATE:-0}" != "1" ]]; then
   # Do not use `tee | grep -q` under pipefail: grep exits as soon as it sees
   # the state line, which makes tee return SIGPIPE and falsely rejects a real
   # TI-Nspire device. Capture once, print once, then inspect the complete text.
-  USB_STATE="$($ROOT/scripts/check-nspire-usb-state.sh 2>&1)" || USB_STATE_STATUS=$?
-  USB_STATE_STATUS="${USB_STATE_STATUS:-0}"
+  # macOS can publish the IORegistry node a few hundred milliseconds before
+  # NavNet/libusb can open it (especially after a calculator app exits).  A
+  # one-shot check made a perfectly present E022 look like a missing cable and
+  # forced users into needless unplug/replug cycles.  Wait briefly on the host
+  # for the same device; this is read-only and never resets USB hardware.
+  USB_STATE=""
+  USB_STATE_STATUS=1
+  USB_WAIT_ATTEMPTS="${NSPIRE_USB_GATE_ATTEMPTS:-20}"
+  USB_WAIT_DELAY="${NSPIRE_USB_GATE_DELAY:-0.25}"
+  for _ in $(seq 1 "$USB_WAIT_ATTEMPTS"); do
+    USB_STATE_STATUS=0
+    USB_STATE="$($ROOT/scripts/check-nspire-usb-state.sh 2>&1)" || USB_STATE_STATUS=$?
+    if [[ "$USB_STATE_STATUS" -eq 0 ]] && grep -q '^STATE=CX2_USB_CANDIDATE ' <<<"$USB_STATE"; then
+      break
+    fi
+    sleep "$USB_WAIT_DELAY"
+  done
   printf '%s\n' "$USB_STATE" >&2
   if [[ "$USB_STATE_STATUS" -ne 0 ]] || ! grep -q '^STATE=CX2_USB_CANDIDATE ' <<<"$USB_STATE"; then
     echo "TI-Nspire CX II handheld is not enumerated; bridge not started" >&2
