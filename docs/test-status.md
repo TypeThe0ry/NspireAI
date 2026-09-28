@@ -3496,3 +3496,53 @@ Observations since then:
   (1000 ms) before its first read, while the calculator had already written
   its PING and was reading. The test with 0 ms delay coincided with the
   second-run crash, so it is still open.
+
+### 2026-09-29 FIRST FULL ROUND TRIP: calculator task ↔ Mac bridge
+
+Three findings made NavNet work between a resident calculator task and the
+Mac bridge (echo backend):
+
+1. **Direction.** The calculator registers a service with
+   `TI_NN_StartService`, and the Mac connects to it with TI's Java
+   `NavNet.connect`. The Java helper got a host-as-client mode
+   (`NSPIRE_CLIENT_SERVICE_ID=0x5003`) that feeds the resulting handle into
+   the existing reader and SEND path. Raw libnspire cannot do this:
+   `service_connect` only records the service id locally and sends no
+   connection request, so a `StartService` callback never fires.
+2. **`connect` is lazy.** `NavNet.connect` returns 1 even for an unregistered
+   service (tested with 0x5ABC). The calculator callback fires only when the
+   first packet arrives, so the host must speak first; client mode sends an
+   NSAI PING (request 0) right after connecting.
+3. **The service callback is the connection handler.** The connection lives
+   only while the callback runs, so the whole session has to run inside it.
+   Both earlier -257 results (calculator connecting to the host service, and
+   the first navsvc) came from callbacks that returned right away; the old
+   helper even forbade I/O in its callback.
+
+Probe `src/probes/navsvc` (sha `6e8ffe52...`): the resident priority-250
+task registers 0x5003 and waits; the callback runs PING/PONG → REQUEST #2 →
+RESPONSE → REQUEST #3 "got:<response>". No file I/O happens in the task.
+Bridge log:
+
+```text
+helper: CONNECTED handle=0x1 mode=client
+helper: CLIENT PING write=1
+RX opcode=1 request=1 bytes=4     calculator PING
+RX opcode=2 request=0 bytes=4     calculator PONG to the host PING
+RX opcode=3 request=2 bytes=15    "hello from task" (sent only after our PONG arrived)
+RX opcode=3 request=3 bytes=33    "got:" + "Mac received: hello from task" (4 + 29)
+```
+
+REQUEST #3's length proves the calculator received the full RESPONSE. The
+handheld stayed on USB (E022) and did not crash. Several resident tasks were
+launched in this boot without problems; all of them avoided file I/O, which
+supports the theory that the repeat-launch crash comes from file I/O in a
+terminated task.
+
+A status grid poked into the LCD framebuffer is visible on the real screen
+but flickers (the OS keeps redrawing it from its own buffer) and does not
+appear in TI screen captures.
+
+Remaining work for the product page: take over the screen from the OS
+redraw, keep keys away from the file browser, and keep one long-lived
+callback session that exchanges with the page task through shared memory.

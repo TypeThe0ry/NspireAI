@@ -52,6 +52,15 @@ public final class NspireNavnetHelper {
     private static volatile int bootstrapServiceId;
     private static volatile ConnectionHandle bootstrapConnection;
     private static volatile Thread bootstrapThread;
+    /* Host-as-client mode (NSPIRE_CLIENT_SERVICE_ID): instead of registering
+     * a host service and waiting for the calculator to connect (which reached
+     * CONNECTED but returned -257 on every read), connect to a service the
+     * calculator registered with TI_NN_StartService, the same direction TI's
+     * own host tools use.  The resulting handle feeds the normal reader and
+     * SEND path. */
+    private static volatile int clientServiceId;
+    private static volatile NodeHandle clientNode;
+    private static volatile Thread clientThread;
     private static volatile long initialReadDelayMs = DEFAULT_INITIAL_READ_DELAY_MS;
     private static volatile ConnectionHandle invalidConnection;
     private static final Object INVALID_CONNECTION_LOCK = new Object();
@@ -341,6 +350,13 @@ public final class NspireNavnetHelper {
                             nodePresent = true;
                             emit("NODE 1");
                         }
+                        if (clientServiceId > 0 && nodes != null) {
+                            try {
+                                startClient(proxy.getHandle(nodes[0]));
+                            } catch (RuntimeException ignored) {
+                                // Retried on the next positive poll.
+                            }
+                        }
                         if (bootstrapServiceId > 0 && nodes != null) {
                             try {
                                 startBootstrap(proxy.getHandle(nodes[0]));
@@ -373,6 +389,52 @@ public final class NspireNavnetHelper {
      * the calculator connects back to the PC service.  Keep this off by
      * default: the production bridge must not open an extra NavNet channel.
      */
+    private static synchronized void startClient(NodeHandle node) {
+        if (clientServiceId <= 0 || node == null || stopping) return;
+        clientNode = node;
+        if (clientThread != null && clientThread.isAlive()) return;
+        clientThread = new Thread(() -> {
+            int attempt = 0;
+            int lastStatus = Integer.MIN_VALUE;
+            while (!stopping) {
+                if (connection == null && clientNode != null) {
+                    ConnectionHandle handle = new ConnectionHandle();
+                    int status = NavNet.connect(clientNode, clientServiceId, handle);
+                    attempt++;
+                    if (status != lastStatus || attempt % 30 == 0) {
+                        emit(String.format("CLIENT CONNECT service=0x%04x attempt=%d status=%d",
+                                clientServiceId, attempt, status));
+                        lastStatus = status;
+                    }
+                    if (status >= 0) {
+                        synchronized (INVALID_CONNECTION_LOCK) {
+                            if (handle != invalidConnection) invalidConnection = null;
+                        }
+                        connection = handle;
+                        emit("CONNECTED handle=0x" + Long.toHexString(handle.getCPtr()) + " mode=client");
+                        /* NavNet.connect is lazy: it returns 1 even for a
+                         * service id nobody registered.  The calculator's
+                         * TI_NN_StartService callback only fires when the
+                         * first packet arrives, so the host must speak
+                         * first.  Send an NSAI PING (request 0). */
+                        byte[] ping = {'N', 'S', 'A', 'I', 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 4,
+                                'P', 'I', 'N', 'G'};
+                        int writeStatus = write(handle, ping);
+                        emit("CLIENT PING write=" + writeStatus);
+                    }
+                }
+                try {
+                    Thread.sleep(1000L);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }, "nspire-navnet-client");
+        clientThread.setDaemon(true);
+        clientThread.start();
+    }
+
     private static synchronized void startBootstrap(NodeHandle node) {
         if (bootstrapServiceId <= 0 || node == null || stopping) return;
         if (bootstrapThread != null && bootstrapThread.isAlive()) return;
@@ -440,6 +502,8 @@ public final class NspireNavnetHelper {
                 "NSPIRE_SERVICE_ID", "0x5001"));
         bootstrapServiceId = Integer.decode(System.getenv().getOrDefault(
                 "NSPIRE_BOOTSTRAP_SERVICE_ID", "0"));
+        clientServiceId = Integer.decode(System.getenv().getOrDefault(
+                "NSPIRE_CLIENT_SERVICE_ID", "0"));
         if (!configureInitialReadDelay()) return;
         String tmp = System.getProperty("java.io.tmpdir");
         String javaHome = System.getProperty("java.home") + "/bin";
@@ -504,31 +568,38 @@ public final class NspireNavnetHelper {
                     // boolean node state; do not expose REMOVE as NODE 2.
                     emit("NODE " + (added ? 1 : 0));
                     if (added) startBootstrap(node);
+                    if (added) startClient(node);
                 }
             });
-            status = NavNet.startService(serviceId, new Context(), new ServiceCallbackListener() {
-                @Override public void serviceCallback(ConnectionHandle handle, Context context) {
-                    synchronized (INVALID_CONNECTION_LOCK) {
-                        /* A distinct callback handle is a fresh native
-                         * channel. Do not clear the marker for the exact
-                         * object that already returned -257: that callback
-                         * must not restart a reader on the same stale handle. */
-                        if (handle != invalidConnection) invalidConnection = null;
+            if (clientServiceId > 0) {
+                status = 0;
+            } else {
+                status = NavNet.startService(serviceId, new Context(), new ServiceCallbackListener() {
+                    @Override public void serviceCallback(ConnectionHandle handle, Context context) {
+                        synchronized (INVALID_CONNECTION_LOCK) {
+                            /* A distinct callback handle is a fresh native
+                             * channel. Do not clear the marker for the exact
+                             * object that already returned -257: that callback
+                             * must not restart a reader on the same stale handle. */
+                            if (handle != invalidConnection) invalidConnection = null;
+                        }
+                        connection = handle;
+                        emit(handle == null
+                                ? "CONNECTED handle=null"
+                                : "CONNECTED handle=0x" + Long.toHexString(handle.getCPtr()));
+                        // No NavNet call is allowed from this callback. In
+                        // particular, read/write here can re-enter TI's callback
+                        // path and deadlock before startService() returns.
                     }
-                    connection = handle;
-                    emit(handle == null
-                            ? "CONNECTED handle=null"
-                            : "CONNECTED handle=0x" + Long.toHexString(handle.getCPtr()));
-                    // No NavNet call is allowed from this callback. In
-                    // particular, read/write here can re-enter TI's callback
-                    // path and deadlock before startService() returns.
+                });
+                if (status < 0) {
+                    emit("ERR NavNet.startService=" + status);
+                    return;
                 }
-            });
-            if (status < 0) {
-                emit("ERR NavNet.startService=" + status);
-                return;
             }
-            emit(String.format("READY service=0x%04x", serviceId));
+            emit(clientServiceId > 0
+                    ? String.format("READY client service=0x%04x", clientServiceId)
+                    : String.format("READY service=0x%04x", serviceId));
             startConnectionWatcher();
             startNodePoller(proxy);
             BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
