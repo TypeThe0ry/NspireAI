@@ -3370,3 +3370,37 @@ key acknowledgement waits for the UI task, which is blocked by the program.
 
 Next: re-add one step at a time to this probe under the stock runtime,
 starting with `lcd_type`/`lcd_init`, and watch the same markers and USB poll.
+
+### 2026-09-28 CORRECTION: USB stalls while any non-yielding program runs
+
+The previous entry's conclusion ("USB stays usable while a program runs") is
+withdrawn. Its only in-run sample treated a failed `marker_b` download as
+"absent", but the failure may have been `Busy`. Longer holds (~3 minutes,
+`HOLD_ROUNDS=4 x HOLD_ITERS=1.2e9`) and a poller that separates `Invalid`
+(file absent) from `Busy`/timeout gave clean results for three variants, all
+launched under the stock runtime:
+
+```text
+marker_probe  b9cf2774...  plain busy-wait         in-run: --info timed out; after return: ready, markers a,b
+marker_lcd    bdbcb222...  + lcd_init/teardown      in-run: --info timed out; after return: ready, markers a,l,b,c
+marker_gc     716bbedd...  + global GC, one frame   in-run: --info timed out; after return: ready, markers a,l,g,b,c
+```
+
+Plain control timeline: launch 21:26:50; `--info` timed out at 21:28:25 and
+21:29:34; at 21:29:53 USB was back and `marker_a` readable; `marker_b` followed
+at 21:30:08. No replug was needed in any run.
+
+Conclusions:
+
+- Any standalone Ndless program that never yields stops the TI OS USB service
+  for as long as it runs; the service recovers by itself when it returns.
+- `lcd_init` is not the cause. On CX II colour hardware it only writes LCD
+  mode 6, which is the OS's own mode.
+- So the page-open design needs a real yield to the OS scheduler while the
+  page stays open. Busy loops, LCD teardown or IRQ bit twiddling cannot fix
+  this on their own.
+- Remote-launch quirk: after navigation, the first remote Enter is usually
+  swallowed; the second one launches. A launch that really started shows up as
+  a Java key timeout, because the UI task is blocked.
+
+Host tooling: `scripts/marker-probe-host.sh screen|keys|launch`.
