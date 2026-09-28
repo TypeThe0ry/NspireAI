@@ -6,6 +6,9 @@
  * PROBE_IRQ re-enables CPU interrupts (the Ndless loader masks them for the
  * whole program) during the hold, leaving the OS controller mask untouched,
  * so the OS timer and USB interrupts can preempt the busy loop.
+ * PROBE_SLEEP keeps the hold in main() (the OS UI task) but re-enables IRQs
+ * and blocks in Nucleus TCC_Task_Sleep (0x1042A1C4 on CX II CAS 6.2.0.333,
+ * identified from the usbd_delay_ms disassembly) instead of busy-waiting.
  * PROBE_TASK makes main() return to the OS right away: the image stays
  * resident and the hold runs in a Nucleus task at TASK_PRIORITY (below the
  * OS worker tasks, above idle), created through the CX II CAS 6.2.0.333
@@ -21,6 +24,14 @@
 #endif
 #ifdef PROBE_IRQ
 #include <os.h>
+#endif
+#ifdef PROBE_SLEEP
+#include <stdint.h>
+#include <os.h>
+extern unsigned int nl_osid(void);
+typedef void (*tcc_task_sleep_t)(unsigned ticks);
+#define CX2_CAS_TCC_TASK_SLEEP ((tcc_task_sleep_t)(uintptr_t)0x1042A1C4u)
+#define CX2_CAS_TICKS_PER_SECOND (*(volatile unsigned *)(uintptr_t)0x11331190u)
 #endif
 #ifdef PROBE_TASK
 #include <stdint.h>
@@ -113,6 +124,22 @@ int main(void) {
     gui_gc_finish(gc);
     gui_gc_blit_to_screen(gc);
     write_marker("/documents/marker_g.tns", "frame drawn\n");
+#endif
+#ifdef PROBE_SLEEP
+    if (nl_osid() != 46u) return 1;
+    unsigned ticks = CX2_CAS_TICKS_PER_SECOND;
+    {
+        char text[32];
+        sprintf(text, "ticks/s=%u\n", ticks);
+        write_marker("/documents/marker_i.tns", text);
+    }
+    if (ticks == 0 || ticks > 10000) ticks = 100;
+    int saved_sleep_irq = TCT_Local_Control_Interrupts(0);
+    for (int second = 0; second < 150; ++second)
+        CX2_CAS_TCC_TASK_SLEEP(ticks);
+    TCT_Local_Control_Interrupts(saved_sleep_irq);
+    write_marker("/documents/marker_b.tns", "done\n");
+    return 0;
 #endif
 #ifdef PROBE_IRQ
     int saved = TCT_Local_Control_Interrupts(0);

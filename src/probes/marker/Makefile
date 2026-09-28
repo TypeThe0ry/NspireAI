@@ -5,11 +5,16 @@ GENZEHN = genzehn
 # STEP=gc: lcd plus global GC and one drawn frame.
 # STEP=irq: plain plus CPU interrupts re-enabled during the hold.
 # STEP=task: main returns; the hold runs in a resident priority-250 task.
+# STEP=sleep: main enables IRQs and blocks in TCC_Task_Sleep for ~150 s.
 STEP ?= plain
 
 CFLAGS = -Wall -W -marm -Os
 ZEHNFLAGS = --name "marker" --author "NspireAI" --240x320-support true
-ifeq ($(STEP),task)
+ifeq ($(STEP),sleep)
+CFLAGS += -DPROBE_SLEEP
+ZEHNFLAGS += --notice "USB baseline marker probe; main sleeps in TCC_Task_Sleep"
+OUT = marker_sleep
+else ifeq ($(STEP),task)
 CFLAGS += -DPROBE_TASK
 ZEHNFLAGS += --notice "USB baseline marker probe; hold runs in a resident Nucleus task"
 OUT = marker_task

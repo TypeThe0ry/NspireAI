@@ -16,6 +16,12 @@
  * sends REQUEST #3 "got:<response>" so the bridge log proves the calculator
  * received the response (bytes = 4 + response length).
  *
+ * IN_MAIN (navmain.tns, service 0x5004) keeps everything in main(), the OS
+ * UI task: it re-enables IRQs and blocks in Nucleus TCC_Task_Sleep between
+ * checks instead of busy-waiting, so the NavNet callback can run while the
+ * UI task (and therefore the OS browser's redraw and key handling) stays
+ * parked in our program.
+ *
  * Without file access the task reports its progress as a status grid poked
  * straight into the OS framebuffer (no lcd_init, no GC): one row per step,
  * a lead cell (blue = not reached, green = ok, red = failed) and 16 cells
@@ -27,7 +33,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef IN_MAIN
+#define SERVICE_ID 0x5004
+#else
 #define SERVICE_ID 0x5003
+#endif
 #define TASK_PRIORITY 250u
 #define HEADER_SIZE 16
 #define MAX_FRAME 240
@@ -198,6 +208,30 @@ static void log_main(const char *text) {
     fclose(f);
 }
 
+#ifdef IN_MAIN
+typedef void (*tcc_task_sleep_t)(unsigned ticks);
+#define CX2_CAS_TCC_TASK_SLEEP ((tcc_task_sleep_t)(uintptr_t)0x1042A1C4u)
+
+int main(void) {
+    if (nl_osid() != CX2_CAS_6_2_0_333_OSID) return 1;
+    hww = lcd_type() == SCR_240x320_565;
+    for (int row = 0; row < ROW_COUNT; ++row) show(row, 0, 0);
+    show(ROW_ALIVE, 1, 1);
+    int saved_irq = TCT_Local_Control_Interrupts(0);
+    int started = (int16_t)TI_NN_StartService(SERVICE_ID, NULL, service_callback);
+    show(ROW_START, started < 0 ? 2 : 1, started);
+    if (started >= 0) {
+        for (int waited = 0; !session_done && waited < 1800; ++waited) {
+            show(ROW_ALIVE, 1, waited);
+            CX2_CAS_TCC_TASK_SLEEP(10); /* 100 ms at 100 ticks/s */
+        }
+        CX2_CAS_TCC_TASK_SLEEP(100);
+        TI_NN_StopService(SERVICE_ID);
+    }
+    TCT_Local_Control_Interrupts(saved_irq);
+    return 0;
+}
+#else
 int main(void) {
     remove("/documents/navsvc_log.tns");
     log_main("main entry\n");
@@ -211,3 +245,4 @@ int main(void) {
     nl_set_resident();
     return 0;
 }
+#endif

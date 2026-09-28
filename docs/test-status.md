@@ -3546,3 +3546,32 @@ appear in TI screen captures.
 Remaining work for the product page: take over the screen from the OS
 redraw, keep keys away from the file browser, and keep one long-lived
 callback session that exchanges with the page task through shared memory.
+
+### 2026-09-29 TCC_Task_Sleep found; parking the UI task breaks NavNet
+
+An `osdump` probe wrote OS code ranges from `main()` to a file for host
+disassembly (`arm-none-eabi-objdump`). `usbd_delay_ms` (0x1048A464) converts
+milliseconds to ticks using the ticks-per-second value at 0x11331190 (100 on
+this unit) and calls **0x1042A1C4**. That function matches Nucleus PLUS
+`TCC_Task_Sleep` instruction for instruction: `TCT_Check_Stack`,
+`TCT_Protect`, `TCC_Suspend_Task(current, NU_SLEEP_SUSPEND=2, 0, 0, ticks)`,
+`TCT_Unprotect`. The next function, 0x1042A20C, is `TCC_Suspend_Task`
+(`NU_PURE_SUSPEND`, `NU_SUSPEND`).
+
+- `marker_sleep` (`0ee4f78f...`): `main()` re-enables IRQs and calls
+  `TCC_Task_Sleep(100)` 150 times. During the run the raw `--info` returned
+  `ready=true` (it timed out while busy-waiting), but file downloads timed
+  out. After it returned, all markers and USB were fine.
+- `navmain` (`9de04f97...`, service 0x5004): the same callback session as
+  navsvc, but `main()` parks the UI task in `TCC_Task_Sleep`. Two runs, same
+  result both times: PING, PONG and REQUEST #2 arrive, then the host's next
+  `NavNet.read` blocks until the channel dies, so the echo RESPONSE write
+  (queued behind `IO_LOCK`) fails with -257. The navsvc task version passes
+  the same exchange.
+
+Conclusion: NavNet needs the OS UI task to be free after the connection is
+up. The product page must use the proven task architecture (main returns;
+page in a priority-250 task; session in the service callback). Screen and
+keys will be taken over from the task side: point the LCD base
+(0xC0000010) at the page's own framebuffer, scan the key matrix directly,
+and mask the keypad interrupt while the page is active.
