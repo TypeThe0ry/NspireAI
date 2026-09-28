@@ -35,6 +35,7 @@ program-test:
 		./scripts/test-ngc-lcdinit-candidate.sh && \
 		./scripts/test-ngc-stage-upload-gate.sh && \
 		./scripts/test-device-artifact-audit.sh && \
+		./scripts/test-ndless-runtime-audit.sh && \
 		./scripts/test-upload-and-verify-nspire.sh
 
 clean:
