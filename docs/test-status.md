@@ -15,6 +15,36 @@ Stage0 contains no NavNet calls and cannot be expected to emit CONNECTED,
 RX, or PONG. Immediate return alone also cannot distinguish normal execution
 from failed entry; its result requires corroborating device responsiveness.
 
+After the remote selection error was corrected, the live root listing confirmed
+the exact file separately (`FILE 3020 stage0_probe.tns`). The user then tried
+that actual 3020-byte stage-0 file and reported that it still would not open.
+The exact visual failure mode (immediate close versus unsupported-document
+dialog) was not captured, but this is now direct physical failure evidence for
+the minimal package's load/entry path. No UI, LCD, GC, RTC, NavNet, or bridge
+logic is present in the stage-0 execution path.
+
+The user subsequently confirmed that every staged diagnostic (`stage0_probe`,
+`stage1_probe`, `stage2_probe`, and `stage3_probe`) opens and immediately
+flashes/closes. This is the strongest current physical boundary evidence: the
+failure is common to the minimal stage-0 package, so production UI, LCD/GC,
+RTC, key scanning, NavNet framing, and bridge request handling are not the
+first cause. The device runtime/loader/package-entry ABI must be resolved
+before another application package is tested.
+
+The device-side read-only runtime audit then succeeded and identified the
+installed resource as the reviewed loader-boundary variant:
+
+```text
+REMOTE_BYTES=196864
+REMOTE_SHA256=e930ed866d08e44063539ecc7fd40d5611b272b64bfb6621f04f90fd34aadb0f
+RUNTIME_CLASS=LOADER_IRQ_BOUNDARY_VARIANT
+```
+
+Therefore the repeated stage crashes are not explained by a silently restored
+stock Ndless runtime. The remaining fault is in the active loader/runtime
+boundary or the generated Zehn/RPF entry package itself; no production bridge
+test is justified until that boundary is repaired.
+
 ## 2026-09-28 historical attempt (superseded by correction above)
 
 After the handheld returned as a verified `E022` device, the isolated stage-0
