@@ -1,5 +1,26 @@
 # Verification record
 
+## 2026-09-28 stage-0 physical launch: entry boundary still freezes NavNet
+
+After the handheld returned as a verified `E022` device, the isolated stage-0
+probe was uploaded to `/stage0_probe.tns` and read back exactly:
+
+```text
+bytes: 3020
+sha256: 3198cd3b0aa3dcc9b67a46e3b1b2359e66a62ae792255f4da83942d4a3a66f55
+```
+
+The TI remote screen showed the `Document Sent / stage0_probe.tns` dialog,
+then the file in Browse. A single controlled Enter was sent to launch the
+selected file. `sendEventToNode` timed out after 5 seconds; the subsequent
+read-only screen probe could no longer obtain a NavNet node within 5 seconds.
+The USB descriptor remained `STATE=CX2_USB_CANDIDATE product=0xE022`, and all
+host-side helper processes were cleaned up. Stage-0 calls no LCD, GC, drawing,
+key, RTC, or NavNet API and returns immediately, so this result is direct
+evidence against the loader/program-entry boundary or the calculator runtime,
+not against the page UI or application protocol. No production package was
+launched.
+
 ## 2026-09-28 loader-boundary runtime A/B: page launch still drops USB
 
 After the user exited the page, the read-only probes recovered E022 and
