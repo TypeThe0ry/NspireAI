@@ -203,7 +203,10 @@ static int ngc_run(void) {
      * from the rejected get_event() experiment and from NavNet ownership. */
     if (!ngc_prepare_lcd()) return EXIT_FAILURE;
     chat_gc = gui_gc_global_GC();
-    if (!chat_gc) return EXIT_FAILURE;
+    if (!chat_gc) {
+        ngc_release_lcd();
+        return EXIT_FAILURE;
+    }
     set_status("NGC probe stage 12");
     ngc_draw();
     {
@@ -231,7 +234,10 @@ static int ngc_run(void) {
      * avoids turning the diagnostic itself into a high-frequency RTC test. */
     if (!ngc_prepare_lcd()) return EXIT_FAILURE;
     chat_gc = gui_gc_global_GC();
-    if (!chat_gc) return EXIT_FAILURE;
+    if (!chat_gc) {
+        ngc_release_lcd();
+        return EXIT_FAILURE;
+    }
     set_status("NGC probe stage 13");
     ngc_draw();
     {
@@ -260,7 +266,10 @@ static int ngc_run(void) {
      * path rather than key-matrix ownership. */
     if (!ngc_prepare_lcd()) return EXIT_FAILURE;
     chat_gc = gui_gc_global_GC();
-    if (!chat_gc) return EXIT_FAILURE;
+    if (!chat_gc) {
+        ngc_release_lcd();
+        return EXIT_FAILURE;
+    }
     set_status("NGC probe stage 14");
     ngc_draw();
     {
@@ -283,7 +292,10 @@ static int ngc_run(void) {
      * no-NavNet/no-key discriminator for the stage-14 USB/screen stall. */
     if (!ngc_prepare_lcd()) return EXIT_FAILURE;
     chat_gc = gui_gc_global_GC();
-    if (!chat_gc) return EXIT_FAILURE;
+    if (!chat_gc) {
+        ngc_release_lcd();
+        return EXIT_FAILURE;
+    }
     set_status("NGC probe stage 15");
     ngc_draw();
     {
@@ -304,7 +316,10 @@ static int ngc_run(void) {
      * symbol call in a bounded diagnostic package. */
     if (!ngc_prepare_lcd()) return EXIT_FAILURE;
     chat_gc = gui_gc_global_GC();
-    if (!chat_gc) return EXIT_FAILURE;
+    if (!chat_gc) {
+        ngc_release_lcd();
+        return EXIT_FAILURE;
+    }
     set_status("NGC probe stage 16");
     ngc_draw();
     if (!nav_scheduler_probe_call()) return EXIT_FAILURE;
@@ -314,7 +329,10 @@ static int ngc_run(void) {
      * then returns so the launcher can reclaim the program. */
     if (!ngc_prepare_lcd()) return EXIT_FAILURE;
     chat_gc = gui_gc_global_GC();
-    if (!chat_gc) return EXIT_FAILURE;
+    if (!chat_gc) {
+        ngc_release_lcd();
+        return EXIT_FAILURE;
+    }
     set_status("NGC probe stage 17");
     ngc_draw();
     {
@@ -334,7 +352,10 @@ static int ngc_run(void) {
 #endif
 #if NSPIRE_NGC_PROBE_STAGE >= 2
     chat_gc = gui_gc_global_GC();
-    if (!chat_gc) return EXIT_FAILURE;
+    if (!chat_gc) {
+        ngc_release_lcd();
+        return EXIT_FAILURE;
+    }
 #endif
 #if NSPIRE_NGC_PROBE_STAGE >= 3
     ngc_draw();
@@ -392,7 +413,10 @@ static int ngc_run(void) {
      * Keep both operations before the first frame and before RTC/USB work. */
     if (!ngc_prepare_lcd()) return EXIT_FAILURE;
     chat_gc = gui_gc_global_GC();
-    if (!chat_gc) return EXIT_FAILURE;
+    if (!chat_gc) {
+        ngc_release_lcd();
+        return EXIT_FAILURE;
+    }
     ngc_transport_armed = NGC_TRANSPORT_DEFAULT;
     set_status(ngc_transport_armed
                    ? "NGC/RTC; USB armed by build"

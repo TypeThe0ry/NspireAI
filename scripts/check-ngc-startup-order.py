@@ -23,7 +23,7 @@ def main() -> None:
         raise SystemExit("NGC startup regression: RTC is read before the first frame")
     if "nl_osid() != 46" in body and "return EXIT_FAILURE" in body.split("nl_osid() != 46", 1)[1].split("\n", 1)[0]:
         raise SystemExit("NGC startup regression: OS-id mismatch must not return the generic loader failure")
-    if "if (!chat_gc) return EXIT_FAILURE;" not in body:
+    if "if (!chat_gc)" not in body or "ngc_release_lcd();" not in body:
         raise SystemExit("NGC startup guard missing: global GC check changed")
     prepare = body.index("    if (!ngc_prepare_lcd()) return EXIT_FAILURE;")
     if prepare >= first_draw:
