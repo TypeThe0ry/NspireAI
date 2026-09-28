@@ -1,6 +1,21 @@
 # Verification record
 
-## 2026-09-28 stage-0 physical launch attempt: remote key result unconfirmed
+## 2026-09-28 correction: stage-0 transferred, different file selected
+
+Evidence correction: the Browse screenshot
+`/tmp/nspire-stage0-browse-8585.png` highlighted `nspire_ai` at 17K, not
+`stage0_probe` (3020 bytes). The operator misidentified the file and sent
+Enter to the production-named selection. The later user instruction to open
+`nspire_ai (stage0, 17K)` repeated that error and is withdrawn. Do not repeat
+that launch. The transfer/readback below is valid; none of the subsequent
+launch or timeout observations demonstrates stage0 execution or failure.
+The previous claim that no production package was launched was unjustified:
+Enter targeted that filename, though successful program entry is unverified.
+Stage0 contains no NavNet calls and cannot be expected to emit CONNECTED,
+RX, or PONG. Immediate return alone also cannot distinguish normal execution
+from failed entry; its result requires corroborating device responsiveness.
+
+## 2026-09-28 historical attempt (superseded by correction above)
 
 After the handheld returned as a verified `E022` device, the isolated stage-0
 probe was uploaded to `/stage0_probe.tns` and read back exactly:
