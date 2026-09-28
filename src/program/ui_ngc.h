@@ -39,6 +39,17 @@ static int ngc_prepare_lcd(void) {
     return 1;
 }
 
+/* Ndless's NGC samples restore SCR_TYPE_INVALID before returning.  lcd_init()
+ * replaces the active framebuffer on CX II; leaving that mode installed makes
+ * the next document/USB transition hang even after this program has returned.
+ * Keep teardown idempotent so every normal exit uses the same recovery path. */
+static void ngc_release_lcd(void) {
+    if (!ngc_lcd_ready) return;
+    (void)lcd_init(SCR_TYPE_INVALID);
+    ngc_lcd_ready = 0;
+    chat_gc = NULL;
+}
+
 static void ngc_line(int y, const char *text) {
     char utf16[LINE_CAP * 2];
     ascii2utf16(utf16, text, sizeof(utf16));
@@ -360,6 +371,7 @@ static int ngc_run(void) {
     (void)nav_try_connect();
     nav_poll();
 #endif
+    ngc_release_lcd();
     return EXIT_SUCCESS;
 #else
     uint32_t last_tick;
@@ -477,6 +489,7 @@ static int ngc_run(void) {
 #if defined(NSPIRE_NGC_LOCAL_SERVICE) || defined(NSPIRE_NGC_MENU_LOCAL_SERVICE)
     nav_stop_local_service();
 #endif
+    ngc_release_lcd();
     return EXIT_SUCCESS;
 #endif
 }
