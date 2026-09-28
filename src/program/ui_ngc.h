@@ -84,6 +84,23 @@ static void ngc_draw(void) {
     ngc_ui_dirty = 0;
 }
 
+#ifdef NSPIRE_NGC_TASK_PROBE
+/* Minimal task-handoff diagnostic.  It deliberately stops after one frame:
+ * no RTC, NavNet, key scan, scheduler call, or resident loop is involved.
+ * A visible marker proves that TCC_Create_Task started the entry and that the
+ * task can use the NGC LCD/GC after the loader returns. */
+static void ngc_task_probe_run(void) {
+    if (!ngc_prepare_lcd()) return;
+    chat_gc = gui_gc_global_GC();
+    if (!chat_gc) {
+        ngc_release_lcd();
+        return;
+    }
+    set_status("TASK ABI STARTED");
+    ngc_draw();
+}
+#endif
+
 /* No touchpad arrows: these keys use the SDK's matrix-read path. No repeats
  * or sleep/idle calls. Full keyboard and font behavior still needs device QA. */
 static int ngc_keys(void) {
@@ -525,7 +542,11 @@ static int ngc_run(void) {
 static void ngc_task_entry(unsigned argc, void *argv) {
     (void)argc;
     (void)argv;
+#ifdef NSPIRE_NGC_TASK_PROBE
+    ngc_task_probe_run();
+#else
     (void)ngc_run();
+#endif
     nav_task_finish();
 }
 

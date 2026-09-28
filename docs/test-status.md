@@ -3282,3 +3282,23 @@ installed TI desktop runtime automatically. This is host recovery evidence
 only: the installed page was the previously rejected
 `4a2c20db...0f1173c` package, so no Enter/launch was issued and no
 `CONNECTED`, calculator request/RX, or same-page response is claimed here.
+
+### 2026-09-28 minimal task-handoff ABI probe (offline only)
+
+To separate the private Nucleus task ABI from the full AI page, a guarded
+`NSPIRE_NGC_TASK_PROBE` build was added. Its task entry initializes LCD/GC,
+draws one `TASK ABI STARTED` frame, and terminates immediately; it contains no
+NavNet, RTC, key scan, scheduler, or resident loop. The clean Docker build
+produced:
+
+```text
+sha256=4327c7675d61d679489c04cdd88609b35d33d986e0160c8e2af097ea08f35f1f
+bytes=7192
+ngc_task_handoff=TRUE
+ngc_task_probe=TRUE
+```
+
+This package is stored only under `.build/ngc-task-abi-probe/`; it was not
+uploaded because the task ABI is still unverified and the operator's physical
+calculator must not be used as a blind probe. The normal `dist/` artifact was
+restored unchanged.

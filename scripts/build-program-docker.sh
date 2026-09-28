@@ -12,10 +12,16 @@ NGC_CPU_IRQ="${NSPIRE_NGC_CPU_IRQ:-FALSE}"
 NGC_USB_IRQ_WINDOW="${NSPIRE_NGC_USB_IRQ_WINDOW:-FALSE}"
 NGC_USB_IRQ_MENU="${NSPIRE_NGC_USB_IRQ_MENU:-FALSE}"
 NGC_TASK_HANDOFF="${NSPIRE_NGC_TASK_HANDOFF:-FALSE}"
+NGC_TASK_PROBE="${NSPIRE_NGC_TASK_PROBE:-FALSE}"
 case "$UI_NGC" in TRUE|FALSE) ;; *) echo "NSPIRE_UI_NGC must be TRUE or FALSE" >&2; exit 2;; esac
 case "$NGC_PROBE" in TRUE|FALSE) ;; *) echo "NSPIRE_NGC_PROBE must be TRUE or FALSE" >&2; exit 2;; esac
 case "$NGC_PROBE_STAGE" in 0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17) ;; *) echo "NSPIRE_NGC_PROBE_STAGE must be 0 through 17" >&2; exit 2;; esac
 case "$NGC_TASK_HANDOFF" in TRUE|FALSE) ;; *) echo "NSPIRE_NGC_TASK_HANDOFF must be TRUE or FALSE" >&2; exit 2;; esac
+case "$NGC_TASK_PROBE" in TRUE|FALSE) ;; *) echo "NSPIRE_NGC_TASK_PROBE must be TRUE or FALSE" >&2; exit 2;; esac
+if [[ "$NGC_TASK_PROBE" == TRUE && "$NGC_TASK_HANDOFF" != TRUE ]]; then
+  echo "NSPIRE_NGC_TASK_PROBE requires NSPIRE_NGC_TASK_HANDOFF=TRUE" >&2
+  exit 2
+fi
 if [[ "$NGC_TASK_HANDOFF" == TRUE ]]; then
   if [[ "$UI_NGC" != TRUE || "$NGC_PROBE" != FALSE || "$NGC_PROBE_STAGE" != 0 || \
         "$NGC_AUTO_TRANSPORT" != FALSE || "$NGC_LOCAL_SERVICE" != FALSE || \
@@ -66,6 +72,7 @@ docker run --rm \
   -e "NGC_USB_IRQ_WINDOW=$NGC_USB_IRQ_WINDOW" \
   -e "NGC_USB_IRQ_MENU=$NGC_USB_IRQ_MENU" \
   -e "NGC_TASK_HANDOFF=$NGC_TASK_HANDOFF" \
+  -e "NGC_TASK_PROBE=$NGC_TASK_PROBE" \
   -v "$ROOT:/work" \
   -v "$ROOT/.deps/ndless/ndless-sdk:/sdk" \
   debian:bookworm-slim bash -lc '
@@ -85,7 +92,7 @@ docker run --rm \
     # Do not reuse main.o across SDL/NGC flag changes; the object must be
     # rebuilt when UI_NGC changes.
     make -C /work/src/program clean
-    make -C /work/src/program UI_NGC="$UI_NGC" NGC_PROBE="$NGC_PROBE" NGC_PROBE_STAGE="$NGC_PROBE_STAGE" NGC_AUTO_TRANSPORT="$NGC_AUTO_TRANSPORT" NGC_LOCAL_SERVICE="$NGC_LOCAL_SERVICE" NGC_MENU_LOCAL_SERVICE="$NGC_MENU_LOCAL_SERVICE" NGC_CPU_IRQ="$NGC_CPU_IRQ" NGC_USB_IRQ_WINDOW="$NGC_USB_IRQ_WINDOW" NGC_USB_IRQ_MENU="$NGC_USB_IRQ_MENU" NGC_TASK_HANDOFF="$NGC_TASK_HANDOFF"
+    make -C /work/src/program UI_NGC="$UI_NGC" NGC_PROBE="$NGC_PROBE" NGC_PROBE_STAGE="$NGC_PROBE_STAGE" NGC_AUTO_TRANSPORT="$NGC_AUTO_TRANSPORT" NGC_LOCAL_SERVICE="$NGC_LOCAL_SERVICE" NGC_MENU_LOCAL_SERVICE="$NGC_MENU_LOCAL_SERVICE" NGC_CPU_IRQ="$NGC_CPU_IRQ" NGC_USB_IRQ_WINDOW="$NGC_USB_IRQ_WINDOW" NGC_USB_IRQ_MENU="$NGC_USB_IRQ_MENU" NGC_TASK_HANDOFF="$NGC_TASK_HANDOFF" NGC_TASK_PROBE="$NGC_TASK_PROBE"
   '
 
 mkdir -p "$ROOT/dist"
@@ -103,6 +110,7 @@ ngc_cpu_irq=$NGC_CPU_IRQ
 ngc_irq_window=$NGC_USB_IRQ_WINDOW
 ngc_irq_menu=$NGC_USB_IRQ_MENU
 ngc_task_handoff=$NGC_TASK_HANDOFF
+ngc_task_probe=$NGC_TASK_PROBE
 build_status=success
 EOF
 printf 'built %s\n' "$ROOT/dist/nspire_ai.tns"
