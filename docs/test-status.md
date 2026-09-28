@@ -43,6 +43,20 @@ production runtime-boundary page was restored and read back at its exact
 `4420b04290fc588805ed0439ca1aa6357ab19f57b77ad8bbd5f465a5aaa7baba`.
 The stage-2 artifact is not left on the device.
 
+To isolate the remaining lower boundary, the reviewed stage-1 artifact was
+then uploaded to `/stage1_probe.tns` and read back exactly:
+
+```text
+bytes: 16864
+sha256: 66f822dab397de642ea7d7f723451a8c1d1c8f944862c5e7808646fab7045a05
+```
+
+Stage-1 calls only `lcd_type()`/`lcd_init()` and returns; it does not acquire
+the global GC, draw, scan keys, or call NavNet. After the upload, one helper
+probe briefly returned `Busy` and a bounded retry recovered normal device info.
+No calculator-side launch result is claimed until the user confirms whether
+this stage also flashes/crashes.
+
 ## 2026-09-28 post-reset runtime identity gate
 
 After the stage-3 page froze the USB/OS path, the next read-only probe found
