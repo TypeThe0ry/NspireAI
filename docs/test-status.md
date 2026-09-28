@@ -3265,3 +3265,20 @@ The replacement runtime is not active until the calculator is restarted. No
 launch or bridge result is attributed to this pair yet; the next physical
 test must occur only after that restart, with the bridge already at
 `READY service=0x5001`.
+
+### 2026-09-28 host-side E022/NavNet recovery
+
+Without changing the USB cable, macOS IORegistry reported the direct
+TI-Nspire CX II handheld (`0x0451:0xE022`). The raw helper opened the device and
+returned `cx2=true ready=true` with OS `6.2.0.333`. Starting the TI-Nspire
+desktop runtime before the Java bridge then produced the authoritative host
+sequence `READY service=0x5001` followed by `NODE 1`; a remote screen capture
+also succeeded and showed the calculator document list with `nspire_ai`
+selected. This proves the host-side USB/NavNet chain can be recovered without
+unplugging.
+
+The bridge now retries the short macOS E022 enumeration race and starts the
+installed TI desktop runtime automatically. This is host recovery evidence
+only: the installed page was the previously rejected
+`4a2c20db...0f1173c` package, so no Enter/launch was issued and no
+`CONNECTED`, calculator request/RX, or same-page response is claimed here.
