@@ -3249,3 +3249,19 @@ does not reach its exit path before the launch-time stall. The failure remains
 at or before the NGC LCD-entry boundary, so this SHA must not be retried.
 The exact package is kept in the deployment blocklist, and no claim of a
 calculator-side request/response loop is made.
+
+### 2026-09-28 loader-boundary pair redeployed after the launch stall
+
+After the ordinary NGC candidate stalled, the handheld recovered to E022 and
+the previously built loader-boundary pair was deployed with the explicit
+runtime-boundary gate. The runtime readback matched
+`e930ed866d08e44063539ecc7fd40d5611b272b64bfb6621f04f90fd34aadb0f` at
+`/ndless/ndless_resources.tns`. The first page upload attempt returned a
+transient `Busy`; a fresh raw-helper upload then wrote
+`/nspire_ai.tns` and read it back as
+`4420b04290fc588805ed0439ca1aa6357ab19f57b77ad8bbd5f465a5aaa7baba`.
+
+The replacement runtime is not active until the calculator is restarted. No
+launch or bridge result is attributed to this pair yet; the next physical
+test must occur only after that restart, with the bridge already at
+`READY service=0x5001`.
