@@ -23,6 +23,12 @@ immediately, so a physical launch result must be obtained from the calculator
 screen (or a reliable screen probe) before attributing the failure to the
 loader/program-entry boundary. No production package was launched.
 
+An independent post-attempt USB helper `--info` probe also produced no result
+within the bounded command window, although the kernel-level E022 descriptor
+remained present. This confirms that the NavNet/file-session layer was wedged
+after the launch attempt, but still does not identify whether stage0 executed;
+the package itself contains no observable marker.
+
 ## 2026-09-28 loader-boundary runtime A/B: page launch still drops USB
 
 After the user exited the page, the read-only probes recovered E022 and
