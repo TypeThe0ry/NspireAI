@@ -18,18 +18,20 @@ from failed entry; its result requires corroborating device responsiveness.
 After the remote selection error was corrected, the live root listing confirmed
 the exact file separately (`FILE 3020 stage0_probe.tns`). The user then tried
 that actual 3020-byte stage-0 file and reported that it still would not open.
-The exact visual failure mode (immediate close versus unsupported-document
-dialog) was not captured, but this is now direct physical failure evidence for
-the minimal package's load/entry path. No UI, LCD, GC, RTC, NavNet, or bridge
-logic is present in the stage-0 execution path.
+The later clarification was immediate close, not a captured unsupported-document
+dialog. This observation alone is NOT proof of a load/entry failure: stage0
+deliberately returns immediately and has no visible success marker.
 
 The user subsequently confirmed that every staged diagnostic (`stage0_probe`,
 `stage1_probe`, `stage2_probe`, and `stage3_probe`) opens and immediately
-flashes/closes. This is the strongest current physical boundary evidence: the
-failure is common to the minimal stage-0 package, so production UI, LCD/GC,
-RTC, key scanning, NavNet framing, and bridge request handling are not the
-first cause. The device runtime/loader/package-entry ABI must be resolved
-before another application package is tested.
+flashes/closes. Source inspection of `ngc_run()` confirms stages 0--3 all
+return after their short operations (stage3 draws only one frame). The reported
+appearance is compatible with their intended successful behavior as well as
+failure. Preserve the user's report, but withdraw the inference that all four
+crashed, that the loader is the first cause, or that LCD/GC/UI are excluded.
+Independent evidence of an error, loss of responsiveness, or program completion
+is needed to discriminate these outcomes. Do not repeat launches merely to
+observe the same ambiguous immediate return.
 
 The device-side read-only runtime audit then succeeded and identified the
 installed resource as the reviewed loader-boundary variant:
@@ -40,10 +42,10 @@ REMOTE_SHA256=e930ed866d08e44063539ecc7fd40d5611b272b64bfb6621f04f90fd34aadb0f
 RUNTIME_CLASS=LOADER_IRQ_BOUNDARY_VARIANT
 ```
 
-Therefore the repeated stage crashes are not explained by a silently restored
-stock Ndless runtime. The remaining fault is in the active loader/runtime
-boundary or the generated Zehn/RPF entry package itself; no production bridge
-test is justified until that boundary is repaired.
+This verifies only the resource file stored on the device, not the code active
+in RAM. It neither proves that this variant is running nor establishes a
+loader/package fault. The production page's USB failure remains unresolved;
+the short-stage reports do not localize its cause.
 
 The read-only `/ndless` directory listing also shows the installer and
 resource files present (`ndless_installer_4.5.5-6.2.0-6.4.0.tns`,
@@ -73,13 +75,16 @@ that stage0 launched or crashed, because the remote key call itself timed out.
 Stage-0 still calls no LCD, GC, drawing, key, RTC, or NavNet API and returns
 immediately, so a physical launch result must be obtained from the calculator
 screen (or a reliable screen probe) before attributing the failure to the
-loader/program-entry boundary. No production package was launched.
+loader/program-entry boundary. As corrected above, the selected filename was
+`nspire_ai`, not stage0; the assertion that no production launch was attempted
+is withdrawn.
 
 An independent post-attempt USB helper `--info` probe also produced no result
 within the bounded command window, although the kernel-level E022 descriptor
-remained present. This confirms that the NavNet/file-session layer was wedged
-after the launch attempt, but still does not identify whether stage0 executed;
-the package itself contains no observable marker.
+remained present. That command did not preserve an explicit timeout/exit result,
+so silence alone does not confirm a wedged file session. A later sequential
+`--info` probe returned status 0 and device information. Stage0 execution
+remains unverified; the package itself contains no observable marker.
 
 ## 2026-09-28 loader-boundary runtime A/B: page launch still drops USB
 
