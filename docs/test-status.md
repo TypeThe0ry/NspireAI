@@ -3447,3 +3447,17 @@ Open design issue: once `main()` returns, the OS document browser is live
 again, so it also receives keys and redraws. The next steps are NavNet
 CONNECTED/PING from the task (the core goal), then screen ownership and key
 isolation (for example by filtering `get_internal_event`).
+
+### 2026-09-28 NavNet-from-task probe: calculator dropped off USB
+
+`src/probes/navtask` (sha `4aedccc3...`) uses the proven priority-250 resident
+task and, from inside the task, runs NodeEnum → `TI_NN_Connect(0x5001)` →
+NSAI PING → wait for PONG → REQUEST → wait for RESPONSE. Each step is
+appended to `/documents/navlog.tns`.
+
+With the echo bridge at `READY service=0x5001` / `NODE 1`, Enter was sent at
+22:00:55. No `CONNECTED` or RX reached the bridge. Remote screen calls then
+timed out, and by 22:04:37 the handheld had disappeared from USB (only the
+TS4 `0xACE1` controller was left); it did not come back within 30 s. So a
+NavNet call from the task most likely wedged or crashed the OS. The navlog
+survives in flash; after a reset it will show the last step reached.
