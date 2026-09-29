@@ -17,7 +17,9 @@ export NSPIRE_REMOTE_TIMEOUT_SECONDS="${NSPIRE_REMOTE_TIMEOUT_SECONDS:-12}"
 MARKERS=(marker_a marker_l marker_g marker_i marker_t marker_b marker_c)
 
 with_bridge() {
-  ./scripts/run-navnet-bridge.sh echo >"$TMP/bridge.log" 2>&1 &
+  # Plain host-service mode: this bridge only keeps the TI runtime warm for
+  # remote keys/screens and must not open a session with a page.
+  NSPIRE_CLIENT_SERVICE_ID=0 ./scripts/run-navnet-bridge.sh echo >"$TMP/bridge.log" 2>&1 &
   local bp=$!
   sleep 8
   $R screen "$TMP/warm.png" >/dev/null 2>&1

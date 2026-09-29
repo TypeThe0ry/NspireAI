@@ -3617,3 +3617,46 @@ Deployed and read back exactly (`scripts/deploy-page.sh`):
 The bridge now defaults to host-as-client on 0x5001 with a 0 ms initial
 read delay. All 19 bridge unit tests and both lifecycle tests pass. The page
 itself has not run on the handheld yet; the next reset is needed first.
+
+### 2026-09-29 Page v1 garbled screen; review fixes; NavNet read semantics
+
+- **v1 display.** Pointing the LCD base at a malloc'd buffer showed garbage
+  on the handheld; Esc still hid the page correctly. The page now draws into
+  the OS framebuffer (`LCD_BASE`) and saves/restores the OS picture on
+  show/hide. TI screen captures still show the OS's own buffer, not the page.
+- **Review workflow** (5 dimensions, adversarial verification, 33 findings
+  confirmed; the rendering and task-ABI reviewers stalled). Fixed:
+  - session liveness: the page pings after 5 s idle and drops the session
+    after 20 s of silence;
+  - newest callback takes over from a stale one;
+  - conversation and request ids seeded from the RTC (0x90090000), so a
+    running bridge does not drop the first question after a reset;
+  - 90 s answer timeout, so input can never stay locked;
+  - `out_pending` is cleared when a session ends;
+  - D-cache clean-only (libndls `clear_cache` also invalidates, which is
+    unsafe from a preemptible task);
+  - `TI_NN_StartService` is retried;
+  - separate registry slots per service id, plus a `BUILD_ID`;
+  - autotest counters reset when the page is shown again;
+  - helper client mode: keeps knocking until the page answers, drops a
+    silent connection after 30 s, and closes the handle on the
+    transient-retry limit;
+  - the bridge waits for the helper to disconnect before terminating it.
+- **NavNet read semantics** (timestamped bridge log): the host
+  `NavNet.read` blocks until data arrives or about 60 s pass, whatever
+  timeout is passed (200 and 1 both blocked about 62 s). The calculator's
+  `TI_NN_Read` also blocked with 100 until data arrived. Holding the host
+  write lock across the read therefore starves every write for a minute,
+  and the page session loop can only send (requests, acks) after a read
+  returns. Configuration now:
+  - host reads are not under the write lock;
+  - the host sends a keepalive PING every 1 s, which paces the page's
+    session loop;
+  - the page reads with timeout 1;
+  - bridge logs no longer print PING/PONG.
+- **Handheld dropped off USB** between 16:26:49 and about 16:29:30, while a
+  newly deployed autotest build "retired" the resident one in place: it
+  called `TI_NN_StopService` and terminated the task while that task's
+  NavNet callback was still blocked in `TI_NN_Read`. In-place retire is
+  removed. A relaunch always re-shows the resident build (and logs an older
+  `BUILD_ID`); a redeploy takes effect after a reset.

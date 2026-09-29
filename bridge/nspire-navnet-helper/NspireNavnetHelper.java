@@ -61,6 +61,18 @@ public final class NspireNavnetHelper {
     private static volatile int clientServiceId;
     private static volatile NodeHandle clientNode;
     private static volatile Thread clientThread;
+    /* Client-mode liveness.  The calculator page answers PING and pings on
+     * its own after 5 s idle, so a live session never stays silent long. */
+    private static volatile long lastRxMillis;
+    private static volatile long clientConnectedMillis;
+    private static final long CLIENT_REPING_MS = 3000L;
+    /* The calculator's TI_NN_Read also blocks until data arrives, and its
+     * session loop can only send (requests, acks) after a read returns, so
+     * a 1 s keepalive is what paces the page's session loop. */
+    private static final long CLIENT_KEEPALIVE_MS = 1000L;
+    private static final long readTimeout = Long.parseLong(System.getenv().getOrDefault(
+            "NSPIRE_NAVNET_READ_TIMEOUT", "1"));
+    private static final long CLIENT_DEAD_MS = 30000L;
     private static volatile long initialReadDelayMs = DEFAULT_INITIAL_READ_DELAY_MS;
     private static volatile ConnectionHandle invalidConnection;
     private static final Object INVALID_CONNECTION_LOCK = new Object();
@@ -212,9 +224,12 @@ public final class NspireNavnetHelper {
                 while (!stopping && connection == handle) {
                     IntegerBox received = new IntegerBox();
                     int status;
-                    synchronized (IO_LOCK) {
-                        status = NavNet.read(handle, 200L, buffer, received);
-                    }
+                    /* Not under IO_LOCK.  TI's read blocks until data arrives
+                     * or about 60 s pass, whatever timeout is passed
+                     * (2026-09-29: 200 and 1 both blocked ~62 s).  Holding
+                     * the write lock across it starved every RESPONSE and
+                     * keepalive write for a minute. */
+                    status = NavNet.read(handle, readTimeout, buffer, received);
                     if (status < 0) {
                         if (stopping || connection != handle) break;
                         if (status == ERR_INVALID_CONNECTION) {
@@ -238,6 +253,12 @@ public final class NspireNavnetHelper {
                                 emit("ERR NavNet.read=" + status
                                         + "; transient retry limit reached");
                                 if (connection == handle) connection = null;
+                                /* In client mode the handle is ours: close it so
+                                 * the calculator's callback session ends and the
+                                 * reconnect is not rejected as a second session. */
+                                if (clientServiceId > 0) {
+                                    try { NavNet.disconnect(handle); } catch (RuntimeException ignored) { }
+                                }
                                 break;
                             }
                             long delay = Math.min(400L,
@@ -256,7 +277,10 @@ public final class NspireNavnetHelper {
                     transientStatus = 0;
                     transientRetries = 0;
                     int length = received.getValue();
-                    if (length > 0) emit("RX " + hex(buffer, Math.min(length, buffer.length)));
+                    if (length > 0) {
+                        lastRxMillis = System.currentTimeMillis();
+                        emit("RX " + hex(buffer, Math.min(length, buffer.length)));
+                    }
                 }
             } finally {
                 // Let the watcher start a fresh reader if the service callback
@@ -396,8 +420,17 @@ public final class NspireNavnetHelper {
         clientThread = new Thread(() -> {
             int attempt = 0;
             int lastStatus = Integer.MIN_VALUE;
+            long lastPingMillis = 0L;
+            /* NavNet.connect is lazy: it returns 1 even for a service id
+             * nobody registered.  The calculator's TI_NN_StartService
+             * callback only fires when the first packet arrives, so the host
+             * must speak first (NSAI PING, request 0). */
+            byte[] ping = {'N', 'S', 'A', 'I', 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 4,
+                    'P', 'I', 'N', 'G'};
             while (!stopping) {
-                if (connection == null && clientNode != null) {
+                ConnectionHandle current = connection;
+                long now = System.currentTimeMillis();
+                if (current == null && clientNode != null) {
                     ConnectionHandle handle = new ConnectionHandle();
                     int status = NavNet.connect(clientNode, clientServiceId, handle);
                     attempt++;
@@ -410,17 +443,37 @@ public final class NspireNavnetHelper {
                         synchronized (INVALID_CONNECTION_LOCK) {
                             if (handle != invalidConnection) invalidConnection = null;
                         }
-                        connection = handle;
-                        emit("CONNECTED handle=0x" + Long.toHexString(handle.getCPtr()) + " mode=client");
-                        /* NavNet.connect is lazy: it returns 1 even for a
-                         * service id nobody registered.  The calculator's
-                         * TI_NN_StartService callback only fires when the
-                         * first packet arrives, so the host must speak
-                         * first.  Send an NSAI PING (request 0). */
-                        byte[] ping = {'N', 'S', 'A', 'I', 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 4,
-                                'P', 'I', 'N', 'G'};
+                        /* Write before publishing the handle so the reader
+                         * cannot enter a blocking read ahead of the PING. */
                         int writeStatus = write(handle, ping);
                         emit("CLIENT PING write=" + writeStatus);
+                        if (writeStatus >= 0) {
+                            clientConnectedMillis = now;
+                            lastRxMillis = 0L;
+                            lastPingMillis = now;
+                            connection = handle;
+                            emit("CONNECTED handle=0x" + Long.toHexString(handle.getCPtr()) + " mode=client");
+                        } else {
+                            try { NavNet.disconnect(handle); } catch (RuntimeException ignored) { }
+                        }
+                    }
+                } else if (current != null) {
+                    long heard = Math.max(lastRxMillis, clientConnectedMillis);
+                    if (now - heard >= CLIENT_DEAD_MS) {
+                        /* Nothing at all for 30 s, although the page pings
+                         * when idle: the session is gone.  Close it and
+                         * connect again. */
+                        emit("CLIENT silent for " + (now - heard) + " ms; reconnecting");
+                        if (connection == current) connection = null;
+                        try { NavNet.disconnect(current); } catch (RuntimeException ignored) { }
+                    } else if ((lastRxMillis == 0L && now - lastPingMillis >= CLIENT_REPING_MS)
+                            || now - lastPingMillis >= CLIENT_KEEPALIVE_MS) {
+                        /* Before the first answer: keep knocking so a page
+                         * opened later gets a callback.  After it: a
+                         * keepalive that also paces the calculator's read
+                         * loop. */
+                        write(current, ping);
+                        lastPingMillis = now;
                     }
                 }
                 try {

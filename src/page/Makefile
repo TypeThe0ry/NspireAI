@@ -3,7 +3,10 @@ LD = nspire-ld
 GENZEHN = genzehn
 NAVNET_INCLUDE ?= /sdk/NavNet/include
 FONT_INCLUDE ?= /sdk/thirdparty/nspire-io/common
-CFLAGS = -Wall -W -marm -Os -I$(NAVNET_INCLUDE) -I$(FONT_INCLUDE)
+# BUILD_ID identifies the resident build (logged when a relaunch re-shows an
+# older one; a redeployed build only loads after a reset).
+BUILD_ID ?= $(shell date +%s)
+CFLAGS = -Wall -W -marm -Os -I$(NAVNET_INCLUDE) -I$(FONT_INCLUDE) -DBUILD_ID=$(BUILD_ID)u
 ZEHNFLAGS = --author "NspireAI" --240x320-support true --uses-lcd-blit true
 
 # nspire_ai.tns: the chat page.  nspire_ai_autotest.tns additionally sends a

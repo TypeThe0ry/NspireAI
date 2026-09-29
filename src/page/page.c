@@ -7,9 +7,9 @@
  *   NavNet stacks need the OS UI task to be free.  main() therefore only
  *   allocates state, creates a resident Nucleus task at priority 250 (below
  *   the OS workers, above idle) and returns.
- * - The page task owns the screen by pointing the LCD base (0xC0000010) at
- *   its own framebuffer (Esc hides the page; reopening the document shows
- *   the same resident page again), polls the key matrix, and sleeps between frames in
+ * - The page task draws into the OS framebuffer (saved on show, restored on
+ *   hide; Esc hides the page and reopening the document shows the same
+ *   resident page again), polls the key matrix, and sleeps between frames in
  *   Nucleus TCC_Task_Sleep so it never starves the OS.  While the page is
  *   up it masks the keypad interrupt so the still-running OS document
  *   browser does not act on the same keys.
@@ -64,6 +64,15 @@ extern unsigned int nl_osid(void); /* Ndless ext syscall, not in SDK headers */
 #define IRQ_DISABLE (*(volatile uint32_t *)0xDC000014u)
 #define IRQ_KEYPAD (1u << 16)
 #define LCD_BASE (*(volatile uint32_t *)0xC0000010u)
+#define RTC_SECONDS (*(volatile uint32_t *)0x90090000u) /* as Ndless gettimeofday */
+
+/* Session liveness (seconds).  TI_NN_Read only ever reports -257 when the
+ * host really closed the channel; a host that died or restarted without
+ * closing leaves a half-open channel, so the page pings when idle and gives
+ * the session up when nothing has come back for a while. */
+#define IDLE_PING_SECONDS 5
+#define SESSION_DEAD_SECONDS 20
+#define ANSWER_TIMEOUT_SECONDS 90 /* > the bridge's 45 s API timeout */
 
 /* ---- display ---- */
 #define W 320
@@ -71,7 +80,10 @@ extern unsigned int nl_osid(void); /* Ndless ext syscall, not in SDK headers */
 #define CW 6
 #define CH 9
 #define COLS (W / CW)          /* 53 */
-#define PAGE_MAGIC 0x4E534149u /* "NSAI" */
+#define PAGE_MAGIC 0x4E534133u /* "NSA3": layout of struct shared below */
+#ifndef BUILD_ID
+#define BUILD_ID 0u
+#endif
 
 #define RGB(r, g, b) (uint16_t)((((r) >> 3) << 11) | (((g) >> 2) << 5) | ((b) >> 3))
 #define C_BG RGB(250, 250, 250)
@@ -91,13 +103,16 @@ extern unsigned int nl_osid(void); /* Ndless ext syscall, not in SDK headers */
  * it to come back instead of loading a second copy.  The registry lives in
  * the last LCD palette words: unused in 16-bit colour mode, not touched by
  * the Ndless loader (it writes the first 8 words), cleared by a reset. */
-#define REGISTRY ((volatile uint32_t *)0xC00003F0u)
+/* Each service id gets its own 4-word slot so the product page and the
+ * autotest build never find (or overwrite) each other. */
+#define REGISTRY ((volatile uint32_t *)(SERVICE_ID == 0x5001 ? 0xC00003F0u : 0xC00003E0u))
 struct shared {
     uint32_t magic;
-    uint32_t service; /* autotest and product builds must not wake each other */
-    volatile int show_request;
+    uint32_t service;
+    uint32_t build;              /* BUILD_ID of the resident code */
+    volatile int show_request;   /* a relaunch asks the hidden page to show */
 };
-static struct shared shared_state = {PAGE_MAGIC, SERVICE_ID, 0};
+static struct shared shared_state = {PAGE_MAGIC, SERVICE_ID, BUILD_ID, 0};
 
 static struct shared *registry_lookup(void) {
     uint32_t p = REGISTRY[1];
@@ -116,8 +131,12 @@ static void registry_publish(void) {
 
 static unsigned char task_control[1024] __attribute__((aligned(8)));
 static unsigned char task_stack[8 * 1024] __attribute__((aligned(8)));
-static uint16_t *fb;             /* page framebuffer the LCD scans out */
-static uint32_t os_lcd_base;     /* the OS framebuffer to give back */
+/* The page draws straight into the OS framebuffer (whatever the LCD base
+ * points at), like ordinary Ndless programs.  v1 pointed the LCD at a
+ * malloc'd buffer instead and the handheld showed garbage.  The OS picture
+ * is saved on show and restored on hide. */
+static uint16_t *fb;             /* current OS framebuffer (LCD base) */
+static uint16_t *saved_screen;   /* OS picture while the page is shown */
 static int hww;                  /* 240x320 panel: pixel (x,y) at x*240+y */
 static int keypad_irq_was_enabled;
 
@@ -134,6 +153,9 @@ static char in_text[TEXT_CAP];
 static volatile uint32_t in_len;
 static volatile int in_error;
 static volatile uint32_t awaited_id;
+static volatile uint32_t session_gen;  /* newest callback wins */
+/* Seeded from the RTC at start so a still-running bridge never mistakes the
+ * requests of a new boot for ones it already answered. */
 static uint16_t conversation_id = 1;
 
 /* ---- chat history ---- */
@@ -147,6 +169,7 @@ static char input[INPUT_CAP + 1];
 static int input_len;
 static int waiting;
 static uint32_t next_id = 2;
+static uint32_t waiting_since;
 static int dirty = 1;
 
 static void put_u32(unsigned char *p, uint32_t v) {
@@ -193,32 +216,49 @@ static void service_callback(nn_ch_t ch, void *data) {
     uint32_t frag_total = 0, frag_next = 0, frag_id = 0;
     int frag_opcode = 0;
 
-    if (session_active || quitting) return; /* one session at a time */
+    if (quitting) return;
+    /* Newest connection wins: a new callback means the host reconnected,
+     * so any older session is stale.  Ask it to leave, then take over. */
+    uint32_t gen = ++session_gen;
+    for (int i = 0; i < 40 && session_active; ++i) TCC_TASK_SLEEP(5);
+    if (session_active || gen != session_gen) return;
     session_active = 1;
     link_up = 1;
     dirty = 1;
+    uint32_t last_rx = RTC_SECONDS, last_ping = last_rx;
     send_frame(ch, OP_PING, 1, "PING", 4);
 
-    while (!quitting) {
+    while (!quitting && gen == session_gen) {
         if (out_pending) {
             int w = send_frame(ch, OP_REQUEST, out_id, out_text, out_len);
             out_pending = 0;
             if (w < 0) {
                 static const char msg[] = "send failed";
                 deliver((const unsigned char *)msg, sizeof(msg) - 1, 1);
-                if (w == -257) break;
+                break;
             }
         }
+        uint32_t now = RTC_SECONDS;
+        if (now - last_rx >= SESSION_DEAD_SECONDS) break;
+        if (now - last_rx >= IDLE_PING_SECONDS && now - last_ping >= IDLE_PING_SECONDS) {
+            if (send_frame(ch, OP_PING, 1, "PING", 4) < 0) break;
+            last_ping = now;
+        }
         uint32_t received = 0;
-        int status = (int16_t)TI_NN_Read(ch, 100, frame, sizeof(frame),
+        /* The timeout argument behaves like seconds (100 blocked the whole
+         * session on 2026-09-29), so ask for 1: the loop then comes back at
+         * least once a second to send requests and keepalives. */
+        int status = (int16_t)TI_NN_Read(ch, 1, frame, sizeof(frame),
                                          (uint32_t)&received);
         if (status < 0) {
             if (status == -257) break;
+            TCC_TASK_SLEEP(2); /* never spin in the OS NavNet context */
             continue;
         }
         if (received < HEADER_SIZE || memcmp(frame, "NSAI", 4) != 0 ||
             frame[4] != 1)
             continue;
+        last_rx = RTC_SECONDS;
         int opcode = frame[5];
         uint32_t request = get_u32(frame + 6);
         uint32_t length = get_u32(frame + 12);
@@ -226,7 +266,7 @@ static void service_callback(nn_ch_t ch, void *data) {
         if (length > received - HEADER_SIZE) length = received - HEADER_SIZE;
 
         if (opcode == OP_PING) {
-            send_frame(ch, OP_PONG, request, "PONG", 4);
+            if (send_frame(ch, OP_PONG, request, "PONG", 4) < 0) break;
         } else if (opcode == OP_FRAGMENT && length >= FRAGMENT_HEADER_SIZE &&
                    request == awaited_id) {
             int orig = payload[0];
@@ -264,7 +304,10 @@ static void service_callback(nn_ch_t ch, void *data) {
             deliver(payload, length, opcode == OP_ERROR);
         }
     }
-    link_up = 0;
+    /* Returning closes this channel.  A request that was never sent must not
+     * be replayed by the next session. */
+    out_pending = 0;
+    if (gen == session_gen) link_up = 0;
     session_active = 0;
     dirty = 1;
 }
@@ -400,8 +443,21 @@ static void render(void) {
     draw_text(1, H - CH, "enter send  del erase  tab/menu scroll  esc quit", C_DIM);
 }
 
+/* The LCD DMA reads RAM, not the data cache.  libndls clear_cache() also
+ * invalidates the whole D-cache, which from a preemptible task can throw
+ * away another task's writes made between its clean and invalidate steps;
+ * cleaning (write back) is all the LCD needs. */
+static void clean_dcache(void) {
+    unsigned zero = 0;
+    __asm volatile(
+        "0: mrc p15, 0, r15, c7, c10, 3 @ test and clean D-cache\n"
+        "   bne 0b\n"
+        "   mcr p15, 0, %0, c7, c10, 4  @ drain write buffer\n"
+        : : "r"(zero) : "cc", "memory");
+}
+
 static void present(void) {
-    clear_cache(); /* the LCD DMA reads RAM, not the data cache */
+    clean_dcache();
 }
 
 /* ------------------------------------------------------------------ */
@@ -477,6 +533,7 @@ static void submit(const char *text, int len) {
     out_id = next_id++;
     awaited_id = out_id;
     waiting = 1;
+    waiting_since = RTC_SECONDS;
     out_pending = 1;
     dirty = 1;
 }
@@ -525,14 +582,17 @@ static void wait_keys_released(void) {
     for (int i = 0; i < 200 && matrix_any_pressed(); ++i) TCC_TASK_SLEEP(TICKS_PER_FRAME);
 }
 
-/* The OS may repoint the LCD at its own buffer (for example when it flips
- * buffers); keep taking it back while the page is visible. */
+/* Follow the LCD base if the OS switches buffers, and redraw now and then
+ * in case an OS status update painted over part of the page. */
 static void hold_screen(void) {
-    uint32_t mine = (uint32_t)(uintptr_t)fb;
-    uint32_t now = LCD_BASE;
-    if (now != mine) {
-        os_lcd_base = now;
-        LCD_BASE = mine;
+    static int frames;
+    uint16_t *now = (uint16_t *)(uintptr_t)LCD_BASE;
+    if (now != fb) {
+        fb = now;
+        dirty = 1;
+    }
+    if (++frames >= 16) { /* ~0.5 s */
+        frames = 0;
         dirty = 1;
     }
 }
@@ -543,18 +603,19 @@ static void show_page(void) {
     keypad_irq_was_enabled = (IRQ_ENABLE & IRQ_KEYPAD) != 0;
     if (keypad_irq_was_enabled) IRQ_DISABLE = IRQ_KEYPAD;
 #endif
-    os_lcd_base = LCD_BASE;
+    fb = (uint16_t *)(uintptr_t)LCD_BASE;
+    memcpy(saved_screen, fb, W * H * 2);
     dirty = 1;
     render();
     present();
-    LCD_BASE = (uint32_t)(uintptr_t)fb;
     for (int i = 0; i < NCHARS; ++i) prev_char[i] = 1;
     for (int i = 0; i < K_COUNT; ++i) prev_ctl[i] = 1;
 }
 
 static void hide_page(void) {
     wait_keys_released(); /* do not leak Esc to the OS browser */
-    LCD_BASE = os_lcd_base;
+    memcpy(fb, saved_screen, W * H * 2);
+    clean_dcache();
 #ifndef PAGE_KEEP_KEYPAD_IRQ
     if (keypad_irq_was_enabled) IRQ_ENABLE = IRQ_KEYPAD;
 #endif
@@ -571,13 +632,29 @@ static void task_main(unsigned argc, void *argv) {
 #endif
 
     hww = lcd_type() == SCR_240x320_565;
+    uint32_t boot = RTC_SECONDS;
+    conversation_id = (uint16_t)(boot | 1u);
+    next_id = (boot & 0xFFFFu) << 12 | 2u;
     hist_add("", "NspireAI - type a question and press enter.", 2);
-    int started = (int16_t)TI_NN_StartService(SERVICE_ID, NULL, service_callback);
-    hist_add("", started < 0 ? "NavNet service could not start."
-                             : "Waiting for the Mac bridge...", 2);
+    int started = -1;
+    uint32_t start_tried = 0;
     show_page();
 
     for (;;) {
+        if (started < 0 && RTC_SECONDS - start_tried >= 2) {
+            /* Keep trying instead of giving up after one failure. */
+            started = (int16_t)TI_NN_StartService(SERVICE_ID, NULL, service_callback);
+            if (start_tried == 0 || started >= 0)
+                hist_add("", started < 0 ? "NavNet service busy; retrying..."
+                                         : "Waiting for the Mac bridge...", 2);
+            start_tried = RTC_SECONDS;
+        }
+        if (waiting && RTC_SECONDS - waiting_since >= ANSWER_TIMEOUT_SECONDS) {
+            /* Never lock input forever on a lost request or answer. */
+            waiting = 0;
+            awaited_id = 0;
+            hist_add("! ", "no answer from the Mac; try again", 2);
+        }
         if (link_up != was_linked) {
             was_linked = link_up;
             hist_add("", was_linked ? "Connected to the Mac bridge."
@@ -586,11 +663,13 @@ static void task_main(unsigned argc, void *argv) {
         }
         if (in_ready) {
             /* Answers keep arriving while the page is hidden. */
+            int in_error_seen = in_error;
+            (void)in_error_seen;
             hist_add(in_error ? "! " : "", in_text, in_error ? 2 : 0);
             in_ready = 0;
             waiting = 0;
 #ifdef PAGE_AUTOTEST
-            if (autotest_stage == 1) {
+            if (autotest_stage == 1 && !in_error_seen) {
                 /* Proof for the host log: send the response length back. */
                 char ack[48] = "autotest got ";
                 int n = 13, v = (int)in_len;
@@ -613,6 +692,11 @@ static void task_main(unsigned argc, void *argv) {
                 shared_state.show_request = 0;
                 show_page();
                 visible = 1;
+#ifdef PAGE_AUTOTEST
+                autotest_stage = 0;
+                autotest_frames = 0;
+                autotest_done_at = -1;
+#endif
             } else {
                 TCC_TASK_SLEEP(10);
             }
@@ -671,20 +755,27 @@ int main(void) {
     if (nl_osid() != CX2_CAS_6_2_0_333_OSID) { main_log("wrong os", (int)nl_osid()); return 1; }
     struct shared *existing = registry_lookup();
     if (existing) {
-        /* The page is already resident: bring it back, load nothing new. */
+        /* The page is already resident: bring it back, load nothing new.
+         * A build deployed later in the same boot only takes effect after a
+         * reset.  Retiring the old copy in place (TI_NN_StopService and task
+         * termination while its NavNet callback was still inside
+         * TI_NN_Read) coincided with the handheld dropping off USB on
+         * 2026-09-29, so it is not attempted. */
         existing->show_request = 1;
-        main_log("show existing page", SERVICE_ID);
+        main_log(existing->build == BUILD_ID ? "show existing page"
+                                             : "show older resident build",
+                 (int)existing->build);
         return 0;
     }
     /* The framebuffer comes from the OS heap at run time; the Ndless loader
      * rejects images whose Zehn allocation exceeds ~60 KB. */
-    fb = malloc(W * H * 2);
-    if (!fb) { main_log("out of memory", 0); return 1; }
+    saved_screen = malloc(W * H * 2);
+    if (!saved_screen) { main_log("out of memory", 0); return 1; }
     int status = TCC_CREATE_TASK(task_control, (char *)"NspireAI", task_main,
                                  0, NULL, task_stack, sizeof(task_stack),
                                  TASK_PRIORITY, 0, NU_PREEMPT, NU_START);
     main_log("create task", status);
-    if (status != 0) { free(fb); return 1; }
+    if (status != 0) { free(saved_screen); return 1; }
     registry_publish();
     nl_set_resident();
     return 0;

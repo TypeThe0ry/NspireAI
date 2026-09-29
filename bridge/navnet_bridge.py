@@ -81,7 +81,10 @@ class NavNetBridge:
                 try:
                     frame = bytes.fromhex(line[3:])
                     opcode, request_id, conversation_id, payload = decode(frame)
-                    print(f"RX opcode={opcode} request={request_id} conversation={conversation_id} bytes={len(payload)}", flush=True)
+                    # PING/PONG now flow every second as keepalive; only log
+                    # frames that carry chat traffic.
+                    if opcode not in (OP_PING, OP_PONG):
+                        print(f"RX opcode={opcode} request={request_id} conversation={conversation_id} bytes={len(payload)}", flush=True)
                     self.handle_frame(frame)
                 except Exception as exc:
                     print(f"navnet frame error: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
@@ -103,6 +106,13 @@ class NavNetBridge:
             if self.process.stdin is not None:
                 self.process.stdin.close()
         except (BrokenPipeError, OSError):
+            pass
+        # Give the helper a moment to see EOF and run its own NavNet
+        # disconnect; a hard terminate can leave the calculator holding a
+        # half-open session until its liveness timeout.
+        try:
+            self.process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
             pass
         if self.process.poll() is None:
             self.process.terminate()
