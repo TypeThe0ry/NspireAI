@@ -13,7 +13,8 @@ case "${1:-page}" in
   page) SRC="$ROOT/src/page/nspire_ai.tns"; DEST=/nspire_ai.tns ;;
   autotest) SRC="$ROOT/src/page/nspire_ai_autotest.tns"; DEST=/nspire_ai_autotest.tns ;;
   dev) SRC="$ROOT/src/page/nspire_ai_dev.tns"; DEST=/nspire_ai_dev.tns ;;
-  *) echo "usage: $0 [page|autotest|dev]" >&2; exit 2 ;;
+  dev2) SRC="$ROOT/src/page/nspire_ai_dev2.tns"; DEST=/nspire_ai_dev2.tns ;;
+  *) echo "usage: $0 [page|autotest|dev|dev2]" >&2; exit 2 ;;
 esac
 [[ -f "$SRC" ]] || { echo "missing $SRC; run scripts/build-marker-probe.sh" >&2; exit 2; }
 python3 "$ROOT/scripts/check-ngc-memory-budget.py" "$SRC"

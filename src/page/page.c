@@ -106,6 +106,12 @@ static volatile nn_ch_t active_ch;     /* lets the page end a session on exit */
  * (freeing the image) while this is non-zero: the navmain probe returned
  * with a second callback running and the handheld dropped off USB. */
 static volatile int callbacks_running;
+/* Telemetry for the host: the page loop bumps loop_beat every frame and
+ * records the step it is about to run, and the callback reports both in its
+ * PONG payload.  If the UI task ever stalls, the bridge log shows where. */
+static volatile uint32_t loop_beat;
+static volatile int loop_step;
+#define STEP(n) (loop_step = (n))
 /* Seeded from the RTC at start so a still-running bridge never mistakes the
  * requests of a new boot for ones it already answered. */
 static uint16_t conversation_id = 1;
@@ -218,7 +224,19 @@ static void service_session(nn_ch_t ch) {
         if (length > received - HEADER_SIZE) length = received - HEADER_SIZE;
 
         if (opcode == OP_PING) {
-            if (send_frame(ch, OP_PONG, request, "PONG", 4) < 0) break;
+            char pong[40] = "PONG b=";
+            int n = 7;
+            uint32_t v = loop_beat;
+            char d[12];
+            int k = 0;
+            do { d[k++] = '0' + v % 10; v /= 10; } while (v);
+            while (k) pong[n++] = d[--k];
+            pong[n++] = ' '; pong[n++] = 's'; pong[n++] = '=';
+            v = (uint32_t)loop_step;
+            k = 0;
+            do { d[k++] = '0' + v % 10; v /= 10; } while (v);
+            while (k) pong[n++] = d[--k];
+            if (send_frame(ch, OP_PONG, request, pong, n) < 0) break;
         } else if (opcode == OP_FRAGMENT && length >= FRAGMENT_HEADER_SIZE &&
                    request == awaited_id) {
             int orig = payload[0];
@@ -625,6 +643,8 @@ int main(void) {
 #endif
 
     for (;;) {
+        loop_beat++;
+        STEP(1);
         if (started < 0 && RTC_SECONDS - start_tried >= 2) {
             started = (int16_t)TI_NN_StartService(SERVICE_ID, NULL, service_callback);
             if (start_tried == 0 || started >= 0)
@@ -632,6 +652,7 @@ int main(void) {
                                          : "Waiting for the Mac bridge...", 2);
             start_tried = RTC_SECONDS;
         }
+        STEP(2);
         if (link_up != was_linked) {
             was_linked = link_up;
             hist_add("", was_linked ? "Connected to the Mac bridge."
@@ -643,6 +664,7 @@ int main(void) {
             awaited_id = 0;
             hist_add("! ", "no answer from the Mac; try again", 2);
         }
+        STEP(3);
         if (in_ready) {
             int was_error = in_error;
             hist_add(was_error ? "! " : "", in_text, was_error ? 2 : 0);
@@ -666,7 +688,9 @@ int main(void) {
 #endif
         }
 
+        STEP(4);
         int stay = poll_keys();
+        STEP(5);
 #ifdef PAGE_AUTOTEST
         ++autotest_frames;
         if (autotest_stage == 0 && link_up) {
@@ -680,11 +704,15 @@ int main(void) {
         if (!stay) break;
         if (dirty) {
             dirty = 0;
+            STEP(6);
             render();
+            STEP(7);
             present();
         }
+        STEP(8);
         TCC_TASK_SLEEP(TICKS_PER_FRAME);
     }
+    STEP(9);
 
     int session_gone = end_session(started);
     wait_keys_released(); /* do not leave Esc for the OS browser */

@@ -83,7 +83,10 @@ class NavNetBridge:
                     opcode, request_id, conversation_id, payload = decode(frame)
                     # PING/PONG now flow every second as keepalive; only log
                     # frames that carry chat traffic.
-                    if opcode not in (OP_PING, OP_PONG):
+                    if opcode == OP_PONG and payload != b"PONG":
+                        # Page telemetry rides on the PONG payload.
+                        print(f"RX pong {payload.decode('ascii', 'replace')}", flush=True)
+                    elif opcode not in (OP_PING, OP_PONG):
                         print(f"RX opcode={opcode} request={request_id} conversation={conversation_id} bytes={len(payload)}", flush=True)
                     self.handle_frame(frame)
                 except Exception as exc:
