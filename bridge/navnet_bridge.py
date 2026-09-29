@@ -202,7 +202,7 @@ class NavNetBridge:
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Persistent Ndless NavNet AI bridge")
     parser.add_argument("--helper", default=os.environ.get("NSPIRE_USB_HELPER", "bridge/nspire-helper/target/debug/nspireai-usb-helper"))
-    parser.add_argument("--backend", choices=("echo", "openai"), default="echo")
+    parser.add_argument("--backend", choices=("echo", "openai", "deepseek"), default="echo")
     parser.add_argument("--model", default=os.environ.get("OPENAI_MODEL", "gpt-5"))
     parser.add_argument("--base-url", default=os.environ.get("OPENAI_BASE_URL"))
     parser.add_argument("--api-timeout", type=float, default=float(os.environ.get("OPENAI_TIMEOUT_SECONDS", "45")))

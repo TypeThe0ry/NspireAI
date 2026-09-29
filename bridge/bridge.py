@@ -65,6 +65,53 @@ class OpenAIBackend:
         return answer
 
 
+# The calculator page shows 53 columns and keeps about 3 KB of an answer, so
+# the model is asked for short plain-text replies.
+CALCULATOR_SYSTEM_PROMPT = (
+    "You are answering on a TI-Nspire CX II calculator screen: 53 characters "
+    "wide, plain ASCII only, no Markdown, no tables, no code fences. Keep "
+    "answers short (a few sentences); use short lines."
+)
+
+
+class ChatCompletionsBackend:
+    """OpenAI-compatible chat.completions backend (DeepSeek and others)."""
+
+    def __init__(self, model: str, api_key: Optional[str], base_url: Optional[str], timeout: float = 45.0):
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise RuntimeError(
+                "chat backend requires the OpenAI SDK: python3 -m pip install -r bridge/requirements.txt"
+            ) from exc
+        kwargs = {"timeout": timeout}
+        if api_key:
+            kwargs["api_key"] = api_key
+        if base_url:
+            kwargs["base_url"] = base_url
+        self.client = OpenAI(**kwargs)
+        self.model = model
+        self.messages: list[dict[str, str]] = []
+
+    def reset(self) -> None:
+        self.messages.clear()
+
+    def answer(self, prompt: str) -> str:
+        self.messages.append({"role": "user", "content": prompt})
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "system", "content": CALCULATOR_SYSTEM_PROMPT}] + self.messages,
+                max_tokens=600,
+            )
+            answer = (response.choices[0].message.content or "").strip()
+        except Exception:
+            self.messages.pop()
+            raise
+        self.messages.append({"role": "assistant", "content": answer})
+        return answer
+
+
 class Bridge:
     """One request at a time; the response ID is uploaded last as a ready marker."""
 
@@ -131,9 +178,20 @@ class Bridge:
         return request_id
 
 
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_DEFAULT_MODEL = "deepseek-chat"
+
+
 def make_backend(name: str, model: str, api_key: Optional[str], base_url: Optional[str], timeout: float):
     if name == "echo":
         return EchoBackend()
+    if name == "deepseek":
+        return ChatCompletionsBackend(
+            model=os.environ.get("DEEPSEEK_MODEL", DEEPSEEK_DEFAULT_MODEL),
+            api_key=os.environ.get("DEEPSEEK_API_KEY"),
+            base_url=os.environ.get("DEEPSEEK_BASE_URL", DEEPSEEK_BASE_URL),
+            timeout=timeout,
+        )
     return OpenAIBackend(model=model, api_key=api_key, base_url=base_url, timeout=timeout)
 
 
@@ -156,7 +214,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--n-link-bin", default=os.environ.get("N_LINK_BIN", "n-link"))
     parser.add_argument("--remote-dir", default="/nspireai")
     parser.add_argument("--n-link-timeout", type=float, default=15.0)
-    parser.add_argument("--backend", choices=("echo", "openai"), default="echo")
+    parser.add_argument("--backend", choices=("echo", "openai", "deepseek"), default="echo")
     parser.add_argument("--model", default=os.environ.get("OPENAI_MODEL", "gpt-5"))
     parser.add_argument("--base-url", default=os.environ.get("OPENAI_BASE_URL"))
     parser.add_argument("--api-timeout", type=float, default=float(os.environ.get("OPENAI_TIMEOUT_SECONDS", "45")))

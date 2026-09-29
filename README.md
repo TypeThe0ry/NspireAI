@@ -19,8 +19,9 @@
 >   after closing the page.
 >
 > Build: `scripts/build-marker-probe.sh`. Deploy: `scripts/deploy-page.sh`.
-> Bridge: `scripts/run-navnet-bridge.sh echo` (or `openai` with
-> `OPENAI_API_KEY`).
+> Bridge: `scripts/run-navnet-bridge.sh echo`, `deepseek` (needs
+> `DEEPSEEK_API_KEY`; `DEEPSEEK_MODEL` defaults to `deepseek-chat`) or
+> `openai` (needs `OPENAI_API_KEY`).
 
 > **Do not run the IRQ-scope 0922 handheld build**: the user reported a freeze
 > followed by a crash. Its SHA256 is
