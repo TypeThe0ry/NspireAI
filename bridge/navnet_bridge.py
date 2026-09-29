@@ -27,6 +27,7 @@ from .protocol import (
     OP_DUMP_REQ,
     OP_HELLO,
     OP_INJECT,
+    OP_PREVIEW_REQ,
     FragmentReassembler,
     decode,
     encode,
@@ -194,6 +195,11 @@ class NavNetBridge:
         if opcode == OP_ACTION:
             self.ui_executor.submit(self._page_call, "on_action", payload)
             return
+        if opcode == OP_PREVIEW_REQ:
+            # Only the newest revision matters; drop previews still queued.
+            self.preview_latest = request_id
+            self.ui_executor.submit(self._page_preview, request_id, payload)
+            return
         if opcode == OP_DUMP:
             waiter = getattr(self, "dump_waiters", {}).pop(request_id, None)
             if waiter is not None:
@@ -239,6 +245,11 @@ class NavNetBridge:
                 print(f"page host unavailable, using plain text: {self.page_host_error}",
                       file=sys.stderr, flush=True)
         return self.page_host
+
+    def _page_preview(self, request_id: int, payload: bytes) -> None:
+        if request_id != getattr(self, "preview_latest", request_id):
+            return  # superseded while waiting in the queue
+        self._page_call("on_preview", request_id, payload)
 
     def _page_call(self, method: str, *args) -> None:
         host = self._page_host()

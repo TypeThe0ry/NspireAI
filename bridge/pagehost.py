@@ -15,10 +15,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
+import re
+
 from .protocol import (
     OP_BLOCK,
     OP_CLEAR,
     OP_ERROR,
+    OP_PREVIEW,
     OP_RESPONSE,
     OP_SCREEN,
     OP_STATE,
@@ -41,6 +44,7 @@ MENU_WIDTH = 312
 MENU_HEIGHT = 220
 SESSIONS_PER_PAGE = 7
 HISTORY_TURNS = 6           # messages replayed when the page (re)opens a session
+PREVIEW_MAX_H = 72          # PREVIEW_MAX_H in src/page/page.c
 
 SYSTEM_PROMPT = (
     "You are an assistant used from a TI-Nspire calculator with a small "
@@ -87,6 +91,81 @@ def parse_tags(text: str) -> tuple[dict[str, str], str]:
         tags[key] = value
         text = rest if sep else ""
     return tags, text
+
+
+_STRONG_MATH = re.compile(r"[\\^_{}]|[A-Za-z0-9)\]][=<>+*/][A-Za-z0-9(\\\[-]|[A-Za-z]\(")
+_WEAK_MATH = re.compile(r"[-+]?\d+(\.\d+)?[A-Za-z]{0,2}|[A-Za-z]|[-+=<>*/()\[\]|]+")
+_TRAILING = ".,;:?!"
+
+
+def close_groups(latex: str) -> str:
+    """Make half-typed LaTeX renderable: close braces, fill empty groups."""
+    depth = 0
+    for index, char in enumerate(latex):
+        if char == "\\":
+            continue
+        if index and latex[index - 1] == "\\":
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}" and depth:
+            depth -= 1
+    latex += "}" * depth
+    latex = re.sub(r"\{\s*\}", r"{\\cdots}", latex)
+    return re.sub(r"[\^_]$", "", latex)  # a dangling ^ or _ has nothing to raise yet
+
+
+def auto_math(text: str) -> str:
+    """Wrap the math-looking parts of plain input in $...$.
+
+    The calculator user types `solve x^2 + \\frac{1}{2} = 0` without dollar
+    signs; spans of math-like tokens become inline math so the preview and
+    the chat history show them typeset.  Text that already uses $ or \\( is
+    left alone.
+    """
+    if "$" in text or "\\(" in text or "\\[" in text:
+        return text
+    parts = re.split(r"(\s+)", text)
+    out: list[str] = []
+    span: list[str] = []
+
+    def flush() -> None:
+        while span and span[-1].isspace():
+            out_tail.append(span.pop())
+        body = "".join(span)
+        strong = any(_STRONG_MATH.search(t) for t in span)
+        operators = any(t in ("=", "+", "-", "*", "/", "<", ">") for t in span)
+        operands = sum(1 for t in span if not t.isspace() and t not in "=+-*/<>")
+        if body and (strong or (operators and operands >= 2)):
+            tail = ""
+            while body and body[-1] in _TRAILING:
+                tail = body[-1] + tail
+                body = body[:-1]
+            out.append("$" + close_groups(body) + "$" + tail)
+        else:
+            out.append(body)
+        out.extend(reversed(out_tail))
+        out_tail.clear()
+        span.clear()
+
+    out_tail: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        core = part.rstrip(_TRAILING)
+        mathy = bool(core) and (bool(_STRONG_MATH.search(core)) or bool(_WEAK_MATH.fullmatch(core)))
+        if part.isspace():
+            if span:
+                span.append(part)
+            else:
+                out.append(part)
+        elif mathy:
+            span.append(part)
+        else:
+            flush()
+            out.append(part)
+    flush()
+    return "".join(out)
 
 
 def parse_kv(text: str) -> dict[str, str]:
@@ -219,7 +298,8 @@ class PageHost:
     @staticmethod
     def _user_display(message: dict) -> str:
         cmd = message.get("cmd")
-        return f"[{cmd}] {message['content']}" if cmd else message["content"]
+        shown = auto_math(message["content"])
+        return f"[{cmd}] {shown}" if cmd else shown
 
     # ----- screens -------------------------------------------------------
 
@@ -352,6 +432,21 @@ class PageHost:
                 log.exception("page action %r failed", action)
                 self.send_info(f"action failed: {type(exc).__name__}")
 
+    def on_preview(self, request_id: int, payload: bytes) -> None:
+        """Typeset the input line while the user types."""
+        text = payload.decode("utf-8", "replace")
+        typeset = auto_math(text)
+        if typeset == text and text.isascii():
+            self._send(OP_PREVIEW, b"", request_id)  # the raw line says it all
+            return
+        image = self.render.render_preview(typeset, self.cfg) if hasattr(
+            self.render, "render_preview") else self.render.render_markdown(typeset, self.cfg)
+        width, height = image.size
+        if height > PREVIEW_MAX_H:  # keep the end, where the user is typing
+            image = image.crop((0, height - PREVIEW_MAX_H, width, height))
+        payload = self.imagecodec.encode_block(KIND_USER, image, request_id & 0xFFFFFFFF, bpp=4)
+        self._send(OP_PREVIEW, payload, request_id)
+
     def on_request(self, request_id: int, payload: bytes) -> None:
         """Answer one question.  Runs on the bridge's worker thread."""
         tags, text = parse_tags(payload.decode("utf-8", "replace"))
@@ -362,7 +457,9 @@ class PageHost:
             session = self.store.active()
             label = self.commands.label(command) if command else None
             self.store.append(session.id, "user", text, think=effort, cmd=label)
-            shown = f"[{label}] {text}" if label else text
+            shown = auto_math(text)
+            if label:
+                shown = f"[{label}] {shown}"
             self.send_image(KIND_USER, self.render.render_user_turn(shown, self.cfg), request_id)
             messages = self._context(session.id, command, text)
         try:

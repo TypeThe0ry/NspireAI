@@ -27,6 +27,8 @@ OP_DUMP_REQ = 14  # host -> page: send the framebuffer
 OP_DUMP = 15      # page -> host: u16 w, u16 h, u8 format 1, runs {u8 n, u16 rgb565}
 OP_INJECT = 16    # host -> page: key events for unattended tests
 OP_CLEAR = 17     # host -> page: drop all history blocks
+OP_PREVIEW_REQ = 18  # page -> host: input text to typeset; request id = input revision
+OP_PREVIEW = 19   # host -> page: typeset input (BLOCK layout), empty = nothing to show
 FRAGMENT_HEADER = struct.Struct(">BBII")  # original opcode, reserved, total, offset
 
 def encode(opcode: int, request_id: int, conversation_id: int, payload: bytes) -> bytes:

@@ -52,6 +52,8 @@
 #define OP_DUMP 15     /* page -> host: framebuffer, RLE RGB565 */
 #define OP_INJECT 16   /* host -> page: key events, for unattended tests */
 #define OP_CLEAR 17    /* host -> page: drop all history blocks */
+#define OP_PREVIEW_REQ 18 /* page -> host: input text to typeset (id = revision) */
+#define OP_PREVIEW 19  /* host -> page: typeset input (BLOCK layout) or empty */
 
 /* ---- CX II CAS 6.2.0.333 private ABI (Ndless IDC map + disassembly) ---- */
 typedef void (*tcc_task_sleep_t)(unsigned ticks);
@@ -149,7 +151,7 @@ static volatile int rx_ready;
 
 /* Page -> host: one slot per kind of message.  The page fills a free slot
  * and sets pending; the callback sends it (fragmented when long). */
-enum { TX_REQUEST, TX_ACTION, TX_DUMP, TX_SLOTS };
+enum { TX_REQUEST, TX_ACTION, TX_DUMP, TX_PREVIEW, TX_SLOTS };
 struct tx_slot {
     volatile int pending;
     int opcode;
@@ -627,6 +629,18 @@ static void screen_store(const uint8_t *p, uint32_t len) {
 #define INPUT_CAP 900
 static char input[INPUT_CAP + 1];
 static int input_len;
+static int cursor; /* insertion point, 0..input_len */
+/* Live preview: the host typesets the input (LaTeX, CJK) while the user
+ * types.  input_rev counts edits; a preview is only shown for the revision
+ * it was rendered from. */
+#define PREVIEW_MAX_H 72
+static uint32_t input_rev, preview_sent_rev, edit_beat;
+static struct {
+    uint8_t bpp;
+    uint16_t w, h;
+    uint8_t *data;
+} preview;
+static uint8_t preview_req[INPUT_CAP];
 static int waiting;
 static uint32_t waiting_since;
 static uint32_t awaited_id;
@@ -643,16 +657,32 @@ static int layout_mode;
 static char cmd_id[28], cmd_label[14];
 static char session_label[24] = "";
 static int session_number;
-static int arrows_enabled; /* touchpad arrows scroll; off until verified */
+/* Touchpad arrows: up/down scroll, left/right move the input cursor.  One
+ * touchpad_scan per frame ran without disturbing the OS (2026-09-29). */
+static int arrows_enabled = 1;
 static uint8_t request_buf[INPUT_CAP + 64];
 static uint8_t action_buf[200];
 static uint8_t *dump_buf;
 
+static void preview_clear(void) {
+    free(preview.data);
+    preview.data = NULL;
+    preview.h = 0;
+    dirty = 1;
+}
+
+static void input_changed(void) {
+    input_rev++;
+    edit_beat = loop_beat;
+    dirty = 1;
+}
+
 static void input_append(char c) {
     if (input_len >= INPUT_CAP) return;
-    input[input_len++] = c;
-    input[input_len] = '\0';
-    dirty = 1;
+    memmove(input + cursor + 1, input + cursor, (size_t)(input_len - cursor));
+    input[cursor++] = c;
+    input[++input_len] = '\0';
+    input_changed();
 }
 
 static void input_append_str(const char *s) {
@@ -715,10 +745,12 @@ static void submit(void) {
     waiting_since = RTC_SECONDS;
     tx_post(TX_REQUEST, OP_REQUEST, id, request_buf, (uint32_t)n);
     input_len = 0;
+    cursor = 0;
     input[0] = '\0';
     cmd_id[0] = '\0';
     cmd_label[0] = '\0';
-    dirty = 1;
+    preview_clear();
+    input_changed();
 }
 
 /* ------------------------------------------------------------------ */
@@ -772,8 +804,17 @@ static void draw_image(int sx, int sy, int w, int bpp, const uint8_t *data,
     }
 }
 
+/* Bottom-up layout: input box, typeset preview, key legend, history. */
+static int preview_top(void) {
+    return INPUT_TOP - 2 - (preview.data ? preview.h + 3 : 0);
+}
+
+static int legend_top(void) {
+    return preview_top() - (LEGEND ? LEGEND_ROWS * CH + 1 : 0);
+}
+
 static int view_bottom(void) {
-    return INPUT_TOP - 3 - (LEGEND ? LEGEND_ROWS * CH + 1 : 0);
+    return legend_top() - 1;
 }
 
 static int doc_height(void) {
@@ -853,10 +894,17 @@ static void render(void) {
             "z  x  c  v  b  n  m  p  enter",
             "   ,  ?  !  '  -  space",
         };
-        int top = INPUT_TOP - 3 - LEGEND_ROWS * CH;
-        fill_rect(0, top - 1, W, LEGEND_ROWS * CH + 1, C_INPUT_BG);
+        int top = legend_top();
+        fill_rect(0, top, W, LEGEND_ROWS * CH + 1, C_INPUT_BG);
         for (int r = 0; r < LEGEND_ROWS; ++r)
-            draw_text(70, top + r * CH, legend[r], C_BAR);
+            draw_text(70, top + 1 + r * CH, legend[r], C_BAR);
+    }
+    if (preview.data) {
+        int top = preview_top();
+        fill_rect(0, top, W, preview.h + 3, C_BG);
+        fill_rect(0, top, W, 1, C_USER);
+        draw_image(0, top + 2, preview.w, preview.bpp, preview.data, 0, preview.h,
+                   ink_lut[KIND_USER]);
     }
     fill_rect(0, INPUT_TOP - 2, W, 1, C_DIM);
     fill_rect(0, INPUT_TOP, W, 2 * CH + 4, C_INPUT_BG);
@@ -874,9 +922,14 @@ static void render(void) {
         shown[n++] = ' ';
         int prefix = n;
         int cap = 2 * COLS - prefix - 1;
-        int start = input_len > cap ? input_len - cap : 0;
-        for (int i = start; i < input_len; ++i) shown[n++] = input[i];
-        shown[n++] = '_';
+        /* Window of the input that keeps the cursor visible. */
+        int start = cursor > cap - 8 ? cursor - (cap - 8) : 0;
+        if (input_len - start < cap) start = input_len > cap ? input_len - cap : 0;
+        int cursor_at = -1;
+        for (int i = start; i <= input_len && n < 2 * COLS; ++i) {
+            if (i == cursor) cursor_at = n;
+            shown[n++] = i < input_len ? input[i] : ' ';
+        }
         shown[n] = '\0';
         char row0[COLS + 1];
         int l0 = n < COLS ? n : COLS;
@@ -890,8 +943,13 @@ static void render(void) {
             draw_text(1, INPUT_TOP + 2, chip, C_USER);
         }
         if (n > COLS) draw_text(1, INPUT_TOP + 2 + CH, shown + COLS, C_TEXT);
+        if (cursor_at >= 0) { /* underline cursor */
+            int cx = 1 + (cursor_at % COLS) * CW;
+            int cy = INPUT_TOP + 2 + (cursor_at / COLS) * CH + 8;
+            fill_rect(cx, cy, CW, 1, C_USER);
+        }
     }
-    draw_text(1, H - CH, "menu cmds  cat chats  tab scroll  var think  doc kbd", C_DIM);
+    draw_text(1, H - CH, "menu cmds  cat chats  arrows  var think  doc kbd", C_DIM);
 
     if (overlay) {
         const struct screen *s = screen_find(overlay);
@@ -966,7 +1024,7 @@ static uint32_t dump_encode(uint8_t *out) {
 
 enum {
     EV_ENTER = 0x100, EV_DEL, EV_ESC, EV_UP, EV_DOWN, EV_THINK, EV_LAYOUT,
-    EV_MENU, EV_CHATS, EV_ARROWS,
+    EV_MENU, EV_CHATS, EV_ARROWS, EV_LEFT, EV_RIGHT,
 };
 
 /* Two layouts.  "abc" is what the key caps say.  "qwerty" (enhanced typing)
@@ -1032,6 +1090,7 @@ static uint8_t prev_char[NCHARS];
 static uint8_t prev_string[NSTRINGS];
 static uint8_t prev_ctl[K_COUNT];
 static uint8_t prev_arrow;
+static int arrow_hold;
 static int del_hold;
 
 /* Injected key events from the host (OP_INJECT), consumed like real keys. */
@@ -1126,12 +1185,23 @@ static int handle_event(int ev) {
         submit();
         break;
     case EV_DEL:
-        if (input_len > 0) {
+        if (cursor > 0) {
+            memmove(input + cursor - 1, input + cursor, (size_t)(input_len - cursor));
+            --cursor;
             input[--input_len] = '\0';
-        } else {
+            input_changed();
+        } else if (input_len == 0) {
             cmd_id[0] = '\0';
             cmd_label[0] = '\0';
         }
+        dirty = 1;
+        break;
+    case EV_LEFT:
+        if (cursor > 0) --cursor;
+        dirty = 1;
+        break;
+    case EV_RIGHT:
+        if (cursor < input_len) ++cursor;
         dirty = 1;
         break;
     case EV_ESC:
@@ -1180,6 +1250,8 @@ static int inject_event(uint8_t c) {
     case 0x10: return EV_MENU;
     case 0x11: return EV_CHATS;
     case 0x12: return EV_ARROWS;
+    case 0x13: return EV_LEFT;
+    case 0x14: return EV_RIGHT;
     }
     return c >= 32 && c < 127 ? c : 0;
 }
@@ -1234,9 +1306,13 @@ static int poll_keys(void) {
         touchpad_report_t report;
         int arrow = 0;
         if (touchpad_scan(&report) == 0 && report.pressed) arrow = (int)report.arrow;
-        if (arrow != prev_arrow) {
+        arrow_hold = arrow && arrow == prev_arrow ? arrow_hold + 1 : 0;
+        /* Act on the press, then auto-repeat while held. */
+        if (arrow && (arrow != prev_arrow || (arrow_hold > 12 && arrow_hold % 3 == 0))) {
             if (arrow == TPAD_ARROW_UP) handle_event(EV_UP);
             if (arrow == TPAD_ARROW_DOWN) handle_event(EV_DOWN);
+            if (arrow == TPAD_ARROW_LEFT) handle_event(EV_LEFT);
+            if (arrow == TPAD_ARROW_RIGHT) handle_event(EV_RIGHT);
         }
         prev_arrow = (uint8_t)arrow;
     }
@@ -1319,6 +1395,26 @@ static void handle_message(int opcode, uint32_t id, const uint8_t *p, uint32_t l
     case OP_CLEAR:
         blocks_clear();
         break;
+    case OP_PREVIEW: {
+        if (id != input_rev) break; /* rendered from text that has changed since */
+        if (len < 12) {
+            preview_clear();
+            break;
+        }
+        int bpp = p[1], encoding = p[6];
+        int w = (int)get_u16(p + 2), h = (int)get_u16(p + 4);
+        uint32_t bytes = 0;
+        if (h > PREVIEW_MAX_H) break;
+        uint8_t *data = image_decode(bpp, w, h, encoding, p + 12, len - 12, &bytes);
+        if (!data) break;
+        free(preview.data);
+        preview.data = data;
+        preview.bpp = (uint8_t)bpp;
+        preview.w = (uint16_t)w;
+        preview.h = (uint16_t)h;
+        dirty = 1;
+        break;
+    }
     case OP_INJECT:
         for (uint32_t i = 0; i < len; ++i) {
             int next = (inject_head + 1) % (int)sizeof(inject_q);
@@ -1474,6 +1570,18 @@ int main(void) {
         }
         STEP(4);
         int stay = poll_keys();
+        /* Ask for a typeset preview once typing has paused (~250 ms). */
+        if (link_up && input_rev != preview_sent_rev && loop_beat - edit_beat >= 8 &&
+            !tx[TX_PREVIEW].pending) {
+            preview_sent_rev = input_rev;
+            if (input_len == 0) {
+                preview_clear();
+            } else {
+                memcpy(preview_req, input, (size_t)input_len);
+                tx_post(TX_PREVIEW, OP_PREVIEW_REQ, input_rev, preview_req,
+                        (uint32_t)input_len);
+            }
+        }
         STEP(5);
         if (!stay) break;
         if (dirty) {
@@ -1511,6 +1619,7 @@ int main(void) {
     }
     blocks_clear();
     screens_clear();
+    preview_clear();
     free(dump_buf);
     free(blocks);
     free(rx_frame);
