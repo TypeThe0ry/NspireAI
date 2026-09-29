@@ -18,6 +18,18 @@
 > - While the page is open, the calculator's file service pauses: deploy
 >   after closing the page.
 >
+> Start the bridge from a terminal (needs `~/.config/nspireai/env` with
+> `DEEPSEEK_API_KEY=...`):
+>
+> ```sh
+> cd ~/Documents/GitHub/NspireAI && ./scripts/run-navnet-bridge.sh deepseek
+> ```
+>
+> Then open `nspire_ai` on the calculator. Model: `deepseek-v4-pro`
+> (`DEEPSEEK_MODEL` overrides). On the page the **Var** key cycles the
+> thinking effort `off → low → high → max`, shown in the title bar and sent
+> with each request.
+>
 > Build: `scripts/build-marker-probe.sh`. Deploy: `scripts/deploy-page.sh`.
 > Bridge: `scripts/run-navnet-bridge.sh echo`, `deepseek` (needs
 > `DEEPSEEK_API_KEY`; `DEEPSEEK_MODEL` defaults to `deepseek-chat`) or

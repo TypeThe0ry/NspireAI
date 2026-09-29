@@ -15,7 +15,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
-from .bridge import make_backend
+from .bridge import make_backend, split_think_prefix
 from .protocol import FragmentReassembler, decode, encode, fragment
 
 OP_PING, OP_PONG = 1, 2
@@ -180,9 +180,13 @@ class NavNetBridge:
             self.in_flight.discard(key)
             return
         try:
-            prompt = payload.decode("utf-8")
+            effort, prompt = split_think_prefix(payload.decode("utf-8"))
             with self.backend_lock:
-                answer = self.backend.answer(prompt).encode("utf-8", errors="replace")
+                if effort is not None and getattr(self.backend, "supports_effort", False):
+                    text = self.backend.answer(prompt, effort=effort)
+                else:
+                    text = self.backend.answer(prompt)
+                answer = text.encode("utf-8", errors="replace")
         except Exception as exc:
             opcode = OP_ERROR
             answer = f"{type(exc).__name__}: {exc}".encode()
@@ -205,7 +209,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--backend", choices=("echo", "openai", "deepseek"), default="echo")
     parser.add_argument("--model", default=os.environ.get("OPENAI_MODEL", "gpt-5"))
     parser.add_argument("--base-url", default=os.environ.get("OPENAI_BASE_URL"))
-    parser.add_argument("--api-timeout", type=float, default=float(os.environ.get("OPENAI_TIMEOUT_SECONDS", "45")))
+    parser.add_argument("--api-timeout", type=float, default=float(os.environ.get("OPENAI_TIMEOUT_SECONDS", "180")))
     return parser.parse_args(argv)
 
 

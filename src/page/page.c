@@ -9,7 +9,7 @@
  *   running meanwhile (navmain probe, 2026-09-29 17:18), while the OS
  *   document browser is frozen: it neither repaints over the page (drawing
  *   from a resident task flickered) nor reacts to keys.
- * - The calculator registers NavNet service 0x5001 and the Mac helper
+ * - The calculator registers NavNet service 0x5001 and the bridge host
  *   connects to it (host-as-client) and sends a 1 s keepalive.  The service
  *   callback is the connection: the session runs inside it and talks to the
  *   page through the small shared state below.
@@ -66,7 +66,7 @@ extern unsigned int nl_osid(void); /* Ndless ext syscall, not in SDK headers */
  * the session up when nothing has come back for a while. */
 #define IDLE_PING_SECONDS 5
 #define SESSION_DEAD_SECONDS 20
-#define ANSWER_TIMEOUT_SECONDS 90 /* > the bridge's 45 s API timeout */
+#define ANSWER_TIMEOUT_SECONDS 240 /* > the bridge's API timeout, thinking included */
 
 /* ---- display ---- */
 #define W 320
@@ -138,6 +138,10 @@ static int scroll_back;
 static char input[INPUT_CAP + 1];
 static int input_len;
 static int waiting;
+/* Thinking effort, cycled with the Var key and sent as a "#think:<level> "
+ * prefix that the bridge strips (off = no reasoning). */
+static const char *const think_levels[] = {"off", "low", "high", "max"};
+static int think_level;
 static uint32_t next_id = 2;
 static uint32_t waiting_since;
 static int dirty = 1;
@@ -396,8 +400,15 @@ static void render(void) {
     fill_rect(0, 0, W, H, C_BG);
     fill_rect(0, 0, W, 13, C_BAR);
     draw_text(4, 3, "NspireAI", C_BAR_TEXT);
+    {
+        char tag[16] = "think:";
+        int n = 6;
+        for (const char *l = think_levels[think_level]; *l; ++l) tag[n++] = *l;
+        tag[n] = '\0';
+        draw_text(64, 3, tag, think_level ? C_OK : C_DIM);
+    }
     const char *state = link_up ? (waiting ? "thinking..." : "linked")
-                                : "waiting for Mac";
+                                : "waiting for bridge";
     uint16_t dot = link_up ? C_OK : C_WARN;
     fill_rect(W - 6 - CW * (int)strlen(state) - 10, 4, 6, 6, dot);
     draw_text(W - 4 - CW * (int)strlen(state), 3, state, C_BAR_TEXT);
@@ -429,7 +440,7 @@ static void render(void) {
     draw_text(1, INPUT_TOP + 2, row0, C_TEXT);
     if (n > COLS) draw_text(1, INPUT_TOP + 2 + CH, shown + COLS, C_TEXT);
 
-    draw_text(1, H - CH, "enter send  del erase  tab/menu scroll  esc exit", C_DIM);
+    draw_text(1, H - CH, "enter send  del erase  tab/menu scroll  var think  esc exit", C_DIM);
 }
 
 /* The LCD DMA reads RAM, not the data cache.  libndls clear_cache() also
@@ -502,7 +513,7 @@ static const struct keymap chars[] = {
 /* Arrow keys go through the touchpad (I2C) on CX II, so the page avoids
  * them: Tab scrolls back, Menu scrolls forward.  Everything here is a plain
  * key-matrix read. */
-enum { K_ENTER, K_DEL, K_ESC, K_UP, K_DOWN, K_COUNT };
+enum { K_ENTER, K_DEL, K_ESC, K_UP, K_DOWN, K_THINK, K_COUNT };
 
 static int matrix_any_pressed(void) {
     for (volatile uint32_t *r = (volatile uint32_t *)0x900E0010u;
@@ -521,6 +532,7 @@ static int ctl_down(int k) {
     case K_ESC: return isKeyPressed(KEY_NSPIRE_ESC);
     case K_UP: return isKeyPressed(KEY_NSPIRE_TAB);
     case K_DOWN: return isKeyPressed(KEY_NSPIRE_MENU);
+    case K_THINK: return isKeyPressed(KEY_NSPIRE_VAR);
     }
     return 0;
 }
@@ -533,11 +545,17 @@ static void submit(const char *text, int len) {
     shown[len] = '\0';
     hist_add("> ", shown, 1);
     if (!link_up) {
-        hist_add("", "(not connected to the Mac bridge yet)", 2);
+        hist_add("", "(not connected to the bridge yet)", 2);
         return;
     }
-    memcpy(out_text, text, len);
-    out_len = len;
+    char prefix[16] = "#think:";
+    int plen = 7;
+    for (const char *l = think_levels[think_level]; *l; ++l) prefix[plen++] = *l;
+    prefix[plen++] = ' ';
+    if (len > MAX_FRAME_PAYLOAD - plen) len = MAX_FRAME_PAYLOAD - plen;
+    memcpy(out_text, prefix, plen);
+    memcpy(out_text + plen, text, len);
+    out_len = plen + len;
     out_id = next_id++;
     awaited_id = out_id;
     waiting = 1;
@@ -576,6 +594,7 @@ static int poll_keys(void) {
             }
             if (k == K_UP && scroll_back < hist_count - HIST_ROWS) { scroll_back++; dirty = 1; }
             if (k == K_DOWN && scroll_back > 0) { scroll_back--; dirty = 1; }
+            if (k == K_THINK) { think_level = (think_level + 1) % 4; dirty = 1; }
         }
         prev_ctl[k] = down;
     }
@@ -617,7 +636,7 @@ static void main_log(const char *text, int value) {
 static int end_session(int started) {
     quitting = 1;
     session_gen++;
-    /* The Mac's 1 s keepalive makes the callback's blocking read return. */
+    /* The host's 1 s keepalive makes the callback's blocking read return. */
     for (int i = 0; i < 100 && session_active; ++i) TCC_TASK_SLEEP(1);
     nn_ch_t ch = active_ch;
     if (session_active && ch) {
@@ -686,20 +705,20 @@ int main(void) {
             started = (int16_t)TI_NN_StartService(SERVICE_ID, NULL, service_callback);
             if (start_tried == 0 || started >= 0)
                 hist_add("", started < 0 ? "NavNet service busy; retrying..."
-                                         : "Waiting for the Mac bridge...", 2);
+                                         : "Waiting for the bridge...", 2);
             start_tried = RTC_SECONDS;
         }
         STEP(2);
         if (link_up != was_linked) {
             was_linked = link_up;
-            hist_add("", was_linked ? "Connected to the Mac bridge."
-                                    : "Mac bridge disconnected; waiting...", 2);
+            hist_add("", was_linked ? "Connected to the bridge."
+                                    : "Bridge disconnected; waiting...", 2);
             if (!was_linked) waiting = 0;
         }
         if (waiting && RTC_SECONDS - waiting_since >= ANSWER_TIMEOUT_SECONDS) {
             waiting = 0;
             awaited_id = 0;
-            hist_add("! ", "no answer from the Mac; try again", 2);
+            hist_add("! ", "no answer from the bridge; try again", 2);
         }
         STEP(3);
         if (in_ready) {

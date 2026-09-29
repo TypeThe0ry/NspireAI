@@ -65,6 +65,18 @@ class OpenAIBackend:
         return answer
 
 
+THINK_PREFIX = "#think:"
+
+
+def split_think_prefix(prompt: str) -> tuple[Optional[str], str]:
+    """The page prefixes requests with "#think:<off|low|high|max> "."""
+    if prompt.startswith(THINK_PREFIX):
+        head, _, rest = prompt[len(THINK_PREFIX):].partition(" ")
+        if head in ("off", "low", "high", "max"):
+            return head, rest
+    return None, prompt
+
+
 # The calculator page shows 53 columns and keeps about 3 KB of an answer, so
 # the model is asked for short plain-text replies.
 CALCULATOR_SYSTEM_PROMPT = (
@@ -76,6 +88,8 @@ CALCULATOR_SYSTEM_PROMPT = (
 
 class ChatCompletionsBackend:
     """OpenAI-compatible chat.completions backend (DeepSeek and others)."""
+
+    supports_effort = True
 
     def __init__(self, model: str, api_key: Optional[str], base_url: Optional[str], timeout: float = 45.0):
         try:
@@ -96,13 +110,21 @@ class ChatCompletionsBackend:
     def reset(self) -> None:
         self.messages.clear()
 
-    def answer(self, prompt: str) -> str:
+    def answer(self, prompt: str, effort: Optional[str] = None) -> str:
+        """`effort` is off/low/high/max from the calculator page (None = model default)."""
         self.messages.append({"role": "user", "content": prompt})
+        kwargs: dict = {}
+        if effort == "off":
+            kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
+        elif effort in ("low", "high", "max"):
+            kwargs["reasoning_effort"] = effort
+            kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "system", "content": CALCULATOR_SYSTEM_PROMPT}] + self.messages,
                 max_tokens=600,
+                **kwargs,
             )
             answer = (response.choices[0].message.content or "").strip()
         except Exception:
@@ -179,7 +201,7 @@ class Bridge:
 
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-DEEPSEEK_DEFAULT_MODEL = "deepseek-chat"
+DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-pro"
 
 
 def make_backend(name: str, model: str, api_key: Optional[str], base_url: Optional[str], timeout: float):
