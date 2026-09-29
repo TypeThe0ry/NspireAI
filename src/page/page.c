@@ -142,6 +142,7 @@ static int waiting;
  * prefix that the bridge strips (off = no reasoning). */
 static const char *const think_levels[] = {"off", "low", "high", "max"};
 static int think_level;
+static int qwerty = 1; /* enhanced typing on by default; Doc key switches */
 static uint32_t next_id = 2;
 static uint32_t waiting_since;
 static int dirty = 1;
@@ -394,7 +395,8 @@ static void hist_add(const char *prefix, const char *text, int kind) {
 
 #define HIST_TOP 16
 #define INPUT_TOP 204
-#define HIST_ROWS ((INPUT_TOP - HIST_TOP - 2) / CH)
+#define LEGEND_ROWS 4
+#define HIST_ROWS ((INPUT_TOP - HIST_TOP - 2) / CH - (qwerty ? LEGEND_ROWS : 0))
 
 static void render(void) {
     fill_rect(0, 0, W, H, C_BG);
@@ -406,6 +408,7 @@ static void render(void) {
         for (const char *l = think_levels[think_level]; *l; ++l) tag[n++] = *l;
         tag[n] = '\0';
         draw_text(64, 3, tag, think_level ? C_OK : C_DIM);
+        draw_text(136, 3, qwerty ? "kbd:qwerty" : "kbd:abc", C_BAR_TEXT);
     }
     const char *state = link_up ? (waiting ? "thinking..." : "linked")
                                 : "waiting for bridge";
@@ -421,6 +424,19 @@ static void render(void) {
         draw_text(1, HIST_TOP + r * CH, hist[i], c);
     }
 
+    if (qwerty) {
+        /* Key legend, laid out like the physical alpha block. */
+        static const char *const legend[LEGEND_ROWS] = {
+            "q  w  e  r  t  y  u  i  o",
+            "a  s  d  f  g  h  j  k  l",
+            "z  x  c  v  b  n  m  p  enter",
+            "   ,  ?  !  '  -  space",
+        };
+        int top = INPUT_TOP - 3 - LEGEND_ROWS * CH;
+        fill_rect(0, top - 1, W, LEGEND_ROWS * CH + 1, C_INPUT_BG);
+        for (int r = 0; r < LEGEND_ROWS; ++r)
+            draw_text(70, top + r * CH, legend[r], C_BAR);
+    }
     fill_rect(0, INPUT_TOP - 2, W, 1, C_DIM);
     fill_rect(0, INPUT_TOP, W, 2 * CH + 4, C_INPUT_BG);
     /* Show the tail of the input on two rows. */
@@ -440,7 +456,7 @@ static void render(void) {
     draw_text(1, INPUT_TOP + 2, row0, C_TEXT);
     if (n > COLS) draw_text(1, INPUT_TOP + 2 + CH, shown + COLS, C_TEXT);
 
-    draw_text(1, H - CH, "enter send  del erase  tab/menu scroll  var think  esc exit", C_DIM);
+    draw_text(1, H - CH, "tab/menu scroll  var think  doc keyboard  esc exit", C_DIM);
 }
 
 /* The LCD DMA reads RAM, not the data cache.  libndls clear_cache() also
@@ -483,37 +499,54 @@ static void present(void) {
 /* Input                                                               */
 /* ------------------------------------------------------------------ */
 
-struct keymap { const t_key *key; char lower, upper; };
+/* Two layouts.  "abc" is what the key caps say.  "qwerty" (enhanced typing)
+ * maps the alpha block by physical position, 9 keys per row:
+ *   EE A B C D E F G ?!   ->  q w e r t y u i o
+ *   pi H I J K L M N flag ->  a s d f g h j k l
+ *   ,  O P Q R S T U      ->  z x c v b n m p      (return stays Enter)
+ *      V W X Y Z          ->  , ? ! ' -
+ * The Doc key switches; a legend on the page shows the active map.
+ * A 0 means the key types nothing in that layout. */
+struct keymap { const t_key *key; char lower, upper, qlower, qupper; };
 static const struct keymap chars[] = {
-    {&KEY_NSPIRE_A, 'a', 'A'}, {&KEY_NSPIRE_B, 'b', 'B'}, {&KEY_NSPIRE_C, 'c', 'C'},
-    {&KEY_NSPIRE_D, 'd', 'D'}, {&KEY_NSPIRE_E, 'e', 'E'}, {&KEY_NSPIRE_F, 'f', 'F'},
-    {&KEY_NSPIRE_G, 'g', 'G'}, {&KEY_NSPIRE_H, 'h', 'H'}, {&KEY_NSPIRE_I, 'i', 'I'},
-    {&KEY_NSPIRE_J, 'j', 'J'}, {&KEY_NSPIRE_K, 'k', 'K'}, {&KEY_NSPIRE_L, 'l', 'L'},
-    {&KEY_NSPIRE_M, 'm', 'M'}, {&KEY_NSPIRE_N, 'n', 'N'}, {&KEY_NSPIRE_O, 'o', 'O'},
-    {&KEY_NSPIRE_P, 'p', 'P'}, {&KEY_NSPIRE_Q, 'q', 'Q'}, {&KEY_NSPIRE_R, 'r', 'R'},
-    {&KEY_NSPIRE_S, 's', 'S'}, {&KEY_NSPIRE_T, 't', 'T'}, {&KEY_NSPIRE_U, 'u', 'U'},
-    {&KEY_NSPIRE_V, 'v', 'V'}, {&KEY_NSPIRE_W, 'w', 'W'}, {&KEY_NSPIRE_X, 'x', 'X'},
-    {&KEY_NSPIRE_Y, 'y', 'Y'}, {&KEY_NSPIRE_Z, 'z', 'Z'},
-    {&KEY_NSPIRE_0, '0', '0'}, {&KEY_NSPIRE_1, '1', '1'}, {&KEY_NSPIRE_2, '2', '2'},
-    {&KEY_NSPIRE_3, '3', '3'}, {&KEY_NSPIRE_4, '4', '4'}, {&KEY_NSPIRE_5, '5', '5'},
-    {&KEY_NSPIRE_6, '6', '6'}, {&KEY_NSPIRE_7, '7', '7'}, {&KEY_NSPIRE_8, '8', '8'},
-    {&KEY_NSPIRE_9, '9', '9'},
-    {&KEY_NSPIRE_SPACE, ' ', ' '}, {&KEY_NSPIRE_PERIOD, '.', '.'},
-    {&KEY_NSPIRE_COMMA, ',', ','}, {&KEY_NSPIRE_QUESEXCL, '?', '!'},
-    {&KEY_NSPIRE_PLUS, '+', '+'}, {&KEY_NSPIRE_MINUS, '-', '-'},
-    {&KEY_NSPIRE_NEGATIVE, '-', '-'}, {&KEY_NSPIRE_MULTIPLY, '*', '*'},
-    {&KEY_NSPIRE_DIVIDE, '/', '/'}, {&KEY_NSPIRE_EXP, '^', '^'},
-    {&KEY_NSPIRE_LP, '(', '('}, {&KEY_NSPIRE_RP, ')', ')'},
-    {&KEY_NSPIRE_EQU, '=', '='}, {&KEY_NSPIRE_COLON, ':', ':'},
-    {&KEY_NSPIRE_APOSTROPHE, '\'', '"'}, {&KEY_NSPIRE_QUOTE, '"', '"'},
-    {&KEY_NSPIRE_LTHAN, '<', '<'}, {&KEY_NSPIRE_GTHAN, '>', '>'},
+    {&KEY_NSPIRE_EE, 0, 0, 'q', 'Q'},
+    {&KEY_NSPIRE_A, 'a', 'A', 'w', 'W'}, {&KEY_NSPIRE_B, 'b', 'B', 'e', 'E'},
+    {&KEY_NSPIRE_C, 'c', 'C', 'r', 'R'}, {&KEY_NSPIRE_D, 'd', 'D', 't', 'T'},
+    {&KEY_NSPIRE_E, 'e', 'E', 'y', 'Y'}, {&KEY_NSPIRE_F, 'f', 'F', 'u', 'U'},
+    {&KEY_NSPIRE_G, 'g', 'G', 'i', 'I'}, {&KEY_NSPIRE_QUESEXCL, '?', '!', 'o', 'O'},
+    {&KEY_NSPIRE_PI, 0, 0, 'a', 'A'},
+    {&KEY_NSPIRE_H, 'h', 'H', 's', 'S'}, {&KEY_NSPIRE_I, 'i', 'I', 'd', 'D'},
+    {&KEY_NSPIRE_J, 'j', 'J', 'f', 'F'}, {&KEY_NSPIRE_K, 'k', 'K', 'g', 'G'},
+    {&KEY_NSPIRE_L, 'l', 'L', 'h', 'H'}, {&KEY_NSPIRE_M, 'm', 'M', 'j', 'J'},
+    {&KEY_NSPIRE_N, 'n', 'N', 'k', 'K'}, {&KEY_NSPIRE_FLAG, 0, 0, 'l', 'L'},
+    {&KEY_NSPIRE_COMMA, ',', ',', 'z', 'Z'},
+    {&KEY_NSPIRE_O, 'o', 'O', 'x', 'X'}, {&KEY_NSPIRE_P, 'p', 'P', 'c', 'C'},
+    {&KEY_NSPIRE_Q, 'q', 'Q', 'v', 'V'}, {&KEY_NSPIRE_R, 'r', 'R', 'b', 'B'},
+    {&KEY_NSPIRE_S, 's', 'S', 'n', 'N'}, {&KEY_NSPIRE_T, 't', 'T', 'm', 'M'},
+    {&KEY_NSPIRE_U, 'u', 'U', 'p', 'P'},
+    {&KEY_NSPIRE_V, 'v', 'V', ',', ','}, {&KEY_NSPIRE_W, 'w', 'W', '?', '?'},
+    {&KEY_NSPIRE_X, 'x', 'X', '!', '!'}, {&KEY_NSPIRE_Y, 'y', 'Y', '\'', '"'},
+    {&KEY_NSPIRE_Z, 'z', 'Z', '-', '_'},
+    {&KEY_NSPIRE_0, '0', '0', '0', '0'}, {&KEY_NSPIRE_1, '1', '1', '1', '1'},
+    {&KEY_NSPIRE_2, '2', '2', '2', '2'}, {&KEY_NSPIRE_3, '3', '3', '3', '3'},
+    {&KEY_NSPIRE_4, '4', '4', '4', '4'}, {&KEY_NSPIRE_5, '5', '5', '5', '5'},
+    {&KEY_NSPIRE_6, '6', '6', '6', '6'}, {&KEY_NSPIRE_7, '7', '7', '7', '7'},
+    {&KEY_NSPIRE_8, '8', '8', '8', '8'}, {&KEY_NSPIRE_9, '9', '9', '9', '9'},
+    {&KEY_NSPIRE_SPACE, ' ', ' ', ' ', ' '}, {&KEY_NSPIRE_PERIOD, '.', '.', '.', '.'},
+    {&KEY_NSPIRE_PLUS, '+', '+', '+', '+'}, {&KEY_NSPIRE_MINUS, '-', '-', '-', '-'},
+    {&KEY_NSPIRE_NEGATIVE, '-', '-', '-', '-'}, {&KEY_NSPIRE_MULTIPLY, '*', '*', '*', '*'},
+    {&KEY_NSPIRE_DIVIDE, '/', '/', '/', '/'}, {&KEY_NSPIRE_EXP, '^', '^', '^', '^'},
+    {&KEY_NSPIRE_LP, '(', '(', '(', '('}, {&KEY_NSPIRE_RP, ')', ')', ')', ')'},
+    {&KEY_NSPIRE_EQU, '=', '=', '=', '='}, {&KEY_NSPIRE_COLON, ':', ':', ':', ':'},
+    {&KEY_NSPIRE_APOSTROPHE, '\'', '"', '\'', '"'}, {&KEY_NSPIRE_QUOTE, '"', '"', '"', '"'},
+    {&KEY_NSPIRE_LTHAN, '<', '<', '<', '<'}, {&KEY_NSPIRE_GTHAN, '>', '>', '>', '>'},
 };
 #define NCHARS (int)(sizeof(chars) / sizeof(chars[0]))
 
 /* Arrow keys go through the touchpad (I2C) on CX II, so the page avoids
  * them: Tab scrolls back, Menu scrolls forward.  Everything here is a plain
  * key-matrix read. */
-enum { K_ENTER, K_DEL, K_ESC, K_UP, K_DOWN, K_THINK, K_COUNT };
+enum { K_ENTER, K_DEL, K_ESC, K_UP, K_DOWN, K_THINK, K_LAYOUT, K_COUNT };
 
 static int matrix_any_pressed(void) {
     for (volatile uint32_t *r = (volatile uint32_t *)0x900E0010u;
@@ -533,6 +566,7 @@ static int ctl_down(int k) {
     case K_UP: return isKeyPressed(KEY_NSPIRE_TAB);
     case K_DOWN: return isKeyPressed(KEY_NSPIRE_MENU);
     case K_THINK: return isKeyPressed(KEY_NSPIRE_VAR);
+    case K_LAYOUT: return isKeyPressed(KEY_NSPIRE_DOC);
     }
     return 0;
 }
@@ -569,8 +603,10 @@ static int poll_keys(void) {
     int shift = isKeyPressed(KEY_NSPIRE_SHIFT);
     for (int i = 0; i < NCHARS; ++i) {
         int down = isKeyPressed(*chars[i].key) ? 1 : 0;
-        if (down && !prev_char[i] && !waiting && input_len < INPUT_CAP) {
-            input[input_len++] = shift ? chars[i].upper : chars[i].lower;
+        char c = qwerty ? (shift ? chars[i].qupper : chars[i].qlower)
+                        : (shift ? chars[i].upper : chars[i].lower);
+        if (down && !prev_char[i] && c && !waiting && input_len < INPUT_CAP) {
+            input[input_len++] = c;
             input[input_len] = '\0';
             dirty = 1;
         }
@@ -595,6 +631,7 @@ static int poll_keys(void) {
             if (k == K_UP && scroll_back < hist_count - HIST_ROWS) { scroll_back++; dirty = 1; }
             if (k == K_DOWN && scroll_back > 0) { scroll_back--; dirty = 1; }
             if (k == K_THINK) { think_level = (think_level + 1) % 4; dirty = 1; }
+            if (k == K_LAYOUT) { qwerty = !qwerty; scroll_back = 0; dirty = 1; }
         }
         prev_ctl[k] = down;
     }
