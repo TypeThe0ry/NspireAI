@@ -3686,3 +3686,38 @@ reconnect, and USB stayed E022. Node discovery after starting the helper
 took anywhere from immediate to about 18 s; starting a bridge right after
 another one was stopped sometimes saw no node at all, so wait about 10 s
 between them.
+
+### 2026-09-29 Flicker root cause; page moved into main(); navmain re-test
+
+- **Manual page test works end to end.** The user typed `hi` on the resident
+  task page (dev build, 0x5011); the bridge logged `RX opcode=3 ... bytes=2`
+  and answered.
+- **Flicker.** While a resident task draws into the LCD buffer, the running
+  OS keeps overwriting it; redrawing on every detected overwrite made the
+  flicker faster. `lcdinfo` probe results:
+  - LCD base is 0xA8000000, on-chip SRAM (section 0xa8000c1a);
+  - LCD control 0x392d (16 bpp), hww=0;
+  - TTB is 0xA4004000;
+  - heap buffers are section-mapped with VA=PA, yet showing them gives
+    garbage, while the OS buffer shows correctly. So **the LCD only scans
+    out of that SRAM**.
+
+  The `shadowfind` SDRAM search (from main) found one 94%-matching frame at
+  0x125227E8. The same search from the running page found nothing, so that
+  hit was almost certainly the Ndless loader's `savedscr` copy, not an OS
+  composition buffer.
+- **navmain re-test with the fixed host** (lockless reads, 1 s keepalive):
+  PING/PONG → REQUEST #2 → RESPONSE → REQUEST #3 "got:…" (33 bytes), all
+  while `main()` parked the UI task in `TCC_Task_Sleep`. The earlier "UI task
+  must be free" conclusion was an artefact of the host write lock. navmain
+  then returned while a second callback (17:18:25) was running in its image,
+  and the handheld dropped off USB.
+- **Page redesign:** the page now runs in `main()`. IRQs are re-enabled, the
+  UI task is paced with `TCC_Task_Sleep(3)`, and keypad IRQ 16 is masked. It
+  renders off screen, copies to the LCD, and lets the Ndless loader restore
+  the OS picture on exit. There is no resident task, registry, or
+  show/hide; images are about 46.7 KB. The frozen OS UI neither repaints nor
+  handles keys. Exit order: end the session (keepalive or
+  `TI_NN_Disconnect`), `TI_NN_StopService`, then wait until a
+  `callbacks_running` counter is 0. If a callback is still inside the
+  image, the page calls `nl_set_resident` (leak once) instead of returning.

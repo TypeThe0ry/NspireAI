@@ -2,6 +2,7 @@
 # Upload the chat page (src/page) to the calculator and verify it byte for byte.
 #   deploy-page.sh            upload src/page/nspire_ai.tns as /nspire_ai.tns
 #   deploy-page.sh autotest   upload the self-testing build as /nspire_ai_autotest.tns
+#   deploy-page.sh dev        upload the service-0x5011 build as /nspire_ai_dev.tns
 # Build first with scripts/build-marker-probe.sh.  Uses the raw USB helper,
 # which can share the bus with an idle TI desktop app but not with a running
 # bridge.
@@ -11,7 +12,8 @@ H="$ROOT/bridge/nspire-helper/target/debug/nspireai-usb-helper"
 case "${1:-page}" in
   page) SRC="$ROOT/src/page/nspire_ai.tns"; DEST=/nspire_ai.tns ;;
   autotest) SRC="$ROOT/src/page/nspire_ai_autotest.tns"; DEST=/nspire_ai_autotest.tns ;;
-  *) echo "usage: $0 [page|autotest]" >&2; exit 2 ;;
+  dev) SRC="$ROOT/src/page/nspire_ai_dev.tns"; DEST=/nspire_ai_dev.tns ;;
+  *) echo "usage: $0 [page|autotest|dev]" >&2; exit 2 ;;
 esac
 [[ -f "$SRC" ]] || { echo "missing $SRC; run scripts/build-marker-probe.sh" >&2; exit 2; }
 python3 "$ROOT/scripts/check-ngc-memory-budget.py" "$SRC"
