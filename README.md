@@ -1,26 +1,26 @@
 # NspireAI
 
-> **2026-09-29 — current architecture (supersedes the notes below).**
-> The chat page lives in `src/page/page.c` and is deployed as
-> `/nspire_ai.tns`. Physically verified building blocks
-> (`docs/test-status.md`):
+> **2026-09-29 — working. The chat page reaches `Mac received: <text>`
+> on the handheld** (`docs/test-status.md`, "GOAL REACHED"). Current design,
+> each piece verified on the CX II CAS 6.2.0.333:
 >
-> - `main()` only allocates state, creates a resident Nucleus task
->   (priority 250) and returns. The Ndless loader masks IRQs for all of
->   `main()`, and TI's USB/NavNet stack needs the OS UI task to be free.
-> - The calculator registers NavNet service `0x5001`. The Mac Java helper
->   connects to it (host-as-client, now the bridge default) and sends a PING
->   first. The whole session runs inside the calculator's service callback.
->   This completed a full request → response round trip.
-> - The page owns the screen through its own LCD framebuffer, polls the key
->   matrix, and masks the keypad IRQ while it is visible. Esc hides it, and
->   reopening the document shows the same resident page again, so only one
->   image is loaded per boot.
-> - Images must stay under ~60 KB of Zehn allocation, or the loader reports
->   "document format is not supported". Tasks must not use the file system.
+> - `src/page/page.c` runs in `main()`: IRQs re-enabled, the OS UI task
+>   paced with Nucleus `TCC_Task_Sleep`, so USB/NavNet keep running while
+>   the OS browser is frozen (no repaint, no key leakage).
+> - The calculator registers NavNet service `0x5001`; the Mac Java helper
+>   connects to it (host-as-client, the bridge default), speaks first, and
+>   sends a 1 s keepalive. The whole session runs inside the calculator's
+>   service callback.
+> - The page scans out of its own double-buffered SDRAM framebuffer in the
+>   panel's portrait order and hides the hardware cursor, so the OS's own
+>   repaints never show.
+> - Images stay under ~60 KB of Zehn allocation; nothing stays resident.
+> - While the page is open, the calculator's file service pauses: deploy
+>   after closing the page.
 >
 > Build: `scripts/build-marker-probe.sh`. Deploy: `scripts/deploy-page.sh`.
-> Bridge: `scripts/run-navnet-bridge.sh echo` (or `openai`).
+> Bridge: `scripts/run-navnet-bridge.sh echo` (or `openai` with
+> `OPENAI_API_KEY`).
 
 > **Do not run the IRQ-scope 0922 handheld build**: the user reported a freeze
 > followed by a crash. Its SHA256 is

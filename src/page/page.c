@@ -53,6 +53,11 @@ extern unsigned int nl_osid(void); /* Ndless ext syscall, not in SDK headers */
 #define IRQ_DISABLE (*(volatile uint32_t *)0xDC000014u)
 #define IRQ_KEYPAD (1u << 16)
 #define LCD_BASE (*(volatile uint32_t *)0xC0000010u)
+/* PL111 hardware cursor overlay: the OS shows its hourglass through it and
+ * keeps turning it back on while a document is "opening". */
+#define LCD_CURSOR_CTRL (*(volatile uint32_t *)0xC0000C00u)
+#define LCD_CURSOR_XY (*(volatile uint32_t *)0xC0000C10u)   /* x bits 0-9, y bits 16-25 */
+#define LCD_CURSOR_CLIP (*(volatile uint32_t *)0xC0000C14u) /* clip x bits 0-5, y bits 8-13 */
 #define RTC_SECONDS (*(volatile uint32_t *)0x90090000u) /* as Ndless gettimeofday */
 
 /* Session liveness (seconds).  TI_NN_Read only ever reports -257 when the
@@ -82,10 +87,17 @@ extern unsigned int nl_osid(void); /* Ndless ext syscall, not in SDK headers */
 #define C_WARN RGB(220, 120, 20)
 #define C_INPUT_BG RGB(232, 236, 244)
 
-static int keypad_irq_was_enabled;
-static uint16_t *fb;    /* LCD buffer in on-chip SRAM (LCD_BASE) */
-static uint16_t *back;  /* off-screen 320x240 render target */
+static uint16_t *fb;    /* the OS's LCD buffer (LCD_BASE at start) */
+static uint16_t *back;  /* off-screen 320x240 landscape render target */
 static int hww;         /* 240x320 panel: pixel (x,y) at x*240+y */
+/* Private scan-out.  The OS keeps repainting its LCD buffer (the document
+ * "opening" hourglass animation alone repaints the whole screen several
+ * times a second), so the page gives the LCD its own SDRAM buffers instead:
+ * two of them, filled in the panel's native portrait order (measured with
+ * src/probes/scanout: pixel (x,y) at x*240 + 239-y) and flipped by writing
+ * the LCD base register, which the PL111 latches at the next frame. */
+static uint16_t *scan[2];
+static int scan_front;
 
 /* ---- shared between the page loop and the NavNet callback ---- */
 #define TEXT_CAP 3072
@@ -434,14 +446,26 @@ static void clean_dcache(void) {
 }
 
 static void present(void) {
-    if (hww) {
-        for (int x = 0; x < W; ++x)
-            for (int y = 0; y < H; ++y)
-                fb[x * 240 + y] = back[y * W + x];
-    } else {
-        memcpy(fb, back, W * H * 2);
+    if (!scan[0]) { /* fallback: draw into the OS buffer */
+        if (hww) {
+            for (int x = 0; x < W; ++x)
+                for (int y = 0; y < H; ++y)
+                    fb[x * 240 + y] = back[y * W + x];
+        } else {
+            memcpy(fb, back, W * H * 2);
+        }
+        clean_dcache();
+        return;
+    }
+    uint16_t *dst = scan[scan_front ^ 1];
+    for (int y = 0; y < H; ++y) {
+        const uint16_t *row = back + y * W;
+        uint16_t *col = dst + (239 - y);
+        for (int x = 0; x < W; ++x, col += 240) *col = row[x];
     }
     clean_dcache();
+    scan_front ^= 1;
+    LCD_BASE = (uint32_t)(uintptr_t)dst;
 }
 
 /* ------------------------------------------------------------------ */
@@ -616,6 +640,19 @@ int main(void) {
     if (!back) { main_log("out of memory", 0); return 1; }
     hww = lcd_type() == SCR_240x320_565;
     fb = (uint16_t *)(uintptr_t)LCD_BASE;
+    /* The OS re-enables the cursor overlay on every hourglass tick, so
+     * toggling its enable bit flickers.  Clipping the whole image and
+     * parking it off screen hides it whatever the OS does. */
+    uint32_t saved_cursor_xy = LCD_CURSOR_XY, saved_cursor_clip = LCD_CURSOR_CLIP;
+    uint8_t *scan_raw = NULL;
+    if (!hww) { /* portrait mapping measured on a landscape-mode unit only */
+        scan_raw = malloc(2 * W * H * 2 + 64);
+        if (scan_raw) {
+            scan[0] = (uint16_t *)(((uintptr_t)scan_raw + 31) & ~(uintptr_t)31);
+            scan[1] = scan[0] + W * H;
+            memset(scan[0], 0xFF, 2 * W * H * 2);
+        }
+    }
     uint32_t boot = RTC_SECONDS;
     conversation_id = (uint16_t)(boot | 1u);
     next_id = (boot & 0xFFFFu) << 12 | 2u;
@@ -625,7 +662,7 @@ int main(void) {
      * queued for the frozen OS browser to replay after the page closes. */
     int saved_irq = TCT_Local_Control_Interrupts(0);
 #ifndef PAGE_KEEP_KEYPAD_IRQ
-    keypad_irq_was_enabled = (IRQ_ENABLE & IRQ_KEYPAD) != 0;
+    int keypad_irq_was_enabled = (IRQ_ENABLE & IRQ_KEYPAD) != 0;
     if (keypad_irq_was_enabled) IRQ_DISABLE = IRQ_KEYPAD;
 #endif
 
@@ -706,14 +743,24 @@ int main(void) {
             dirty = 0;
             STEP(6);
             render();
-            STEP(7);
-            present();
         }
+        /* Copy every frame: the OS still repaints the LCD now and then (once
+         * at open, at least), and a page that only presents on change stays
+         * hidden after that. */
+        STEP(7);
+        present();
+        if (scan[0] && LCD_BASE != (uint32_t)(uintptr_t)scan[scan_front])
+            LCD_BASE = (uint32_t)(uintptr_t)scan[scan_front]; /* OS took it back */
+        LCD_CURSOR_CLIP = 0x3F3Fu;
+        LCD_CURSOR_XY = 0x03FF03FFu;
         STEP(8);
         TCC_TASK_SLEEP(TICKS_PER_FRAME);
     }
     STEP(9);
 
+    if (scan[0]) LCD_BASE = (uint32_t)(uintptr_t)fb; /* give the LCD back */
+    LCD_CURSOR_CLIP = saved_cursor_clip;
+    LCD_CURSOR_XY = saved_cursor_xy;
     int session_gone = end_session(started);
     wait_keys_released(); /* do not leave Esc for the OS browser */
 #ifndef PAGE_KEEP_KEYPAD_IRQ
@@ -728,5 +775,6 @@ int main(void) {
         return 0;
     }
     free(back);
+    free(scan_raw);
     return 0;
 }

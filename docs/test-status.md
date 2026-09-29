@@ -3742,3 +3742,39 @@ Fallback if the main()-parked page still flickers: a private portrait-order
 SDRAM scan buffer (`LCD_BASE` → our buffer while the page is shown). The new
 probe `src/probes/scanout` (sha `5e16e856...`) shows one test picture through
 the four candidate portrait mappings, to pick the right one on the handheld.
+
+### 2026-09-29 GOAL REACHED: stable page, typed request, same-page response
+
+Final page (`src/page/page.c`, sha `5e391e55...`), tested by the user on
+the handheld with the echo bridge (`scripts/run-navnet-bridge.sh echo`):
+open `nspire_ai.tns` → "linked" → type `hi`, Enter → `Mac received: hi` on
+the page → Esc returns to the document list. No flicker, no freeze, USB
+stays up. The autotest build had earlier completed the same loop
+unattended (request → response → page-side receipt).
+
+What made it work, in order of discovery:
+
+1. Page loop in `main()` with IRQs re-enabled and `TCC_Task_Sleep` pacing
+   (the parked UI task freezes the OS browser, keys included).
+2. Host-as-client NavNet with a 1 s host keepalive and lockless host reads
+   (NavNet reads block until data arrives, whatever timeout is passed).
+3. Private scan-out: the OS keeps repainting its LCD buffer (hourglass
+   animation), so the page owns two SDRAM buffers in the panel's portrait
+   order (pixel (x,y) at x*240 + 239-y, from `src/probes/scanout`, mapping
+   2) and flips `LCD_BASE` (0xC0000010) every frame, re-asserting it if the
+   OS takes it back.
+4. The hourglass is the PL111 hardware cursor; the OS re-enables it every
+   tick, so the page clips it fully (0xC0000C14 = 0x3F3F) and parks it off
+   screen (0xC0000C10) each frame, restoring both on exit.
+5. Loop telemetry rides on PONG payloads (`RX pong PONG b=<beat> s=<step>`
+   in the bridge log), which showed the "frozen" page was running fine and
+   only its picture was overwritten.
+
+Operational facts:
+
+- While the page is open the calculator's file service does not answer
+  (the document manager runs on the parked UI task); deploy only after the
+  page has been closed. Device info and screen capture keep working.
+- TI screen captures show the OS composition buffer, never the page.
+- Remote key injection is unreliable for navigation; verify with a capture
+  before pressing Enter.

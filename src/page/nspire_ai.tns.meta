@@ -1,0 +1,13 @@
+sha256=41c033bffcce9d51ff9b641f0c375955be8db627d857dd9e9e6a6b93b362f96d
+ui_backend=TRUE
+ngc_probe=FALSE
+ngc_probe_stage=0
+ngc_auto_transport=FALSE
+ngc_local_service=FALSE
+ngc_menu_local_service=FALSE
+ngc_cpu_irq=FALSE
+ngc_irq_window=FALSE
+ngc_irq_menu=FALSE
+ngc_task_handoff=FALSE
+ngc_task_probe=FALSE
+build_status=success
