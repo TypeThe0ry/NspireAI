@@ -3721,3 +3721,24 @@ between them.
   `TI_NN_Disconnect`), `TI_NN_StopService`, then wait until a
   `callbacks_running` counter is 0. If a callback is still inside the
   image, the page calls `nl_set_resident` (leak once) instead of returning.
+
+### 2026-09-29 LCD research workflow (read-only)
+
+A three-angle research workflow (Ndless sources, the Hackspire CX II MMIO
+page, other Ndless projects) concluded:
+
+- 0xA8000000 is Hackspire's "Magic VRAM" (0x25800 bytes). Writes are
+  X-Y-swapped/rotated, and it "can't be used as generic RAM".
+- The PL111 timing (CPL=240, LPP=320) scans in the panel's native portrait
+  order.
+- The OS composes into its own landscape buffer and copies it into VRAM with
+  the FTDMAC020 DMA (0xBC000000, likely channel 0). That DMA is the
+  overwrite behind the flicker.
+- The LCD *can* scan SDRAM: Ndless r2022 `lcd_compat` does, after rotating
+  the panel over SPI. v1's garbage is better explained by landscape data in a
+  portrait-scanned buffer than by an SDRAM restriction.
+
+Fallback if the main()-parked page still flickers: a private portrait-order
+SDRAM scan buffer (`LCD_BASE` → our buffer while the page is shown). The new
+probe `src/probes/scanout` (sha `5e16e856...`) shows one test picture through
+the four candidate portrait mappings, to pick the right one on the handheld.
