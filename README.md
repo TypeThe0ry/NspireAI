@@ -16,7 +16,13 @@
 >   `bridge/commands.default.json` and `~/.config/nspireai/commands.json`.
 > - Persistent multi-session chats with context (Cat key), stored under
 >   `~/.config/nspireai/sessions/`.
-> - Chinese input by pinyin: the model reads pinyin and answers in Chinese.
+> - Chinese input: a pinyin input method with a candidate bar (Ctrl+Space).
+>   The dictionary lives on the host (`bridge/ime.py`, built from `jieba` and
+>   `pypinyin`); whole sentences, abbreviations (`zg` → 中国) and unfinished
+>   syllables work, and what you pick is learned.
+> - Internet access: the model can search the web and read pages
+>   (`bridge/webtools.py`) and shows what it looks up. Menu → 7 switches it
+>   off and on; `NSPIREAI_WEB=0` disables it.
 > - The calculator is found on any USB port, hub or dock, and the bridge
 >   waits for it to appear.
 >
@@ -52,6 +58,9 @@
 > | cat | chats: switch, new, delete |
 > | var | thinking effort: off, low, high, max |
 > | doc | keyboard layout |
+> | ctrl + space, or scratchpad | Chinese input on/off (`zh` / `en` in the title bar) |
+> | letters, then 1-9 or space | pick a candidate (space = the first); arrows = more candidates; enter = keep the letters; esc = drop them |
+> | menu, 7 | web search on/off |
 > | ctrl + key | LaTeX symbols: `( )` → `{ }`, `÷` → `\`, `−` → `_`, `=` → `$` … |
 >
 > **Develop**: build with `scripts/build-marker-probe.sh`; redeploy and

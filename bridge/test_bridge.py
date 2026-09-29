@@ -108,5 +108,125 @@ class BridgeEchoTests(unittest.TestCase):
             self.assertEqual(backend.calls, 1)
 
 
+
+
+class FakeCall:
+    def __init__(self, identifier, name, arguments):
+        self.id = identifier
+        self.function = type("Function", (), {"name": name, "arguments": arguments})()
+
+
+class FakeMessage:
+    def __init__(self, content=None, tool_calls=None, reasoning=None):
+        self.content = content
+        self.tool_calls = tool_calls
+        if reasoning is not None:
+            self.reasoning_content = reasoning
+
+
+class FakeCompletions:
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.requests: list[dict] = []
+
+    def create(self, **kwargs):
+        self.requests.append({**kwargs, "messages": list(kwargs["messages"])})
+        message = self.replies.pop(0) if self.replies else FakeMessage(
+            tool_calls=[FakeCall("again", "web_search", '{"query": "more"}')])
+        return type("Response", (), {"choices": [type("Choice", (), {"message": message})()]})()
+
+
+class FakeTools:
+    def __init__(self):
+        self.calls: list[tuple[str, str]] = []
+
+    def describe(self, name, arguments):
+        return f"{name} {arguments}"
+
+    def call(self, name, arguments):
+        self.calls.append((name, arguments))
+        return f"result {len(self.calls)}"
+
+
+def chat_backend(replies):
+    from bridge.bridge import ChatCompletionsBackend
+
+    backend = ChatCompletionsBackend.__new__(ChatCompletionsBackend)
+    backend.model = "test-model"
+    backend.messages = []
+    completions = FakeCompletions(replies)
+    backend.client = type("Client", (), {"chat": type("Chat", (), {"completions": completions})()})()
+    return backend, completions
+
+
+class ToolLoopTests(unittest.TestCase):
+    QUESTION = [{"role": "system", "content": "s"}, {"role": "user", "content": "news?"}]
+
+    def test_without_tools_the_request_is_unchanged(self):
+        backend, completions = chat_backend([FakeMessage(" plain ")])
+        self.assertEqual(backend.complete(self.QUESTION, effort="off"), "plain")
+        self.assertNotIn("tools", completions.requests[0])
+        self.assertEqual(completions.requests[0]["messages"], self.QUESTION)
+
+    def test_tool_results_go_back_with_the_reasoning(self):
+        backend, completions = chat_backend([
+            FakeMessage("", [FakeCall("c1", "web_search", '{"query": "news"}'),
+                             FakeCall("c2", "open_url", '{"url": "https://example.com/"}')],
+                        reasoning="I should look this up"),
+            FakeMessage("The answer."),
+        ])
+        tools, notes = FakeTools(), []
+        answer = backend.complete(self.QUESTION, effort="high", tools=tools, progress=notes.append)
+        self.assertEqual(answer, "The answer.")
+        self.assertEqual(tools.calls, [("web_search", '{"query": "news"}'),
+                                       ("open_url", '{"url": "https://example.com/"}')])
+        self.assertEqual(len(notes), 2)
+        first, second = completions.requests
+        self.assertEqual(first["tool_choice"], "auto")
+        self.assertEqual(first["reasoning_effort"], "high")
+        self.assertEqual([tool["function"]["name"] for tool in first["tools"]],
+                         ["web_search", "open_url"])
+        self.assertEqual(second["messages"][:2], self.QUESTION)
+        turn = second["messages"][2]
+        self.assertEqual(turn["role"], "assistant")
+        self.assertEqual(turn["reasoning_content"], "I should look this up")
+        self.assertEqual([call["id"] for call in turn["tool_calls"]], ["c1", "c2"])
+        self.assertEqual(second["messages"][3:], [
+            {"role": "tool", "tool_call_id": "c1", "content": "result 1"},
+            {"role": "tool", "tool_call_id": "c2", "content": "result 2"},
+        ])
+        self.assertEqual(self.QUESTION[-1], {"role": "user", "content": "news?"})  # not modified
+
+    def test_a_model_that_never_stops_searching_is_made_to_answer(self):
+        from bridge.bridge import MAX_TOOL_ROUNDS
+
+        backend, completions = chat_backend([])   # every reply asks for another search
+        tools = FakeTools()
+        backend.complete(self.QUESTION, tools=tools)
+        self.assertEqual(len(tools.calls), MAX_TOOL_ROUNDS)
+        self.assertEqual(len(completions.requests), MAX_TOOL_ROUNDS + 1)
+        self.assertEqual(completions.requests[-1]["tool_choice"], "none")
+
+    def test_a_failing_progress_note_does_not_cost_the_answer(self):
+        backend, _completions = chat_backend([
+            FakeMessage("", [FakeCall("c1", "web_search", "{}")]), FakeMessage("ok")])
+
+        def broken(note):
+            raise RuntimeError("the page went away")
+
+        self.assertEqual(backend.complete(self.QUESTION, tools=FakeTools(), progress=broken), "ok")
+
+    def test_echo_backend_exercises_the_tools(self):
+        from bridge.bridge import EchoBackend
+
+        tools, notes = FakeTools(), []
+        answer = EchoBackend().complete([{"role": "user", "content": "search ti nspire"}],
+                                        tools=tools, progress=notes.append)
+        self.assertEqual(tools.calls, [("web_search", '{"query": "ti nspire"}')])
+        self.assertIn("result 1", answer)
+        self.assertEqual(len(notes), 1)
+        self.assertIn("Echo", EchoBackend().complete([{"role": "user", "content": "search x"}]))
+
+
 if __name__ == "__main__":
     unittest.main()

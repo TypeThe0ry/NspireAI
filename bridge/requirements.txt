@@ -6,3 +6,9 @@ openai>=3.14.0,<4
 Pillow>=10.1,<13
 matplotlib>=3.9,<4
 numpy>=1.26,<3
+# Pinyin input method (bridge/ime.py): word frequencies and readings.
+jieba>=0.42.1,<1
+pypinyin>=0.50,<1
+# Web search for the model (bridge/webtools.py).  Optional: without it the
+# bridge reads the search pages itself.
+ddgs>=9.0,<10

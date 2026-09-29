@@ -3460,6 +3460,95 @@ def render_menu(title: str, items: Sequence[tuple[str, str]], cfg: Optional[Rend
     return image
 
 
+# ==========================================================================
+# Input method candidate bar
+# ==========================================================================
+
+CANDIDATES_PER_PAGE = 9     # chosen with the keys 1-9
+_CANDIDATE_GAP = 9
+_CANDIDATE_ARROWS = 14      # room kept at the right edge for "<" and ">"
+
+
+def _candidate_chains(safe: RenderConfig) -> tuple[_Chain, _Chain]:
+    plan = _plan_for(safe)
+    return (_chain(plan, "regular", safe.font_size),
+            _chain(plan, "bold", max(6, safe.font_size - 3)))
+
+
+def _candidate_room(safe: RenderConfig) -> int:
+    return safe.width - 2 * max(2, safe.margin) - _CANDIDATE_ARROWS
+
+
+def _candidate_width(text: str, chain: _Chain, digit: _Chain) -> float:
+    return digit.length("0") + 2 + chain.length(text)
+
+
+def layout_candidates(texts: Sequence[str], cfg: Optional[RenderConfig] = None) -> list[tuple[int, int]]:
+    """Split the candidates into pages of the bar: (first index, count) each."""
+    safe = _sane(cfg)
+    chain, digit = _candidate_chains(safe)
+    room = _candidate_room(safe)
+    pages: list[tuple[int, int]] = []
+    first, used = 0, 0.0
+    for index, text in enumerate(texts):
+        width = min(room, _candidate_width(_clean(str(text)), chain, digit))
+        count = index - first
+        if count and (count >= CANDIDATES_PER_PAGE or used + _CANDIDATE_GAP + width > room):
+            pages.append((first, count))
+            first, used = index, 0.0
+        used += width + (_CANDIDATE_GAP if index > first else 0)
+    if first < len(texts):
+        pages.append((first, len(texts) - first))
+    return pages
+
+
+def render_candidates(texts: Sequence[str], cfg: Optional[RenderConfig] = None, previous: bool = False,
+                      following: bool = False, note: str = "") -> Image.Image:
+    """One page of the candidate bar, "1 text  2 text ..." on a single row.
+
+    `previous` and `following` draw the arrows that tell the user there are
+    more pages; `note` replaces the candidates (e.g. "no match").
+    """
+    shown = [" ".join(_clean(str(text)).split()) for text in list(texts)[:CANDIDATES_PER_PAGE]]
+
+    def render(safe: RenderConfig) -> Image.Image:
+        chain, digit = _candidate_chains(safe)
+        margin = max(2, safe.margin)
+        room = _candidate_room(safe)
+        height = min(40, chain.ascent + chain.descent + 5)
+        baseline = 2 + chain.ascent
+        canvas = _Canvas(safe.width)
+        cursor = float(margin)
+        if note:
+            for face, run in chain.runs(_ellipsize(note, chain, room)):
+                canvas.text(cursor, baseline, run, face, GRAY_TEXT, 0, height)
+                cursor += face.length(run)
+        for number, text in enumerate(shown):
+            text = _ellipsize(text, chain, room - digit.length("0") - 2)
+            if number and cursor + _candidate_width(text, chain, digit) > margin + room:
+                break
+            for face, run in digit.runs(str(number + 1)):
+                canvas.text(cursor, baseline, run, face, GRAY_TEXT, 0, height)
+                cursor += face.length(run)
+            cursor += 2
+            for face, run in chain.runs(text):
+                canvas.text(cursor, baseline, run, face, INK, 0, height)
+                cursor += face.length(run)
+            cursor += _CANDIDATE_GAP
+        arrows = ("<" if previous else " ") + (">" if following else " ")
+        if arrows.strip():
+            cursor = float(safe.width - margin - digit.length(arrows))
+            for face, run in digit.runs(arrows):
+                canvas.text(cursor, baseline, run, face, GRAY_TEXT, 0, height)
+                cursor += face.length(run)
+        return canvas.paint(height)
+
+    image = _guarded(render, note or " ".join(shown), cfg)
+    if image.height > 40:
+        image = image.crop((0, 0, image.width, 40))
+    return image
+
+
 def warm_up(cfg: Optional[RenderConfig] = None) -> dict[str, str]:
     """Load the fonts and the math engine now instead of during the first answer.
 
@@ -3468,4 +3557,5 @@ def warm_up(cfg: Optional[RenderConfig] = None) -> dict[str, str]:
     """
     render_markdown("warm up 预热 **bold** `code` $x^2$", cfg)
     render_menu("warm up", [("1", "预热")], cfg)
+    render_candidates(["预热"], cfg)
     return describe_fonts(cfg)

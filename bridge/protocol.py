@@ -29,6 +29,9 @@ OP_INJECT = 16    # host -> page: key events for unattended tests
 OP_CLEAR = 17     # host -> page: drop all history blocks
 OP_PREVIEW_REQ = 18  # page -> host: input text to typeset; request id = input revision
 OP_PREVIEW = 19   # host -> page: typeset input (BLOCK layout), empty = nothing to show
+OP_IME_REQ = 20   # page -> host: u8 candidate page, then pinyin letters; id = revision
+OP_IME = 21       # host -> page: u8 n, u8 flags, u8 page, u8 0, n x {u8 consumed, u8 len, text}, BLOCK image
+OP_IME_PICK = 22  # page -> host: b"letters\ttext\tletters left" chosen by the user (learning)
 FRAGMENT_HEADER = struct.Struct(">BBII")  # original opcode, reserved, total, offset
 
 def encode(opcode: int, request_id: int, conversation_id: int, payload: bytes) -> bytes:

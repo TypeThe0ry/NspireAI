@@ -26,6 +26,8 @@ from .protocol import (
     OP_DUMP,
     OP_DUMP_REQ,
     OP_HELLO,
+    OP_IME_PICK,
+    OP_IME_REQ,
     OP_INJECT,
     OP_PREVIEW_REQ,
     FragmentReassembler,
@@ -60,6 +62,7 @@ class NavNetBridge:
         self.conversation_id: Optional[int] = None
         self.fragments = FragmentReassembler()
         self.send_lock = threading.Lock()
+        self.message_lock = threading.Lock()
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="nspire-ai")
         self.in_flight: set[tuple[int, int]] = set()
         self.backend_lock = threading.Lock()
@@ -88,8 +91,14 @@ class NavNetBridge:
             self.process.stdin.flush()
 
     def send_message(self, opcode: int, request_id: int, conversation_id: int, payload: bytes) -> None:
-        for frame in fragment(opcode, request_id, conversation_id, payload):
-            self.send(frame)
+        # One logical message at a time: the page reassembles fragments in a
+        # single buffer, so frames of two messages must never interleave
+        # (answers, previews and test commands come from different threads).
+        if not hasattr(self, "message_lock"):
+            self.message_lock = threading.Lock()
+        with self.message_lock:
+            for frame in fragment(opcode, request_id, conversation_id, payload):
+                self.send(frame)
 
     def run(self) -> int:
         if self.process.stdout is None:
@@ -201,6 +210,14 @@ class NavNetBridge:
             self.preview_latest = request_id
             self.ui_executor.submit(self._page_preview, request_id, payload)
             return
+        if opcode == OP_IME_REQ:
+            # Typing is faster than the link: answer the newest letters only.
+            self.ime_latest = request_id
+            self.ui_executor.submit(self._page_ime, request_id, payload)
+            return
+        if opcode == OP_IME_PICK:
+            self.ui_executor.submit(self._page_call, "on_ime_pick", payload)
+            return
         if opcode == OP_DUMP:
             waiter = getattr(self, "dump_waiters", {}).pop(request_id, None)
             if waiter is not None:
@@ -248,6 +265,7 @@ class NavNetBridge:
                 host.render.warm_up(host.cfg)
                 host.build_screens()
                 self.page_host = host
+                threading.Thread(target=host.load_ime, name="nspire-ime", daemon=True).start()
             except Exception as exc:
                 self.page_host_error = f"{type(exc).__name__}: {exc}"
                 print(f"page host unavailable, using plain text: {self.page_host_error}",
@@ -258,6 +276,11 @@ class NavNetBridge:
         if request_id != getattr(self, "preview_latest", request_id):
             return  # superseded while waiting in the queue
         self._page_call("on_preview", request_id, payload)
+
+    def _page_ime(self, request_id: int, payload: bytes) -> None:
+        if request_id != getattr(self, "ime_latest", request_id):
+            return  # superseded while waiting in the queue
+        self._page_call("on_ime", request_id, payload)
 
     def _page_call(self, method: str, *args) -> None:
         host = self._page_host()

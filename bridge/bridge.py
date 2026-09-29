@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -36,15 +37,28 @@ English text wraps too, and `inline code` stays monospaced.
 """
 
 
+MAX_TOOL_ROUNDS = 5     # requests that may call tools, for one question
+
+
 class EchoBackend:
+    supports_tools = True   # "search <words>" and "open <url>" exercise the web tools
+
     def answer(self, prompt: str) -> str:
         return f"Mac received: {prompt}"
 
-    def complete(self, messages: list[dict], effort: Optional[str] = None) -> str:
+    def complete(self, messages: list[dict], effort: Optional[str] = None, tools=None,
+                 progress=None) -> str:
         """Stateless form used by the page host; "demo" returns rich sample text."""
         last = messages[-1]["content"] if messages else ""
         if last.strip().lower() == "demo":
             return ECHO_DEMO
+        verb, _, rest = last.strip().partition(" ")
+        call = {"search": ("web_search", "query"), "open": ("open_url", "url")}.get(verb.lower())
+        if tools is not None and call and rest.strip():
+            arguments = json.dumps({call[1]: rest.strip()})
+            if progress is not None:
+                progress(tools.describe(call[0], arguments))
+            return "```\n" + tools.call(call[0], arguments) + "\n```"
         turns = sum(1 for m in messages if m["role"] == "user")
         return f"Echo (turn {turns}, think {effort or 'default'}): {last}"
 
@@ -111,6 +125,7 @@ class ChatCompletionsBackend:
     """OpenAI-compatible chat.completions backend (DeepSeek and others)."""
 
     supports_effort = True
+    supports_tools = True
 
     def __init__(self, model: str, api_key: Optional[str], base_url: Optional[str], timeout: float = 45.0):
         try:
@@ -140,15 +155,64 @@ class ChatCompletionsBackend:
                     "extra_body": {"thinking": {"type": "enabled"}}}
         return {}
 
-    def complete(self, messages: list[dict], effort: Optional[str] = None) -> str:
-        """Stateless completion: the caller (page host) owns the history."""
-        response = self.client.chat.completions.create(
+    def complete(self, messages: list[dict], effort: Optional[str] = None, tools=None,
+                 progress=None) -> str:
+        """Stateless completion: the caller (page host) owns the history.
+
+        `tools` is a session of bridge/webtools.py: the model may search the
+        web and read pages before it answers; `progress(note)` is told what
+        it looks up.
+        """
+        options = dict(
             model=self.model,
-            messages=messages,
             max_tokens=int(os.environ.get("NSPIREAI_MAX_TOKENS", "1500")),
             **self._effort_kwargs(effort),
         )
-        return (response.choices[0].message.content or "").strip()
+        if tools is None:
+            response = self.client.chat.completions.create(messages=messages, **options)
+            return (response.choices[0].message.content or "").strip()
+
+        from .webtools import TOOL_SPECS
+
+        conversation = list(messages)
+        for round_number in range(MAX_TOOL_ROUNDS + 1):
+            last = round_number == MAX_TOOL_ROUNDS
+            response = self.client.chat.completions.create(
+                messages=conversation, tools=TOOL_SPECS,
+                tool_choice="none" if last else "auto", **options)
+            message = response.choices[0].message
+            calls = [] if last else list(getattr(message, "tool_calls", None) or [])
+            if not calls:
+                return (message.content or "").strip()
+            conversation.append(self._assistant_turn(message, calls))
+            for call in calls:
+                name, arguments = call.function.name, call.function.arguments or "{}"
+                if progress is not None:
+                    try:
+                        progress(tools.describe(name, arguments))
+                    except Exception:
+                        pass    # a note that cannot be shown must not cost the answer
+                conversation.append({"role": "tool", "tool_call_id": call.id,
+                                     "content": tools.call(name, arguments)})
+        return ""
+
+    @staticmethod
+    def _assistant_turn(message, calls) -> dict:
+        """The model's tool request as it has to be sent back."""
+        turn = {
+            "role": "assistant",
+            "content": message.content or "",
+            "tool_calls": [{"id": call.id, "type": "function",
+                            "function": {"name": call.function.name,
+                                         "arguments": call.function.arguments or "{}"}}
+                           for call in calls],
+        }
+        # DeepSeek's thinking mode rejects a tool round whose reasoning is
+        # not returned with it.
+        reasoning = getattr(message, "reasoning_content", None)
+        if reasoning is not None:
+            turn["reasoning_content"] = reasoning
+        return turn
 
     def answer(self, prompt: str, effort: Optional[str] = None) -> str:
         """`effort` is off/low/high/max from the calculator page (None = model default)."""

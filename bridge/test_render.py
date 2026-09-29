@@ -948,5 +948,47 @@ class MenuTests(RenderTestCase):
         self.assertEqual(fonts, render.describe_fonts(RenderConfig()))
 
 
+class CandidateTests(RenderTestCase):
+    WORDS = ["这个方程怎么解", "这个", "这歌"] + list("这着者折哲浙遮褶蔗辙")
+
+    def test_pages_hold_what_fits_and_at_most_nine(self):
+        pages = render.layout_candidates(self.WORDS)
+        self.assertEqual(pages[0][0], 0)
+        self.assertEqual(sum(count for _first, count in pages), len(self.WORDS))
+        for index, (first, count) in enumerate(pages):
+            self.assertTrue(1 <= count <= render.CANDIDATES_PER_PAGE)
+            if index:
+                self.assertEqual(first, sum(c for _f, c in pages[:index]))
+        self.assertEqual(render.layout_candidates(list("一二三四五六七八九十")), [(0, 9), (9, 1)])
+        self.assertEqual(render.layout_candidates([]), [])
+        # One candidate wider than the bar still gets a page of its own.
+        self.assertEqual(render.layout_candidates(["长" * 60, "短"]), [(0, 1), (1, 1)])
+        # A narrower screen holds fewer.
+        narrow = render.layout_candidates(self.WORDS, RenderConfig(width=160))
+        self.assertGreater(len(narrow), len(pages))
+
+    def test_a_page_is_drawn_completely(self):
+        for first, count in render.layout_candidates(self.WORDS):
+            shown = self.WORDS[first:first + count]
+            image = render.render_candidates(shown, previous=first > 0, following=True)
+            self.assert_image(image)
+            self.assertLessEqual(image.height, 40)     # the page refuses a taller bar
+            self.assert_has_ink(image)
+            # Nothing is drawn under the arrows at the right edge ...
+            plain = render.render_candidates(shown)
+            self.assertEqual(plain.crop((306, 0, 320, plain.height)).getextrema(), (255, 255))
+            # ... and the arrows are.
+            self.assertLess(image.crop((306, 0, 320, image.height)).getextrema()[0], 200)
+
+    def test_note_and_odd_input(self):
+        note = render.render_candidates([], note="no match")
+        self.assert_image(note)
+        self.assert_has_ink(note)
+        blank = render.render_candidates([])
+        self.assert_image(blank)
+        self.assertLessEqual(render.render_candidates(["长" * 200], RenderConfig(font_size=96)).height, 40)
+        self.assert_image(render.render_candidates(["a\nb", "", None, 3]))
+
+
 if __name__ == "__main__":
     unittest.main()

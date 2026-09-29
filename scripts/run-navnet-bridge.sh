@@ -225,7 +225,14 @@ trap cleanup_all EXIT
 trap 'on_interrupt 130' INT
 trap 'on_interrupt 143' TERM
 
-"$PYTHON_BIN" -m bridge.navnet_bridge --backend "$BACKEND" &
+# Started from a process that runs under Rosetta, a universal Python would
+# start as x86_64 too, and the environment's arm64 modules would not load.
+PYTHON_CMD=("$PYTHON_BIN")
+if [[ "$(uname -s)" == "Darwin" && "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" == "1" ]] &&
+   arch -arm64 "$PYTHON_BIN" -c pass >/dev/null 2>&1; then
+  PYTHON_CMD=(arch -arm64 "$PYTHON_BIN")
+fi
+"${PYTHON_CMD[@]}" -m bridge.navnet_bridge --backend "$BACKEND" &
 BRIDGE_PID=$!
 set +e
 wait "$BRIDGE_PID"

@@ -25,7 +25,6 @@
 #include <os.h>
 #include <libndls.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "charmap.h" /* nspire-io 6x8 font, from the Ndless SDK */
@@ -54,6 +53,9 @@
 #define OP_CLEAR 17    /* host -> page: drop all history blocks */
 #define OP_PREVIEW_REQ 18 /* page -> host: input text to typeset (id = revision) */
 #define OP_PREVIEW 19  /* host -> page: typeset input (BLOCK layout) or empty */
+#define OP_IME_REQ 20  /* page -> host: u8 candidate page, then pinyin letters */
+#define OP_IME 21      /* host -> page: candidates and their bar image */
+#define OP_IME_PICK 22 /* page -> host: "letters<TAB>text<TAB>letters left" (learning) */
 
 /* ---- CX II CAS 6.2.0.333 private ABI (Ndless IDC map + disassembly) ---- */
 typedef void (*tcc_task_sleep_t)(unsigned ticks);
@@ -123,6 +125,10 @@ static volatile int quitting;
 static volatile int session_active;
 static volatile uint32_t session_gen; /* newest callback wins */
 static volatile nn_ch_t active_ch;    /* lets the page end a session on exit */
+/* RTC second of the last frame received.  The callback cannot watch its own
+ * liveness while it is blocked in TI_NN_Read, so the page loop does and
+ * disconnects a channel that has gone silent. */
+static volatile uint32_t session_last_rx;
 /* Callbacks currently executing code in this image.  main() must not return
  * (freeing the image) while this is non-zero. */
 static volatile int callbacks_running;
@@ -151,7 +157,8 @@ static volatile int rx_ready;
 
 /* Page -> host: one slot per kind of message.  The page fills a free slot
  * and sets pending; the callback sends it (fragmented when long). */
-enum { TX_REQUEST, TX_ACTION, TX_DUMP, TX_PREVIEW, TX_SLOTS };
+/* Sent in this order: a pick goes out before the request for what remains. */
+enum { TX_REQUEST, TX_ACTION, TX_DUMP, TX_PREVIEW, TX_PICK, TX_IME, TX_SLOTS };
 struct tx_slot {
     volatile int pending;
     int opcode;
@@ -279,11 +286,20 @@ static void service_session(nn_ch_t ch) {
      * so any older session is stale.  Ask it to leave, then take over. */
     uint32_t gen = ++session_gen;
     for (int i = 0; i < 40 && session_active; ++i) TCC_TASK_SLEEP(5);
+    if (session_active) {
+        /* The old session is blocked in TI_NN_Read on a channel the host
+         * abandoned without closing; closing it here makes the read fail. */
+        nn_ch_t old = active_ch;
+        if (old) TI_NN_Disconnect(old);
+        for (int i = 0; i < 60 && session_active; ++i) TCC_TASK_SLEEP(5);
+    }
     if (session_active || gen != session_gen) return;
     session_active = 1;
     active_ch = ch;
+    session_last_rx = RTC_SECONDS;
     link_up = 1;
-    uint32_t last_rx = RTC_SECONDS, last_ping = last_rx;
+    uint32_t last_ping = session_last_rx;
+    int frag_open = 0;
     if (send_hello(ch) < 0) goto done;
 
     while (session_current(gen)) {
@@ -294,8 +310,8 @@ static void service_session(nn_ch_t ch) {
             if (w < 0) goto done;
         }
         uint32_t now = RTC_SECONDS;
-        if (now - last_rx >= SESSION_DEAD_SECONDS) break;
-        if (now - last_rx >= IDLE_PING_SECONDS && now - last_ping >= IDLE_PING_SECONDS) {
+        if (now - session_last_rx >= SESSION_DEAD_SECONDS) break;
+        if (now - session_last_rx >= IDLE_PING_SECONDS && now - last_ping >= IDLE_PING_SECONDS) {
             if (send_frame(ch, OP_PING, 1, "PING", 4) < 0) break;
             last_ping = now;
         }
@@ -312,7 +328,7 @@ static void service_session(nn_ch_t ch) {
         if (received < HEADER_SIZE || memcmp(frame, "NSAI", 4) != 0 ||
             frame[4] != 1)
             continue;
-        last_rx = RTC_SECONDS;
+        session_last_rx = RTC_SECONDS;
         int opcode = frame[5];
         uint32_t request = get_u32(frame + 6);
         uint32_t length = get_u32(frame + 12);
@@ -340,8 +356,10 @@ static void service_session(nn_ch_t ch) {
                 frag_id = request;
                 frag_opcode = orig;
                 frag_skip = total > RX_CAP; /* too large: drop it whole */
+                frag_open = 1;
             }
-            if (request != frag_id || offset != frag_next || orig != frag_opcode)
+            if (!frag_open || request != frag_id || offset != frag_next ||
+                orig != frag_opcode)
                 continue;
             if (!frag_skip && frag_next + chunk <= RX_CAP)
                 memcpy(rx_buf + frag_next, payload + FRAGMENT_HEADER_SIZE, chunk);
@@ -349,8 +367,13 @@ static void service_session(nn_ch_t ch) {
             if (frag_next >= frag_total) {
                 if (!frag_skip) rx_post(frag_opcode, frag_id, frag_total);
                 frag_total = frag_next = 0;
+                frag_open = 0;
             }
         } else {
+            /* A whole message in one frame.  It reuses rx_buf, so a
+             * fragmented message that was still arriving is given up (the
+             * host sends messages one at a time; this is only a guard). */
+            frag_open = 0;
             if (!rx_wait_free(gen)) break;
             memcpy(rx_buf, payload, length);
             rx_post(opcode, request, length);
@@ -360,16 +383,23 @@ done:
     /* Returning closes this channel.  Unsent messages must not be replayed
      * by the next session. */
     for (int i = 0; i < TX_SLOTS; ++i) tx[i].pending = 0;
-    if (gen == session_gen) link_up = 0;
+    /* Always: a session that takes over sets link_up again itself. */
+    link_up = 0;
     active_ch = NULL;
     session_active = 0;
 }
 
 static void service_callback(nn_ch_t ch, void *data) {
     (void)data;
+    /* The counter guards the image against being freed under a callback, so
+     * its updates must not be lost to a concurrent callback. */
+    int mask = TCT_Local_Control_Interrupts(-1);
     callbacks_running++;
+    TCT_Local_Control_Interrupts(mask);
     service_session(ch);
+    mask = TCT_Local_Control_Interrupts(-1);
     callbacks_running--;
+    TCT_Local_Control_Interrupts(mask);
 }
 
 /* ------------------------------------------------------------------ */
@@ -484,6 +514,7 @@ static void text_add(const char *prefix, const char *text, int kind, uint32_t id
             int take = wlen < COLS - used ? wlen : COLS - used;
             for (int i = 0; i < take; ++i) {
                 unsigned char c = (unsigned char)s[i];
+                if ((c & 0xC0) == 0x80) continue; /* rest of a UTF-8 character */
                 line[used++] = (c >= 32 && c < 127) ? (char)c : '?';
             }
             s += take;
@@ -641,6 +672,33 @@ static struct {
     uint8_t *data;
 } preview;
 static uint8_t preview_req[INPUT_CAP];
+
+/* Pinyin input.  The input buffer holds UTF-8; the letters being composed
+ * live in comp[] until the user picks a candidate.  The host owns the
+ * dictionary: it answers OP_IME_REQ with the candidates (text and how many
+ * letters each consumes) and an image of the candidate bar. */
+#define COMP_CAP 40
+#define IME_MAX_CAND 9
+#define IME_TEXT_CAP 48
+static int ime_on;
+static char comp[COMP_CAP + 1];
+static int comp_len;
+static uint32_t ime_rev, ime_sent_rev;
+static int ime_page;
+static struct {
+    uint8_t consumed, len;
+    char text[IME_TEXT_CAP];
+} cand[IME_MAX_CAND];
+static int ncand;
+static int ime_flags;      /* bit0: previous page exists, bit1: next page */
+static int pending_pick = -1; /* choice made before the candidates arrived */
+static struct {
+    uint8_t bpp;
+    uint16_t w, h;
+    uint8_t *data;
+} ime_bar;
+static uint8_t ime_req[COMP_CAP + 2];
+static uint8_t pick_buf[COMP_CAP + IME_TEXT_CAP + 3];
 static int waiting;
 static uint32_t waiting_since;
 static uint32_t awaited_id;
@@ -654,7 +712,7 @@ static int layout_mode;
 #define QWERTY (layout_mode != 2)
 #define LEGEND (layout_mode == 0)
 /* Pending quick command chosen from a menu, sent as "#cmd:<id> ". */
-static char cmd_id[28], cmd_label[14];
+static char cmd_id[33], cmd_label[14]; /* ids up to 32 chars (bridge/commands.py) */
 static char session_label[24] = "";
 static int session_number;
 /* Touchpad arrows: up/down scroll, left/right move the input cursor.  One
@@ -677,16 +735,110 @@ static void input_changed(void) {
     dirty = 1;
 }
 
-static void input_append(char c) {
-    if (input_len >= INPUT_CAP) return;
-    memmove(input + cursor + 1, input + cursor, (size_t)(input_len - cursor));
-    input[cursor++] = c;
-    input[++input_len] = '\0';
+static int is_continuation(char c) {
+    return ((unsigned char)c & 0xC0) == 0x80;
+}
+
+/* Start of the character before byte index i / after the one at i. */
+static int utf8_prev(int i) {
+    while (i > 0 && is_continuation(input[--i])) { }
+    return i;
+}
+
+static int utf8_next(int i) {
+    if (i < input_len) ++i;
+    while (i < input_len && is_continuation(input[i])) ++i;
+    return i;
+}
+
+static void input_insert(const char *text, int n) {
+    if (n <= 0 || input_len + n > INPUT_CAP) return;
+    memmove(input + cursor + n, input + cursor, (size_t)(input_len - cursor));
+    memcpy(input + cursor, text, (size_t)n);
+    cursor += n;
+    input_len += n;
+    input[input_len] = '\0';
     input_changed();
 }
 
+static void input_append(char c) {
+    input_insert(&c, 1);
+}
+
 static void input_append_str(const char *s) {
-    while (*s) input_append(*s++);
+    input_insert(s, (int)strlen(s));
+}
+
+static void ime_bar_clear(void) {
+    free(ime_bar.data);
+    ime_bar.data = NULL;
+    ime_bar.h = 0;
+    ncand = 0;
+    ime_flags = 0;
+    pending_pick = -1;
+    dirty = 1;
+}
+
+/* The composition changed: the candidates on screen no longer apply. */
+static void ime_changed(void) {
+    ime_rev++;
+    ncand = 0;
+    if (comp_len == 0) ime_bar_clear();
+    dirty = 1;
+}
+
+/* Types the composed letters as they are (Enter, or leaving Chinese mode). */
+static void ime_commit_raw(void) {
+    if (comp_len == 0) return;
+    input_insert(comp, comp_len);
+    comp_len = 0;
+    ime_page = 0;
+    ime_changed();
+}
+
+static void ime_pick(int k) {
+    if (comp_len == 0) return;
+    if (k >= ncand) {
+        if (ncand == 0 && ime_rev != 0) pending_pick = k; /* still on their way */
+        return;
+    }
+    int used = cand[k].consumed <= comp_len ? cand[k].consumed : comp_len;
+    if (!tx[TX_PICK].pending && link_up) {
+        int n = 0;
+        memcpy(pick_buf, comp, (size_t)used);
+        n += used;
+        pick_buf[n++] = '\t';
+        memcpy(pick_buf + n, cand[k].text, cand[k].len);
+        n += cand[k].len;
+        pick_buf[n++] = '\t';
+        memcpy(pick_buf + n, comp + used, (size_t)(comp_len - used));
+        n += comp_len - used;
+        tx[TX_PICK].opcode = OP_IME_PICK;
+        tx[TX_PICK].id = ime_rev;
+        tx[TX_PICK].data = pick_buf;
+        tx[TX_PICK].len = (uint32_t)n;
+        tx[TX_PICK].pending = 1;
+    }
+    input_insert(cand[k].text, cand[k].len);
+    memmove(comp, comp + used, (size_t)(comp_len - used));
+    comp_len -= used;
+    ime_page = 0;
+    pending_pick = -1;
+    ime_changed();
+}
+
+/* Full-width punctuation after Chinese text; ASCII elsewhere (3.5, f(x)). */
+static const char *ime_punctuation(char c) {
+    if (cursor == 0 || !is_continuation(input[cursor - 1])) return NULL;
+    switch (c) {
+    case ',': return "\xEF\xBC\x8C";
+    case '.': return "\xE3\x80\x82";
+    case '?': return "\xEF\xBC\x9F";
+    case '!': return "\xEF\xBC\x81";
+    case ':': return "\xEF\xBC\x9A";
+    case ';': return "\xEF\xBC\x9B";
+    }
+    return NULL;
 }
 
 static void tx_post(int slot, int opcode, uint32_t id, const uint8_t *data, uint32_t len) {
@@ -738,6 +890,7 @@ static void submit(void) {
         for (const char *c = cmd_id; *c; ++c) request_buf[n++] = (uint8_t)*c;
         request_buf[n++] = ' ';
     }
+    request_buf[n++] = 0x1F; /* end of tags: whatever follows is the user's text */
     memcpy(request_buf + n, input, (size_t)input_len);
     n += input_len;
     awaited_id = id;
@@ -809,8 +962,12 @@ static int preview_top(void) {
     return INPUT_TOP - 2 - (preview.data ? preview.h + 3 : 0);
 }
 
+static int bar_top(void) {
+    return preview_top() - (ime_bar.data && comp_len ? ime_bar.h + 2 : 0);
+}
+
 static int legend_top(void) {
-    return preview_top() - (LEGEND ? LEGEND_ROWS * CH + 1 : 0);
+    return bar_top() - (LEGEND ? LEGEND_ROWS * CH + 1 : 0);
 }
 
 static int view_bottom(void) {
@@ -880,6 +1037,7 @@ static void render(void) {
         tag[n] = '\0';
         draw_text(158, 3, tag, think_level ? C_OK : C_DIM);
         draw_text(206, 3, QWERTY ? "qw" : "abc", C_BAR_TEXT);
+        draw_text(230, 3, ime_on ? "zh" : "en", ime_on ? C_OK : C_DIM);
     }
     const char *state = link_up ? (waiting ? "thinking" : "linked") : "offline";
     uint16_t dot = link_up ? C_OK : C_WARN;
@@ -899,6 +1057,13 @@ static void render(void) {
         for (int r = 0; r < LEGEND_ROWS; ++r)
             draw_text(70, top + 1 + r * CH, legend[r], C_BAR);
     }
+    if (ime_bar.data && comp_len) {
+        int top = bar_top();
+        fill_rect(0, top, W, ime_bar.h + 2, C_BG);
+        fill_rect(0, top, W, 1, C_OK);
+        draw_image(0, top + 1, ime_bar.w, ime_bar.bpp, ime_bar.data, 0, ime_bar.h,
+                   ink_lut[KIND_AI]);
+    }
     if (preview.data) {
         int top = preview_top();
         fill_rect(0, top, W, preview.h + 3, C_BG);
@@ -909,8 +1074,14 @@ static void render(void) {
     fill_rect(0, INPUT_TOP - 2, W, 1, C_DIM);
     fill_rect(0, INPUT_TOP, W, 2 * CH + 4, C_INPUT_BG);
     {
-        /* Prompt (or the pending command), then the tail of the input. */
+        /* Prompt (or the pending command), then a window of the input
+         * that keeps the cursor visible.  One cell per ASCII character, two
+         * per non-ASCII character (drawn as a box: the local font is ASCII;
+         * the preview above shows the real glyphs).  The letters being
+         * composed appear at the cursor. */
+        enum { CELL_TEXT, CELL_COMP, CELL_BOX_L, CELL_BOX_R };
         char shown[2 * COLS + 1];
+        uint8_t kind[2 * COLS + 1];
         int n = 0;
         if (cmd_id[0]) {
             shown[n++] = '[';
@@ -921,35 +1092,63 @@ static void render(void) {
         }
         shown[n++] = ' ';
         int prefix = n;
+        for (int k = 0; k < prefix; ++k) kind[k] = CELL_TEXT;
         int cap = 2 * COLS - prefix - 1;
-        /* Window of the input that keeps the cursor visible. */
-        int start = cursor > cap - 8 ? cursor - (cap - 8) : 0;
-        if (input_len - start < cap) start = input_len > cap ? input_len - cap : 0;
-        int cursor_at = -1;
-        for (int i = start; i <= input_len && n < 2 * COLS; ++i) {
-            if (i == cursor) cursor_at = n;
-            shown[n++] = i < input_len ? input[i] : ' ';
+        int before = comp_len, total = comp_len;
+        for (int b = 0; b < input_len; b = utf8_next(b)) {
+            int cells = (unsigned char)input[b] < 0x80 ? 1 : 2;
+            if (b < cursor) before += cells;
+            total += cells;
+        }
+        int start = before > cap - 8 ? before - (cap - 8) : 0;
+        if (total - start < cap) start = total > cap ? total - cap : 0;
+        int cursor_at = -1, pos = 0;
+        for (int b = 0; b <= input_len && n < 2 * COLS; b = b < input_len ? utf8_next(b) : b + 1) {
+            if (b == cursor) {
+                for (int k = 0; k < comp_len && n < 2 * COLS; ++k, ++pos)
+                    if (pos >= start) {
+                        shown[n] = comp[k];
+                        kind[n++] = CELL_COMP;
+                    }
+                if (pos >= start && n <= 2 * COLS) cursor_at = n;
+            }
+            if (b >= input_len) break;
+            if ((unsigned char)input[b] < 0x80) {
+                if (pos >= start) {
+                    shown[n] = input[b];
+                    kind[n++] = CELL_TEXT;
+                }
+                ++pos;
+            } else {
+                for (int half = 0; half < 2 && n < 2 * COLS; ++half, ++pos)
+                    if (pos >= start) {
+                        shown[n] = ' ';
+                        kind[n++] = half ? CELL_BOX_R : CELL_BOX_L;
+                    }
+            }
         }
         shown[n] = '\0';
-        char row0[COLS + 1];
-        int l0 = n < COLS ? n : COLS;
-        memcpy(row0, shown, (size_t)l0);
-        row0[l0] = '\0';
-        draw_text(1, INPUT_TOP + 2, row0, C_TEXT);
-        if (cmd_id[0]) { /* colour the command chip */
-            char chip[20];
-            memcpy(chip, shown, (size_t)prefix);
-            chip[prefix] = '\0';
-            draw_text(1, INPUT_TOP + 2, chip, C_USER);
+        for (int k = 0; k < n; ++k) {
+            int cx = 1 + (k % COLS) * CW, cy = INPUT_TOP + 2 + (k / COLS) * CH;
+            uint16_t colour = k < prefix && cmd_id[0] ? C_USER
+                            : kind[k] == CELL_COMP ? C_USER : C_TEXT;
+            if (kind[k] == CELL_BOX_L) {
+                fill_rect(cx + 1, cy, 2 * CW - 3, 1, C_DIM);
+                fill_rect(cx + 1, cy + 7, 2 * CW - 3, 1, C_DIM);
+                fill_rect(cx + 1, cy, 1, 8, C_DIM);
+                fill_rect(cx + 2 * CW - 3, cy, 1, 8, C_DIM);
+            } else if (kind[k] != CELL_BOX_R) {
+                draw_char_clip(cx, cy, (unsigned char)shown[k], colour, 0, H);
+            }
+            if (kind[k] == CELL_COMP) fill_rect(cx, cy + 8, CW, 1, C_OK);
         }
-        if (n > COLS) draw_text(1, INPUT_TOP + 2 + CH, shown + COLS, C_TEXT);
-        if (cursor_at >= 0) { /* underline cursor */
+        if (cursor_at >= 0 && cursor_at < 2 * COLS) { /* underline cursor */
             int cx = 1 + (cursor_at % COLS) * CW;
             int cy = INPUT_TOP + 2 + (cursor_at / COLS) * CH + 8;
             fill_rect(cx, cy, CW, 1, C_USER);
         }
     }
-    draw_text(1, H - CH, "menu cmds  cat chats  arrows  var think  doc kbd", C_DIM);
+    draw_text(1, H - CH, "menu cmds  cat chats  var think  doc kbd  ctrl+spc zh", C_DIM);
 
     if (overlay) {
         const struct screen *s = screen_find(overlay);
@@ -1024,7 +1223,7 @@ static uint32_t dump_encode(uint8_t *out) {
 
 enum {
     EV_ENTER = 0x100, EV_DEL, EV_ESC, EV_UP, EV_DOWN, EV_THINK, EV_LAYOUT,
-    EV_MENU, EV_CHATS, EV_ARROWS, EV_LEFT, EV_RIGHT,
+    EV_MENU, EV_CHATS, EV_ARROWS, EV_LEFT, EV_RIGHT, EV_IME,
 };
 
 /* Two layouts.  "abc" is what the key caps say.  "qwerty" (enhanced typing)
@@ -1085,7 +1284,7 @@ static const struct strkey strings[] = {
 };
 #define NSTRINGS (int)(sizeof(strings) / sizeof(strings[0]))
 
-enum { K_ENTER, K_DEL, K_ESC, K_TAB, K_THINK, K_LAYOUT, K_MENU, K_CHATS, K_COUNT };
+enum { K_ENTER, K_DEL, K_ESC, K_TAB, K_THINK, K_LAYOUT, K_MENU, K_CHATS, K_IME, K_COUNT };
 static uint8_t prev_char[NCHARS];
 static uint8_t prev_string[NSTRINGS];
 static uint8_t prev_ctl[K_COUNT];
@@ -1114,6 +1313,9 @@ static int ctl_down(int k) {
     case K_LAYOUT: return isKeyPressed(KEY_NSPIRE_DOC);
     case K_MENU: return isKeyPressed(KEY_NSPIRE_MENU);
     case K_CHATS: return isKeyPressed(KEY_NSPIRE_CAT);
+    case K_IME: /* Chinese / English: ctrl+space, or the scratchpad key */
+        return isKeyPressed(KEY_NSPIRE_SCRATCHPAD) ||
+               (isKeyPressed(KEY_NSPIRE_CTRL) && isKeyPressed(KEY_NSPIRE_SPACE));
     }
     return 0;
 }
@@ -1177,18 +1379,86 @@ static int handle_event(int ev) {
         return 1;
     }
     if (ev > 0 && ev < 0x100) {
-        input_append((char)ev);
+        char c = (char)ev;
+        if (ime_on) {
+            if (((c >= 'a' && c <= 'z') || (c == '\'' && comp_len > 0)) &&
+                comp_len < COMP_CAP) {
+                comp[comp_len++] = c;
+                ime_page = 0;
+                ime_changed();
+                return 1;
+            }
+            if (comp_len > 0) {
+                if (c >= '1' && c <= '9') {
+                    ime_pick(c - '1');
+                    return 1;
+                }
+                if (c == ' ') {
+                    ime_pick(0);
+                    return 1;
+                }
+                /* Anything else ends the composition first. */
+                if (ncand > 0) ime_pick(0);
+                ime_commit_raw();
+            }
+            const char *wide = ime_punctuation(c);
+            if (wide) {
+                input_append_str(wide);
+                return 1;
+            }
+        }
+        input_append(c);
         return 1;
     }
+    if (comp_len > 0) { /* keys act on the composition while it exists */
+        switch (ev) {
+        case EV_ENTER:
+            ime_commit_raw();
+            return 1;
+        case EV_DEL:
+            --comp_len;
+            ime_page = 0;
+            ime_changed();
+            return 1;
+        case EV_ESC:
+            comp_len = 0;
+            ime_page = 0;
+            ime_changed();
+            return 1;
+        case EV_LEFT:
+        case EV_UP:
+            if (ime_flags & 1) {
+                --ime_page;
+                ime_rev++;
+                ncand = 0;
+            }
+            return 1;
+        case EV_RIGHT:
+        case EV_DOWN:
+            if (ime_flags & 2) {
+                ++ime_page;
+                ime_rev++;
+                ncand = 0;
+            }
+            return 1;
+        }
+    }
     switch (ev) {
+    case EV_IME:
+        ime_commit_raw();
+        ime_on = !ime_on;
+        dirty = 1;
+        break;
     case EV_ENTER:
         submit();
         break;
     case EV_DEL:
         if (cursor > 0) {
-            memmove(input + cursor - 1, input + cursor, (size_t)(input_len - cursor));
-            --cursor;
-            input[--input_len] = '\0';
+            int start = utf8_prev(cursor);
+            memmove(input + start, input + cursor, (size_t)(input_len - cursor));
+            input_len -= cursor - start;
+            cursor = start;
+            input[input_len] = '\0';
             input_changed();
         } else if (input_len == 0) {
             cmd_id[0] = '\0';
@@ -1197,11 +1467,11 @@ static int handle_event(int ev) {
         dirty = 1;
         break;
     case EV_LEFT:
-        if (cursor > 0) --cursor;
+        cursor = utf8_prev(cursor);
         dirty = 1;
         break;
     case EV_RIGHT:
-        if (cursor < input_len) ++cursor;
+        cursor = utf8_next(cursor);
         dirty = 1;
         break;
     case EV_ESC:
@@ -1252,6 +1522,7 @@ static int inject_event(uint8_t c) {
     case 0x12: return EV_ARROWS;
     case 0x13: return EV_LEFT;
     case 0x14: return EV_RIGHT;
+    case 0x15: return EV_IME;
     }
     return c >= 32 && c < 127 ? c : 0;
 }
@@ -1269,8 +1540,10 @@ static int poll_keys(void) {
     int ctrl = isKeyPressed(KEY_NSPIRE_CTRL);
     for (int i = 0; i < NSTRINGS; ++i) {
         int down = isKeyPressed(*strings[i].key) ? 1 : 0;
-        if (down && !prev_string[i] && !overlay && !(strings[i].abc_only && QWERTY))
+        if (down && !prev_string[i] && !overlay && !(strings[i].abc_only && QWERTY)) {
+            ime_commit_raw();
             input_append_str(ctrl ? strings[i].ctrl : strings[i].text);
+        }
         prev_string[i] = (uint8_t)down;
     }
     for (int i = 0; i < NCHARS; ++i) {
@@ -1293,6 +1566,7 @@ static int poll_keys(void) {
         case K_LAYOUT: ev = EV_LAYOUT; break;
         case K_MENU: ev = EV_MENU; break;
         case K_CHATS: ev = EV_CHATS; break;
+        case K_IME: ev = EV_IME; break;
         case K_DEL:
             ev = EV_DEL;
             del_hold = down ? del_hold + 1 : 0;
@@ -1363,12 +1637,14 @@ static void handle_message(int opcode, uint32_t id, const uint8_t *p, uint32_t l
     case OP_ERROR:
         if (id != awaited_id) break;
         if (len) {
-            char text[1024];
-            uint32_t n = len < sizeof(text) - 1 ? len : sizeof(text) - 1;
-            memcpy(text, p, n);
-            text[n] = '\0';
-            text_add(opcode == OP_ERROR ? "! " : "", text,
-                     opcode == OP_ERROR ? KIND_INFO : KIND_AI, 0);
+            char *text = malloc(len + 1);
+            if (text) {
+                memcpy(text, p, len);
+                text[len] = '\0';
+                text_add(opcode == OP_ERROR ? "! " : "", text,
+                         opcode == OP_ERROR ? KIND_INFO : KIND_AI, 0);
+                free(text);
+            }
         }
         waiting = 0;
         awaited_id = 0;
@@ -1395,6 +1671,47 @@ static void handle_message(int opcode, uint32_t id, const uint8_t *p, uint32_t l
     case OP_CLEAR:
         blocks_clear();
         break;
+    case OP_IME: {
+        if (id != ime_rev || comp_len == 0 || len < 4) break; /* stale */
+        int count = p[0] <= IME_MAX_CAND ? p[0] : IME_MAX_CAND;
+        uint32_t pos = 4;
+        int parsed = 0;
+        for (int k = 0; k < p[0]; ++k) {
+            if (pos + 2 > len || pos + 2 + p[pos + 1] > len) break;
+            if (k < count && p[pos + 1] < IME_TEXT_CAP) {
+                cand[parsed].consumed = p[pos];
+                cand[parsed].len = p[pos + 1];
+                memcpy(cand[parsed].text, p + pos + 2, p[pos + 1]);
+                ++parsed;
+            }
+            pos += 2u + p[pos + 1];
+        }
+        ncand = parsed;
+        ime_flags = p[1];
+        ime_page = p[2];
+        if (len >= pos + 12) {
+            const uint8_t *img = p + pos;
+            int bpp = img[1], encoding = img[6];
+            int w = (int)get_u16(img + 2), h = (int)get_u16(img + 4);
+            uint32_t bytes = 0;
+            uint8_t *data = h <= 40 ? image_decode(bpp, w, h, encoding, img + 12,
+                                                   len - pos - 12, &bytes) : NULL;
+            if (data) {
+                free(ime_bar.data);
+                ime_bar.data = data;
+                ime_bar.bpp = (uint8_t)bpp;
+                ime_bar.w = (uint16_t)w;
+                ime_bar.h = (uint16_t)h;
+            }
+        }
+        if (pending_pick >= 0) {
+            int k = pending_pick;
+            pending_pick = -1;
+            if (k < ncand) ime_pick(k);
+        }
+        dirty = 1;
+        break;
+    }
     case OP_PREVIEW: {
         if (id != input_rev) break; /* rendered from text that has changed since */
         if (len < 12) {
@@ -1439,20 +1756,12 @@ static void wait_keys_released(void) {
     for (int i = 0; i < 200 && matrix_any_pressed(); ++i) TCC_TASK_SLEEP(TICKS_PER_FRAME);
 }
 
-/* main() runs in the OS UI task, where file access is safe. */
-static void main_log(const char *text, int value) {
-    char line[80];
-    int n = 0;
-    while (*text && n < 60) line[n++] = *text++;
-    line[n++] = ' ';
-    if (value < 0) line[n++] = '-';
-    n += fmt_uint(line + n, value < 0 ? (uint32_t)-value : (uint32_t)value);
-    line[n++] = '\n';
-    line[n] = '\0';
-    FILE *f = fopen("/documents/nspire_ai_log.tns", "ab");
-    if (!f) return;
-    fputs(line, f);
-    fclose(f);
+/* Start-up failures are shown in an OS dialog; main() runs in the UI task
+ * before the page takes over, so that is safe.  (A log file would pull in
+ * stdio, about 5 KB of the 60 KB image budget.) */
+static int fail(const char *message) {
+    show_msgbox("NspireAI", message);
+    return 1;
 }
 
 /* The image is freed when main() returns, so no NavNet callback may be
@@ -1494,18 +1803,18 @@ static void lut_init(void) {
 }
 
 int main(void) {
-    if (nl_osid() != CX2_CAS_6_2_0_333_OSID) { main_log("wrong os", (int)nl_osid()); return 1; }
+    if (nl_osid() != CX2_CAS_6_2_0_333_OSID)
+        return fail("This build needs a TI-Nspire CX II CAS with OS 6.2.0.333.");
     back = malloc(W * H * 2);
     rx_buf = malloc(RX_CAP);
     rx_frame = malloc(RX_FRAME_CAP);
     blocks = malloc(sizeof(struct block) * MAX_BLOCKS);
     if (!back || !rx_buf || !rx_frame || !blocks) {
-        main_log("out of memory", 0);
         free(back);
         free(rx_buf);
         free(rx_frame);
         free(blocks);
-        return 1;
+        return fail("Not enough memory. Close other documents or reset.");
     }
     hww = lcd_type() == SCR_240x320_565;
     fb = (uint16_t *)(uintptr_t)LCD_BASE;
@@ -1558,6 +1867,12 @@ int main(void) {
             if (!was_linked) waiting = 0;
             dirty = 1;
         }
+        if (link_up && RTC_SECONDS - session_last_rx >= SESSION_DEAD_SECONDS) {
+            /* The host went silent while the callback sits in TI_NN_Read. */
+            nn_ch_t ch = active_ch;
+            session_last_rx = RTC_SECONDS;
+            if (ch) TI_NN_Disconnect(ch);
+        }
         if (waiting && RTC_SECONDS - waiting_since >= ANSWER_TIMEOUT_SECONDS) {
             waiting = 0;
             awaited_id = 0;
@@ -1570,6 +1885,13 @@ int main(void) {
         }
         STEP(4);
         int stay = poll_keys();
+        /* Candidates for the letters being composed, after every change. */
+        if (link_up && comp_len > 0 && ime_rev != ime_sent_rev && !tx[TX_IME].pending) {
+            ime_sent_rev = ime_rev;
+            ime_req[0] = (uint8_t)ime_page;
+            memcpy(ime_req + 1, comp, (size_t)comp_len);
+            tx_post(TX_IME, OP_IME_REQ, ime_rev, ime_req, (uint32_t)comp_len + 1);
+        }
         /* Ask for a typeset preview once typing has paused (~250 ms). */
         if (link_up && input_rev != preview_sent_rev && loop_beat - edit_beat >= 8 &&
             !tx[TX_PREVIEW].pending) {
@@ -1613,13 +1935,13 @@ int main(void) {
         /* A callback is still inside this image: keep the image and its
          * buffers alive rather than free memory that is in use.  Leaks
          * once, never crashes. */
-        main_log("session still active at exit; staying resident", 0);
         nl_set_resident();
         return 0;
     }
     blocks_clear();
     screens_clear();
     preview_clear();
+    ime_bar_clear();
     free(dump_buf);
     free(blocks);
     free(rx_frame);

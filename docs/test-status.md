@@ -3824,3 +3824,80 @@ new `bridge/test_pagehost.py`.
 Known limits: Chinese is typed as pinyin (no on-device input method); the
 page image is 51 KB of the ~60 KB loader budget; italics render as regular
 text and colour emoji as `?`.
+
+## 2026-09-29 (later): pinyin input method, internet access, review fixes
+
+Page build `455b10b27a1038bed84e57dd9f6dd497325e72bcb3f719b4044519acfb55e062`
+(loader allocation 49,856 bytes of the 60,000 budget), deployed and reopened
+unattended with `scripts/page-cycle.sh deepseek`.
+
+**Pinyin input method.** The page only collects letters (`comp[]`) and shows
+what the host sends; `bridge/ime.py` owns the dictionary (268,140 spellings
+built from `jieba`'s word list and `pypinyin`'s readings in 8.5 s, then cached
+as `~/.cache/nspireai/ime-v2.json.gz`, 0.7 s to load). A lookup takes 0.1 ms.
+Characters rank by their use inside words as well as on their own, a reading
+that no word uses ranks last, a short list of mathematics and science words
+ranks higher, and what the user picks is remembered
+(`~/.config/nspireai/ime-user.json`), including phrases entered piece by
+piece.
+
+**Internet access.** DeepSeek's API has no search of its own, so the bridge
+offers the model two tools (`bridge/webtools.py`: `web_search`, `open_url`)
+through function calling. In thinking mode the model's `reasoning_content`
+is returned with each tool round, as the API requires. `open_url` only opens
+URLs that a search returned or that the user typed, only public addresses on
+ports 80 and 443, and re-checks every redirect. At most five tool rounds per
+question; the last request forbids further calls.
+
+Verified on the handheld (remote keys and the page's own framebuffer dump):
+
+| Feature | Evidence |
+| --- | --- |
+| Candidate bar | `zhegefangchengzenmejie` → `1这个方程怎么解 2这个 3这歌 4这 …` above the input line, `zh` in the title bar |
+| Pick | `1` put the sentence into the input line; `:` after Chinese became `：`; the preview showed `这个方程怎么解：x² − 5x + 6 = 0` typeset |
+| More candidates | `shi`, right arrow → second page `1石 2世 3师 4史 5始 6士 7势 8食 9示` with both arrows |
+| Esc | dropped the letters being composed and kept the line |
+| Chinese question | DeepSeek answered in Chinese with the factorisation and a boxed `x = 2, 3` |
+| Web search | "what is the newest stable python version and its release date?" → notes `Searching: newest stable Python version release date` and `Reading: devguide.python.org`, then the answer (3.14, 2025-10-07; 3.15 planned for 2026-10-01) |
+| Web switch | Menu → 7 showed `on 开`, then `off 关`, then on again, each with a note in the chat |
+| Both together | `jintian` `beijing` `tianqi` `zenmeyang`, each picked with `1`, gave `今天北京天气怎么样`; the answer quoted 中国天气网 with that day's forecast and a wind warning |
+| Bridge restart | with the page open, the page said HELLO to the new bridge after 9 s |
+
+Live API check without the handheld (`deepseek-v4-pro`, tools offered):
+thinking off and high, each with and without earlier turns in the history
+(stored without `reasoning_content`), and a follow-up that needs no search.
+All six answered; the search cases made exactly one tool call.
+
+Fixes from the code review of the previous round:
+
+- A new connection could not take over while the old session sat in
+  `TI_NN_Read`: the page now disconnects the old channel, and its main loop
+  disconnects a link that has been silent for 20 s.
+- The host sent frames of different messages interleaved (answer, preview,
+  test commands come from different threads) while the page reassembles into
+  one buffer: `send_message` now holds a lock for the whole message.
+- The page noted the menu version and session before the data had arrived;
+  after an interrupted transfer the host skipped it. HELLO now always gets
+  state, menus and history.
+- An answer that arrived after the user switched chats was drawn in the
+  wrong chat; it is stored where it belongs and the page gets a note.
+- `callbacks_running` is updated with interrupts masked; command ids of 32
+  characters fit; the plain-text fallback no longer cuts at 1 KB; the page
+  ends its tags with a unit separator, so a question that begins with
+  `#think:` is not read as a tag.
+- `scripts/run-navnet-bridge.sh` starts Python natively (`arch -arm64`) when
+  it can: started from an x86_64 parent, the universal interpreter came up
+  under Rosetta and could not load the environment's arm64 modules.
+
+Search providers from this network: `ddgs` answers (1.4 to 2.7 s); the
+built-in DuckDuckGo reader gets a verification page and Bing often returns
+unrelated results, which are recognised and dropped. Without `ddgs` web
+search is therefore unreliable here.
+
+Host tests: 365 pass (`scripts/test-bridge.sh`, which now discovers every
+`bridge/test_*.py`).
+
+Known limits: the sentence guess is a unigram model, so a long input may
+need to be entered in pieces (the pieces are then learned as a phrase); web
+pages that need JavaScript, a login or a PDF reader cannot be read, and
+pages are fetched directly (no proxy support).

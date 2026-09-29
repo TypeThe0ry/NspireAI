@@ -205,5 +205,50 @@ class NavNetBridgeTests(unittest.TestCase):
         self.assertEqual(backend.reset_count, 2)
 
 
+class PageDispatchTests(unittest.TestCase):
+    """Input method traffic goes to the page host, the newest letters first."""
+
+    class Host:
+        def __init__(self):
+            self.calls: list[tuple] = []
+
+        def on_ime(self, request_id, payload):
+            self.calls.append(("ime", request_id, payload))
+
+        def on_ime_pick(self, payload):
+            self.calls.append(("pick", payload))
+
+    class Inline:
+        """An executor that runs the work when the test says so."""
+
+        def __init__(self):
+            self.queued: list[tuple] = []
+
+        def submit(self, function, *args):
+            self.queued.append((function, args))
+
+        def run(self):
+            while self.queued:
+                function, args = self.queued.pop(0)
+                function(*args)
+
+    def test_superseded_requests_are_dropped(self):
+        from bridge.navnet_bridge import OP_IME_PICK, OP_IME_REQ
+
+        bridge, _backend, _sent = make_bridge()
+        host = self.Host()
+        bridge.page_host = host
+        bridge.page_host_error = None
+        bridge.page_host_lock = threading.Lock()
+        bridge.ui_executor = self.Inline()
+        bridge.handle(OP_IME_REQ, 1, 7, b"\x00n")
+        bridge.handle(OP_IME_PICK, 1, 7, "ni\t你\t".encode("utf-8"))
+        bridge.handle(OP_IME_REQ, 2, 7, b"\x00ni")
+        bridge.handle(OP_IME_REQ, 3, 7, b"\x00nih")
+        bridge.ui_executor.run()
+        self.assertEqual(host.calls, [("pick", "ni\t你\t".encode("utf-8")),
+                                      ("ime", 3, b"\x00nih")])
+
+
 if __name__ == "__main__":
     unittest.main()
