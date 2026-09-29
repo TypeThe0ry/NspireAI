@@ -3660,3 +3660,29 @@ itself has not run on the handheld yet; the next reset is needed first.
   NavNet callback was still blocked in `TI_NN_Read`. In-place retire is
   removed. A relaunch always re-shows the resident build (and logs an older
   `BUILD_ID`); a redeploy takes effect after a reset.
+
+### 2026-09-29 PAGE ROUND TRIP VERIFIED ON THE HANDHELD (autotest build)
+
+After a reset, `/nspire_ai_autotest.tns` (sha `9c93dfeb...`, service 0x5010)
+and `/nspire_ai.tns` (sha `8cf8ca06...`) were deployed. The bridge ran in
+client mode with lockless reads and a 1 s keepalive, and was started before
+the page, so the page is found by knocking. Timestamped bridge log:
+
+```text
+16:45:54 helper: NODE 1 / CLIENT CONNECT status=1 / CLIENT PING write=1 / CONNECTED
+16:46:08 remote Enter opens the autotest page
+16:46:13 helper: OK                                              (PONG to the page's PING)
+16:46:13 RX opcode=3 request=246759426 conversation=60245 bytes=28   "autotest hello from the page"
+16:46:13 helper: OK                                              (echo RESPONSE, 42 bytes)
+16:46:14 RX opcode=3 request=246759427 conversation=60245 bytes=15   "autotest got 42"
+16:46:14 helper: OK
+```
+
+The second request carries the length of the response the page received
+(42 = "Mac received: " + 28), so this is a page-open request → response →
+page-side receipt loop. The RTC-seeded conversation and request ids are
+visible in the log. For 35 s afterwards there was no silent-session
+reconnect, and USB stayed E022. Node discovery after starting the helper
+took anywhere from immediate to about 18 s; starting a bridge right after
+another one was stopped sometimes saw no node at all, so wait about 10 s
+between them.
