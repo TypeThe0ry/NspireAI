@@ -1,2 +1,8 @@
 # Installed only for --backend openai. Echo mode uses the Python standard library.
 openai>=3.14.0,<4
+# Rendering answers and menus to images for the calculator page
+# (bridge/render.py, bridge/imagecodec.py).  matplotlib typesets LaTeX math
+# with its built-in mathtext engine; no TeX installation is needed.
+Pillow>=10.1,<13
+matplotlib>=3.9,<4
+numpy>=1.26,<3

@@ -870,7 +870,7 @@ static void render(void) {
             left[n++] = ' ';
         }
         for (const char *t = session_label[0] ? session_label : "NspireAI";
-             *t && n < 24; ++t)
+             *t && n < 20; ++t)
             left[n++] = *t;
         left[n] = '\0';
         draw_text(4, 3, left, C_BAR_TEXT);

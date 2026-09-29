@@ -1,39 +1,63 @@
 # NspireAI
 
-> **2026-09-29 — working. The chat page reaches `Mac received: <text>`
-> on the handheld** (`docs/test-status.md`, "GOAL REACHED"). Current design,
-> each piece verified on the CX II CAS 6.2.0.333:
+> **2026-09-29 — working on the handheld** (`docs/test-status.md`). The
+> calculator is a thin terminal; the bridge host renders and remembers.
 >
-> - `src/page/page.c` runs in `main()`: IRQs re-enabled, the OS UI task
->   paced with Nucleus `TCC_Task_Sleep`, so USB/NavNet keep running while
->   the OS browser is frozen (no repaint, no key leakage).
-> - The calculator registers NavNet service `0x5001`; the Mac Java helper
->   connects to it (host-as-client, the bridge default), speaks first, and
->   sends a 1 s keepalive. The whole session runs inside the calculator's
->   service callback.
+> **What it does**
+> - Chat with an LLM from the calculator (DeepSeek `deepseek-v4-pro`, OpenAI,
+>   or an echo backend), with a thinking-effort switch (Var key).
+> - Answers are typeset: Markdown, LaTeX math and Chinese are rendered on the
+>   host into grayscale image blocks and shown on the page.
+> - The input line has a cursor (arrow keys) and a live typeset preview of
+>   what is being typed; math in plain input is detected automatically.
+> - Enhanced typing: a QWERTY-by-position layout with an on-screen legend
+>   (Doc key cycles qwerty + legend, qwerty, abc). Ctrl gives LaTeX symbols.
+> - Quick commands in a two-level menu (Menu key), defined in
+>   `bridge/commands.default.json` and `~/.config/nspireai/commands.json`.
+> - Persistent multi-session chats with context (Cat key), stored under
+>   `~/.config/nspireai/sessions/`.
+> - Chinese input by pinyin: the model reads pinyin and answers in Chinese.
+> - The calculator is found on any USB port, hub or dock, and the bridge
+>   waits for it to appear.
+>
+> **How it works** (each piece verified on the CX II CAS 6.2.0.333)
+> - `src/page/page.c` runs in `main()`: IRQs re-enabled, the OS UI task paced
+>   with Nucleus `TCC_Task_Sleep`, so USB/NavNet keep running while the OS
+>   browser is frozen.
+> - The calculator registers NavNet service `0x5001`; the host's Java helper
+>   connects to it, speaks first and sends a 250 ms keepalive. The session
+>   runs inside the calculator's service callback.
 > - The page scans out of its own double-buffered SDRAM framebuffer in the
->   panel's portrait order and hides the hardware cursor, so the OS's own
->   repaints never show.
-> - Images stay under ~60 KB of Zehn allocation; nothing stays resident.
-> - While the page is open, the calculator's file service pauses: deploy
->   after closing the page.
+>   panel's portrait order and hides the hardware cursor.
+> - Protocol 2 (`bridge/protocol.py`, `bridge/imagecodec.py`,
+>   `bridge/pagehost.py`): image blocks, overlay screens with key tables,
+>   actions, state, previews, plus key injection and framebuffer dumps for
+>   unattended tests.
+> - While the page is open the calculator's file service pauses: deploy
+>   after closing the page (`scripts/page-cycle.sh` does it remotely).
 >
-> Start the bridge from a terminal (needs `~/.config/nspireai/env` with
-> `DEEPSEEK_API_KEY=...`):
+> **Run it** (needs `~/.config/nspireai/env` with `DEEPSEEK_API_KEY=...`):
 >
 > ```sh
 > cd ~/Documents/GitHub/NspireAI && ./scripts/run-navnet-bridge.sh deepseek
 > ```
 >
-> Then open `nspire_ai` on the calculator. Model: `deepseek-v4-pro`
-> (`DEEPSEEK_MODEL` overrides). On the page the **Var** key cycles the
-> thinking effort `off → low → high → max`, shown in the title bar and sent
-> with each request.
+> Then open `nspire_ai` on the calculator.
 >
-> Build: `scripts/build-marker-probe.sh`. Deploy: `scripts/deploy-page.sh`.
-> Bridge: `scripts/run-navnet-bridge.sh echo`, `deepseek` (needs
-> `DEEPSEEK_API_KEY`; `DEEPSEEK_MODEL` defaults to `deepseek-chat`) or
-> `openai` (needs `OPENAI_API_KEY`).
+> | Key | Action |
+> | --- | --- |
+> | enter / del / esc | send / erase / close the page |
+> | arrows | scroll the chat (up, down), move the cursor (left, right) |
+> | menu | quick commands |
+> | cat | chats: switch, new, delete |
+> | var | thinking effort: off, low, high, max |
+> | doc | keyboard layout |
+> | ctrl + key | LaTeX symbols: `( )` → `{ }`, `÷` → `\`, `−` → `_`, `=` → `$` … |
+>
+> **Develop**: build with `scripts/build-marker-probe.sh`; redeploy and
+> reopen the page unattended with `scripts/page-cycle.sh [echo|deepseek]`;
+> drive and inspect the page with `scripts/pagectl.py` (`type`, `dump`,
+> `status`); host tests with `scripts/test-bridge.sh`.
 
 > **Do not run the IRQ-scope 0922 handheld build**: the user reported a freeze
 > followed by a crash. Its SHA256 is

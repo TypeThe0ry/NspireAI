@@ -67,6 +67,7 @@ class NavNetBridge:
         # Protocol 2 (thin-terminal page).  Created on the first HELLO; when
         # the rendering modules are unavailable the page gets plain text.
         self.page_host = None
+        self.page_host_lock = threading.Lock()
         # Menu and session actions must stay responsive while a model call
         # occupies the answer worker.
         self.ui_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="nspire-ui")
@@ -235,11 +236,18 @@ class NavNetBridge:
 
     def _page_host(self):
         """The page host, or None when rendering is unavailable."""
+        with self.page_host_lock:
+            return self._page_host_locked()
+
+    def _page_host_locked(self):
         if self.page_host is None and self.page_host_error is None:
             try:
                 from .pagehost import PageHost
 
-                self.page_host = PageHost(self.send_message, self.backend)
+                host = PageHost(self.send_message, self.backend)
+                host.render.warm_up(host.cfg)
+                host.build_screens()
+                self.page_host = host
             except Exception as exc:
                 self.page_host_error = f"{type(exc).__name__}: {exc}"
                 print(f"page host unavailable, using plain text: {self.page_host_error}",
@@ -393,6 +401,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv or sys.argv[1:])
     bridge = NavNetBridge(args.helper, args.backend, args.model, args.base_url, args.api_timeout)
+    # matplotlib scans the system fonts on first use (many seconds); do it
+    # now, off the request path, so the first answer is not delayed.
+    threading.Thread(target=bridge._page_host, name="nspire-warmup", daemon=True).start()
     home = Path(os.environ.get("NSPIREAI_HOME", str(Path.home() / ".config" / "nspireai")))
     try:
         bridge.start_control(home / "bridge.sock")

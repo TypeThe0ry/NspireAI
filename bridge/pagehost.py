@@ -33,7 +33,7 @@ KIND_AI, KIND_USER, KIND_INFO = 0, 1, 2
 ACT_CLOSE, ACT_GOTO, ACT_INSERT, ACT_COMMAND, ACT_SEND, ACT_SEND_STAY = range(6)
 
 SCREEN_ROOT = 1
-SCREEN_HELP = 3
+SCREEN_HELP = 3             # first help page; the second is SCREEN_HELP + 1
 SCREEN_CATEGORY_BASE = 10   # + 10 * category index + page
 SCREEN_SESSIONS = 200
 
@@ -59,25 +59,32 @@ SYSTEM_PROMPT = (
     "the user's language."
 )
 
-HELP_TEXT = """\
+HELP_PAGES = [
+    """\
 ## Keys
-- **enter** send  ·  **del** erase  ·  **esc** close
-- **menu** quick commands  ·  **cat** chats
-- **tab** / **shift+tab** scroll up / down
-- **var** thinking effort  ·  **doc** keyboard layout
+- **enter** send · **del** erase · **esc** close
+- **arrows** scroll the chat / move the cursor
+- **menu** quick commands · **cat** chats
+- **var** thinking effort: off, low, high, max
+- **doc** keyboard: qwerty + legend, qwerty, abc
+- Chinese: type pinyin; the answer is Chinese
 
-## Symbols (hold ctrl)
-- `( )` → `{ }`   `÷` → `\\`   `−` → `_`   `=` → `$`
-- `7 8` → `[ ]`   `4 5` → `< >`   `×` → `&`   `+` → `|`
-- `1` `!`  `2` `@`  `3` `#`  `0` `%`  `.` `;`
+**0** next page
+""",
+    """\
+## Symbols: hold ctrl
+- `(` `)` give `{` `}` · `7` `8` give `[` `]`
+- `÷` gives `\\` · `−` gives `_` · `=` gives `$`
+- `×` gives `&` · `+` gives `|` · `.` gives `;`
+- `1` `!` · `2` `@` · `3` `#` · `0` `%` · `4` `5` `<` `>`
 
 ## Math keys
-- `x²` types `^2`, with ctrl `\\sqrt{`
-- fraction key types `\\frac{`, with ctrl `}{`
+- `x²` types `^2`; with ctrl `\\sqrt{`
+- fraction key types `\\frac{`; with ctrl `}{`
 - `e^x` `10^x` `trig` type `e^` `10^` `\\sin(`
-
-Chinese: type pinyin, the answer comes back in Chinese.
-"""
+""",
+]
+HELP_TEXT = "\n".join(HELP_PAGES)  # part of the menu version
 
 
 def parse_tags(text: str) -> tuple[dict[str, str], str]:
@@ -240,7 +247,8 @@ class PageHost:
         self.backend = backend
         self.imagecodec = imagecodec
         self.render = render
-        self.cfg = render.RenderConfig.from_env()
+        # Info notes are tinted gray by the page; render them in full ink.
+        self.cfg = render.RenderConfig.from_env(max_height=3000, info_ink=0)
         self.home = Path(home) if home else Path(os.environ.get(
             "NSPIREAI_HOME", str(Path.home() / ".config" / "nspireai")))
         self.store = SessionStore(self.home)
@@ -269,7 +277,7 @@ class PageHost:
 
     def send_state(self) -> None:
         session = self.store.active()
-        title = ascii_label(session.title, 20)
+        title = ascii_label(session.title, 16)
         self._send(OP_STATE, f"s={session.id};t={title};mv={self.menu_version}".encode("ascii"))
 
     def send_image(self, kind: int, image, block_id: int) -> None:
@@ -318,7 +326,7 @@ class PageHost:
         categories = self.commands.categories[:7]
         root: list[tuple[str, str, int, bytes]] = []
         for index, category in enumerate(categories):
-            root.append((str(index + 1), category.title or category.label, ACT_GOTO,
+            root.append((str(index + 1), category.display, ACT_GOTO,
                          bytes([SCREEN_CATEGORY_BASE + 10 * index])))
         root.append(("8", "Chats 会话", ACT_SEND_STAY, b"session.list"))
         root.append(("9", "Help 帮助", ACT_GOTO, bytes([SCREEN_HELP])))
@@ -329,7 +337,7 @@ class PageHost:
             for page_number, page in enumerate(pages):
                 items: list[tuple[str, str, int, bytes]] = []
                 for slot, item in enumerate(page):
-                    label = item.title or item.label
+                    label = item.display
                     if item.type == "insert":
                         action, arg = ACT_INSERT, item.text.encode("ascii", "replace")
                     else:
@@ -344,15 +352,17 @@ class PageHost:
                     items.append(("0", "back", ACT_GOTO, bytes([SCREEN_ROOT])))
                     footer = "esc = close"
                 screens.append(self._screen(base + page_number,
-                                            category.title or category.label, items, footer))
+                                            category.display, items, footer))
 
         cfg = self.render.RenderConfig(**{**self.cfg.__dict__, "width": MENU_WIDTH,
-                                          "max_height": MENU_HEIGHT})
-        help_image = self.render.render_markdown(HELP_TEXT, cfg)
-        if help_image.size[1] > MENU_HEIGHT:
-            help_image = help_image.crop((0, 0, MENU_WIDTH, MENU_HEIGHT))
-        keys = [self.imagecodec.ScreenKey(key="0", action=ACT_GOTO, arg=bytes([SCREEN_ROOT]))]
-        screens.append(self.imagecodec.encode_screen(SCREEN_HELP, 0, keys, help_image, bpp=4))
+                                          "max_height": MENU_HEIGHT, "font_size": 12})
+        for index, text in enumerate(HELP_PAGES):
+            image = self.render.render_markdown(text, cfg)
+            if image.size[1] > MENU_HEIGHT:
+                image = image.crop((0, 0, MENU_WIDTH, MENU_HEIGHT))
+            nxt = SCREEN_HELP + index + 1 if index + 1 < len(HELP_PAGES) else SCREEN_ROOT
+            keys = [self.imagecodec.ScreenKey(key="0", action=ACT_GOTO, arg=bytes([nxt]))]
+            screens.append(self.imagecodec.encode_screen(SCREEN_HELP + index, 0, keys, image, bpp=4))
         return screens
 
     def send_screens(self) -> None:

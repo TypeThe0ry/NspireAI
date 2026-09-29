@@ -3778,3 +3778,49 @@ Operational facts:
 - TI screen captures show the OS composition buffer, never the page.
 - Remote key injection is unreliable for navigation; verify with a capture
   before pressing Enter.
+
+### 2026-09-29 Protocol 2: thin-terminal page with rendered answers, menus, sessions
+
+The calculator page became a thin terminal and the bridge host renders and
+remembers. Everything below was verified on the handheld with
+`scripts/pagectl.py` (remote key injection and dumps of the page's real
+framebuffer), so no manual key presses were needed.
+
+Test tooling added first:
+
+- `OP_INJECT` (host → page key events) and `OP_DUMP_REQ`/`OP_DUMP` (the
+  page's back buffer as RLE RGB565), exposed by a control socket in the
+  bridge (`~/.config/nspireai/bridge.sock`) and `scripts/pagectl.py`.
+- `scripts/page-cycle.sh`: remote Esc → stop bridge → upload and verify →
+  start bridge → remote Enter → wait for HELLO. It ran unattended several
+  times.
+- `scripts/check-page-syscalls.py`: every OS call in `page.c` must be in the
+  6.2.0.333 symbol map. Added after `TI_NN_GetConnMaxPktSize` (not in the
+  map) crashed the NavNet task and froze the handheld.
+- `scripts/probe-nspire-usb.py`: walks the whole USB tree (plist from
+  `ioreg`, `/sys/bus/usb` on Linux). The handheld was found behind three hub
+  levels of a dock (`TS4 USB2.0 Hub > HUB > HUB`); the dock's TI power
+  controller `0xACE1` is reported but not mistaken for it. The bridge now
+  waits for the handheld instead of exiting.
+
+Verified on the handheld:
+
+| Feature | Evidence |
+| --- | --- |
+| Image blocks | 34.6 KB block (162 frames) plus a framebuffer dump in 0.95 s, so ≥ 35 KB/s |
+| Rendered answers | DeepSeek solved `x^2 - 5x + 6 = 0`; the page showed the factorisation, the two cases and a boxed final answer, all typeset |
+| Chinese | pinyin input `jie shi yi xia gou gu ding li` → Chinese answer with typeset math |
+| Live preview | typing `x^2 - 5x + 6` showed the typeset expression above the input line |
+| Quick commands | Menu → Math → Factorize set the `[factorize]` chip; Solve produced the answer above |
+| Context | follow-up "what were the two roots?" → "2 and 3." |
+| Sessions | Cat → list, New chat (S2), switch back to S1 replayed its history; history also came back after closing and reopening the page |
+| Reconnect | restarting the bridge (echo → DeepSeek) with the page open: the page said HELLO again by itself |
+| Input editing | cursor moved with injected left/right, deletion in the middle of the line |
+| Touchpad arrows | one `touchpad_scan` per frame: heartbeat stayed at 33 frames/s |
+
+Host tests: 223 unit tests pass (`scripts/test-bridge.sh`), including the
+new `bridge/test_pagehost.py`.
+
+Known limits: Chinese is typed as pinyin (no on-device input method); the
+page image is 51 KB of the ~60 KB loader budget; italics render as regular
+text and colour emoji as `?`.

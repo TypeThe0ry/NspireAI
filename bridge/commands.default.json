@@ -1,0 +1,217 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "math",
+      "label": "Math",
+      "items": [
+        {
+          "id": "explain",
+          "label": "explain",
+          "title": "Explain",
+          "type": "prompt",
+          "template": "Explain the following math concept or problem. Start with the main idea, then give the key details.\n\n{input}"
+        },
+        {
+          "id": "solve",
+          "label": "solve",
+          "title": "Solve",
+          "type": "prompt",
+          "template": "Solve the following problem. Show the key steps briefly and state the final answer clearly.\n\n{input}"
+        },
+        {
+          "id": "simplify",
+          "label": "simplify",
+          "title": "Simplify",
+          "type": "prompt",
+          "template": "Simplify the following expression. Show the key steps briefly.\n\n{input}"
+        },
+        {
+          "id": "factorize",
+          "label": "factorize",
+          "title": "Factorize",
+          "type": "prompt",
+          "template": "Factorize the following expression. Show the key steps briefly.\n\n{input}"
+        },
+        {
+          "id": "expand",
+          "label": "expand",
+          "title": "Expand",
+          "type": "prompt",
+          "template": "Expand the following expression and collect like terms. Show the key steps briefly.\n\n{input}"
+        },
+        {
+          "id": "differentiate",
+          "label": "d/dx",
+          "title": "Differentiate",
+          "type": "prompt",
+          "template": "Differentiate the following expression. Name the rules you use and simplify the result.\n\n{input}"
+        },
+        {
+          "id": "integrate",
+          "label": "integrate",
+          "title": "Integrate",
+          "type": "prompt",
+          "template": "Integrate the following expression. Show the method (substitution, parts, ...) and the key steps.\n\n{input}"
+        },
+        {
+          "id": "limit",
+          "label": "limit",
+          "title": "Limit",
+          "type": "prompt",
+          "template": "Evaluate the following limit. Show the key steps briefly.\n\n{input}"
+        },
+        {
+          "id": "evaluate",
+          "label": "evaluate",
+          "title": "Evaluate numerically",
+          "type": "prompt",
+          "template": "Evaluate the following numerically. Give the exact value if there is a simple one, and a decimal value to 6 significant digits.\n\n{input}"
+        },
+        {
+          "id": "derive",
+          "label": "step-by-step",
+          "title": "Proof / derivation",
+          "type": "prompt",
+          "template": "Give a rigorous step-by-step proof or derivation of the following. Number the steps and justify each one.\n\n{input}"
+        },
+        {
+          "id": "check",
+          "label": "check answer",
+          "title": "Check my answer",
+          "type": "prompt",
+          "template": "Check my work or answer below. Say whether it is correct; if it is not, point out the first mistake and give the corrected result.\n\n{input}"
+        }
+      ]
+    },
+    {
+      "id": "language",
+      "label": "Language",
+      "items": [
+        {
+          "id": "to_chinese",
+          "label": "to Chinese",
+          "title": "Translate to Chinese",
+          "type": "prompt",
+          "template": "Translate the following into Simplified Chinese. Reply with the translation only.\n\n{input}"
+        },
+        {
+          "id": "to_english",
+          "label": "to English",
+          "title": "Translate to English",
+          "type": "prompt",
+          "template": "Translate the following into natural English. Reply with the translation only.\n\n{input}"
+        },
+        {
+          "id": "summarize",
+          "label": "summarize",
+          "title": "Summarize",
+          "type": "prompt",
+          "template": "Summarize the following in a few short bullet points.\n\n{input}"
+        },
+        {
+          "id": "polish",
+          "label": "polish",
+          "title": "Polish / rewrite",
+          "type": "prompt",
+          "template": "Rewrite the following so that it is clear, natural and concise. Keep the meaning and the language. Reply with the rewritten text only.\n\n{input}"
+        },
+        {
+          "id": "grammar",
+          "label": "grammar",
+          "title": "Grammar check",
+          "type": "prompt",
+          "template": "Check the grammar and spelling of the following. Give the corrected text, then list each correction briefly.\n\n{input}"
+        },
+        {
+          "id": "define",
+          "label": "define",
+          "title": "Define a word",
+          "type": "prompt",
+          "template": "Define the following word or phrase: part of speech, meaning, the Chinese translation, and one example sentence.\n\n{input}"
+        }
+      ]
+    },
+    {
+      "id": "code",
+      "label": "Code",
+      "items": [
+        {
+          "id": "code_explain",
+          "label": "explain code",
+          "title": "Explain code",
+          "type": "prompt",
+          "template": "Explain what the following code does, step by step and briefly.\n\n{input}"
+        },
+        {
+          "id": "code_write",
+          "label": "write code",
+          "title": "Write code",
+          "type": "prompt",
+          "template": "Write code for the following task. Keep it short, keep lines under 40 characters where possible, and add a one-line explanation.\n\n{input}"
+        },
+        {
+          "id": "code_debug",
+          "label": "find bug",
+          "title": "Find the bug",
+          "type": "prompt",
+          "template": "Find the bug in the following code. Explain the cause in one or two sentences and show the corrected code.\n\n{input}"
+        }
+      ]
+    },
+    {
+      "id": "study",
+      "label": "Study",
+      "items": [
+        {
+          "id": "eli5",
+          "label": "ELI5",
+          "title": "Explain like I'm 5",
+          "type": "prompt",
+          "template": "Explain the following in very simple words, as if to a young child, using an everyday analogy.\n\n{input}"
+        },
+        {
+          "id": "example",
+          "label": "example",
+          "title": "Give an example",
+          "type": "prompt",
+          "template": "Give one concrete worked example that illustrates the following.\n\n{input}"
+        },
+        {
+          "id": "quiz",
+          "label": "quiz me",
+          "title": "Quiz me",
+          "type": "prompt",
+          "template": "Quiz me on the following topic. Ask three short questions, numbered, and do not reveal the answers until I reply.\n\n{input}"
+        },
+        {
+          "id": "compare",
+          "label": "compare",
+          "title": "Compare A and B",
+          "type": "prompt",
+          "template": "Compare the following. Use a small table of the key differences, then one sentence on when to use each.\n\n{input}"
+        }
+      ]
+    },
+    {
+      "id": "latex",
+      "label": "LaTeX",
+      "items": [
+        {"id": "frac", "label": "\\frac{}{}", "type": "insert", "text": "\\frac{"},
+        {"id": "sqrt", "label": "\\sqrt{}", "type": "insert", "text": "\\sqrt{"},
+        {"id": "int", "label": "\\int", "type": "insert", "text": "\\int "},
+        {"id": "sum", "label": "\\sum", "type": "insert", "text": "\\sum "},
+        {"id": "lim", "label": "\\lim", "type": "insert", "text": "\\lim "},
+        {"id": "sup", "label": "^{}", "type": "insert", "text": "^{"},
+        {"id": "sub", "label": "_{}", "type": "insert", "text": "_{"},
+        {"id": "pi", "label": "\\pi", "type": "insert", "text": "\\pi "},
+        {"id": "infty", "label": "\\infty", "type": "insert", "text": "\\infty "},
+        {"id": "cdot", "label": "\\cdot", "type": "insert", "text": "\\cdot "},
+        {"id": "times", "label": "\\times", "type": "insert", "text": "\\times "},
+        {"id": "leq", "label": "\\leq", "type": "insert", "text": "\\leq "},
+        {"id": "geq", "label": "\\geq", "type": "insert", "text": "\\geq "},
+        {"id": "neq", "label": "\\neq", "type": "insert", "text": "\\neq "}
+      ]
+    }
+  ]
+}
