@@ -2,6 +2,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# API keys live outside the repo: ~/.config/nspireai/env (KEY=value lines).
+NSPIREAI_ENV="${NSPIREAI_ENV:-$HOME/.config/nspireai/env}"
+if [[ -f "$NSPIREAI_ENV" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$NSPIREAI_ENV"
+  set +a
+fi
 BACKEND="${1:-${NSPIRE_AI_BACKEND:-echo}}"
 PYTHON_BIN="${PYTHON_BIN:-$ROOT/bridge/.venv/bin/python}"
 CUSTOM_USB_HELPER="${NSPIRE_USB_HELPER:-}"

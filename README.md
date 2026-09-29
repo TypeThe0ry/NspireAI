@@ -231,6 +231,14 @@ The model call runs only on the Mac. Keep the API key in the environment; do
 not put it in a TNS file, source file, or log.
 
 ```sh
+mkdir -p ~/.config/nspireai
+printf 'DEEPSEEK_API_KEY=sk-...\n' > ~/.config/nspireai/env   # read by run-navnet-bridge.sh
+./scripts/run-navnet-bridge.sh deepseek                      # DEEPSEEK_MODEL defaults to deepseek-chat
+```
+
+Or with OpenAI:
+
+```sh
 export OPENAI_API_KEY='...'
 export OPENAI_MODEL='gpt-5'
 ./scripts/run-navnet-bridge.sh openai
