@@ -68,8 +68,10 @@ public final class NspireNavnetHelper {
     private static final long CLIENT_REPING_MS = 3000L;
     /* The calculator's TI_NN_Read also blocks until data arrives, and its
      * session loop can only send (requests, acks) after a read returns, so
-     * a 1 s keepalive is what paces the page's session loop. */
-    private static final long CLIENT_KEEPALIVE_MS = 1000L;
+     * the keepalive is what paces the page's session loop (and so how fast
+     * a key press on the page reaches the host). */
+    private static final long CLIENT_KEEPALIVE_MS = Long.parseLong(System.getenv().getOrDefault(
+            "NSPIRE_CLIENT_KEEPALIVE_MS", "250"));
     private static final long readTimeout = Long.parseLong(System.getenv().getOrDefault(
             "NSPIRE_NAVNET_READ_TIMEOUT", "1"));
     private static final long CLIENT_DEAD_MS = 30000L;
@@ -421,6 +423,7 @@ public final class NspireNavnetHelper {
             int attempt = 0;
             int lastStatus = Integer.MIN_VALUE;
             long lastPingMillis = 0L;
+            long lastConnectMillis = 0L;
             /* NavNet.connect is lazy: it returns 1 even for a service id
              * nobody registered.  The calculator's TI_NN_StartService
              * callback only fires when the first packet arrives, so the host
@@ -430,7 +433,8 @@ public final class NspireNavnetHelper {
             while (!stopping) {
                 ConnectionHandle current = connection;
                 long now = System.currentTimeMillis();
-                if (current == null && clientNode != null) {
+                if (current == null && clientNode != null && now - lastConnectMillis >= 1000L) {
+                    lastConnectMillis = now;
                     ConnectionHandle handle = new ConnectionHandle();
                     int status = NavNet.connect(clientNode, clientServiceId, handle);
                     attempt++;
@@ -477,7 +481,7 @@ public final class NspireNavnetHelper {
                     }
                 }
                 try {
-                    Thread.sleep(1000L);
+                    Thread.sleep(Math.max(50L, Math.min(1000L, CLIENT_KEEPALIVE_MS)));
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                     return;

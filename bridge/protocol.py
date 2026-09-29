@@ -11,8 +11,22 @@ HEADER = struct.Struct(">4sBBIHI")  # magic, version, opcode, request, conversat
 # enough room for the NSAI header and the NavNet framing rather than relying
 # on the larger buffers exposed by one particular CX II host connector.
 MAX_PAYLOAD = 224
-MAX_MESSAGE_PAYLOAD = 64 * 1024
+# Rendered image blocks and framebuffer dumps are far larger than text.
+MAX_MESSAGE_PAYLOAD = 1024 * 1024
+OP_PING, OP_PONG = 1, 2
+OP_REQUEST, OP_RESPONSE, OP_ERROR = 3, 4, 5
+OP_CANCEL, OP_NEW = 6, 7
 OP_FRAGMENT = 8
+# Protocol 2 (thin-terminal page): see src/page/page.c.
+OP_HELLO = 9      # page -> host: "v=2;w=320;h=240;bpp=4;max=..;n=..;sid=..;mv=.."
+OP_BLOCK = 10     # host -> page: rendered image block (bridge/imagecodec.py)
+OP_SCREEN = 11    # host -> page: overlay screen with a key table
+OP_ACTION = 12    # page -> host: action string chosen on a screen
+OP_STATE = 13     # host -> page: "s=<session>;t=<title>;mv=<menu version>"
+OP_DUMP_REQ = 14  # host -> page: send the framebuffer
+OP_DUMP = 15      # page -> host: u16 w, u16 h, u8 format 1, runs {u8 n, u16 rgb565}
+OP_INJECT = 16    # host -> page: key events for unattended tests
+OP_CLEAR = 17     # host -> page: drop all history blocks
 FRAGMENT_HEADER = struct.Struct(">BBII")  # original opcode, reserved, total, offset
 
 def encode(opcode: int, request_id: int, conversation_id: int, payload: bytes) -> bytes:

@@ -1,23 +1,26 @@
 /* NspireAI chat page for TI-Nspire CX II CAS 6.2.0.333 (Ndless OS id 46).
  *
+ * The calculator is a thin terminal: the bridge host renders answers
+ * (Markdown, LaTeX, CJK) and menus into grayscale images and keeps the
+ * sessions; this page shows them, edits one input line and sends requests.
+ *
  * Architecture (each piece verified on the handheld, see docs/test-status.md
  * 2026-09-28/29):
  *
  * - The page runs in main(), in the OS UI task.  main() re-enables IRQs
  *   (the Ndless loader masks them) and paces itself with Nucleus
  *   TCC_Task_Sleep, which really blocks the UI task.  USB and NavNet keep
- *   running meanwhile (navmain probe, 2026-09-29 17:18), while the OS
- *   document browser is frozen: it neither repaints over the page (drawing
- *   from a resident task flickered) nor reacts to keys.
- * - The calculator registers NavNet service 0x5001 and the bridge host
- *   connects to it (host-as-client) and sends a 1 s keepalive.  The service
- *   callback is the connection: the session runs inside it and talks to the
- *   page through the small shared state below.
- * - The LCD only scans out of on-chip SRAM (0xA8000000), so the page renders
- *   off screen and copies into the LCD buffer; on exit the Ndless loader
- *   restores the OS picture.
- * - Nothing stays resident: images must stay under ~60 KB of Zehn
- *   allocation, and resident images leak until reset.
+ *   running meanwhile, while the OS document browser is frozen: it neither
+ *   handles keys nor finishes "opening" the document.
+ * - The calculator registers a NavNet service and the bridge host connects
+ *   to it (host-as-client) and sends a keepalive.  The service callback is
+ *   the connection: the session runs inside it and exchanges whole messages
+ *   with the page loop through the rx buffer and the tx slots below.
+ * - The OS keeps repainting its own LCD buffer, so the page scans out of
+ *   its own double-buffered SDRAM framebuffer in the panel's portrait order
+ *   and hides the hardware cursor.
+ * - Nothing stays resident, and the page never frees memory a callback
+ *   could still be using.
  */
 #include <os.h>
 #include <libndls.h>
@@ -30,6 +33,7 @@
 #ifndef SERVICE_ID
 #define SERVICE_ID 0x5001
 #endif
+#define PROTOCOL_VERSION 2
 #define HEADER_SIZE 16
 #define MAX_FRAME_PAYLOAD 224
 #define FRAGMENT_HEADER_SIZE 10
@@ -38,8 +42,16 @@
 #define OP_REQUEST 3
 #define OP_RESPONSE 4
 #define OP_ERROR 5
-#define OP_NEW 7
 #define OP_FRAGMENT 8
+#define OP_HELLO 9     /* page -> host: capabilities, what the page already has */
+#define OP_BLOCK 10    /* host -> page: rendered image block */
+#define OP_SCREEN 11   /* host -> page: overlay screen (menu) with a key table */
+#define OP_ACTION 12   /* page -> host: action string chosen on a screen */
+#define OP_STATE 13    /* host -> page: "k=v;k=v" status for the title bar */
+#define OP_DUMP_REQ 14 /* host -> page: send the framebuffer */
+#define OP_DUMP 15     /* page -> host: framebuffer, RLE RGB565 */
+#define OP_INJECT 16   /* host -> page: key events, for unattended tests */
+#define OP_CLEAR 17    /* host -> page: drop all history blocks */
 
 /* ---- CX II CAS 6.2.0.333 private ABI (Ndless IDC map + disassembly) ---- */
 typedef void (*tcc_task_sleep_t)(unsigned ticks);
@@ -54,16 +66,16 @@ extern unsigned int nl_osid(void); /* Ndless ext syscall, not in SDK headers */
 #define IRQ_KEYPAD (1u << 16)
 #define LCD_BASE (*(volatile uint32_t *)0xC0000010u)
 /* PL111 hardware cursor overlay: the OS shows its hourglass through it and
- * keeps turning it back on while a document is "opening". */
-#define LCD_CURSOR_CTRL (*(volatile uint32_t *)0xC0000C00u)
+ * re-enables it on every animation tick, so the page clips it away and
+ * parks it off screen instead of toggling the enable bit (which flickers). */
 #define LCD_CURSOR_XY (*(volatile uint32_t *)0xC0000C10u)   /* x bits 0-9, y bits 16-25 */
 #define LCD_CURSOR_CLIP (*(volatile uint32_t *)0xC0000C14u) /* clip x bits 0-5, y bits 8-13 */
 #define RTC_SECONDS (*(volatile uint32_t *)0x90090000u) /* as Ndless gettimeofday */
 
 /* Session liveness (seconds).  TI_NN_Read only ever reports -257 when the
- * host really closed the channel; a host that died or restarted without
- * closing leaves a half-open channel, so the page pings when idle and gives
- * the session up when nothing has come back for a while. */
+ * host really closed the channel; a host that died without closing leaves a
+ * half-open channel, so the page pings when idle and gives the session up
+ * when nothing has come back for a while. */
 #define IDLE_PING_SECONDS 5
 #define SESSION_DEAD_SECONDS 20
 #define ANSWER_TIMEOUT_SECONDS 240 /* > the bridge's API timeout, thinking included */
@@ -73,8 +85,12 @@ extern unsigned int nl_osid(void); /* Ndless ext syscall, not in SDK headers */
 #define H 240
 #define CW 6
 #define CH 9
-#define COLS (W / CW)          /* 53 */
-
+#define COLS (W / CW) /* 53 */
+#define TITLE_H 13
+#define VIEW_TOP 14
+#define INPUT_TOP 204
+#define LEGEND_ROWS 4
+#define SCROLL_STEP 60
 
 #define RGB(r, g, b) (uint16_t)((((r) >> 3) << 11) | (((g) >> 2) << 5) | ((b) >> 3))
 #define C_BG RGB(250, 250, 250)
@@ -87,65 +103,67 @@ extern unsigned int nl_osid(void); /* Ndless ext syscall, not in SDK headers */
 #define C_WARN RGB(220, 120, 20)
 #define C_INPUT_BG RGB(232, 236, 244)
 
-static uint16_t *fb;    /* the OS's LCD buffer (LCD_BASE at start) */
-static uint16_t *back;  /* off-screen 320x240 landscape render target */
-static int hww;         /* 240x320 panel: pixel (x,y) at x*240+y */
-/* Private scan-out.  The OS keeps repainting its LCD buffer (the document
- * "opening" hourglass animation alone repaints the whole screen several
- * times a second), so the page gives the LCD its own SDRAM buffers instead:
- * two of them, filled in the panel's native portrait order (measured with
- * src/probes/scanout: pixel (x,y) at x*240 + 239-y) and flipped by writing
- * the LCD base register, which the PL111 latches at the next frame. */
+static uint16_t *fb;   /* the OS's LCD buffer (LCD_BASE at start) */
+static uint16_t *back; /* off-screen 320x240 landscape render target */
+static int hww;        /* 240x320 panel: pixel (x,y) at x*240+y */
+/* Private scan-out buffers in the panel's native portrait order (measured
+ * with src/probes/scanout: pixel (x,y) at x*240 + 239-y), flipped by
+ * writing the LCD base register, which the PL111 latches per frame. */
 static uint16_t *scan[2];
 static int scan_front;
 
-/* ---- shared between the page loop and the NavNet callback ---- */
-#define TEXT_CAP 3072
+/* ------------------------------------------------------------------ */
+/* State shared between the page loop and the NavNet callback          */
+/* ------------------------------------------------------------------ */
+
 static volatile int link_up;
 static volatile int quitting;
 static volatile int session_active;
-static volatile int out_pending;
-static char out_text[MAX_FRAME_PAYLOAD];
-static volatile uint32_t out_len, out_id;
-static volatile int in_ready;
-static char in_text[TEXT_CAP];
-static volatile uint32_t in_len;
-static volatile int in_error;
-static volatile uint32_t awaited_id;
-static volatile uint32_t session_gen;  /* newest callback wins */
-static volatile nn_ch_t active_ch;     /* lets the page end a session on exit */
+static volatile uint32_t session_gen; /* newest callback wins */
+static volatile nn_ch_t active_ch;    /* lets the page end a session on exit */
 /* Callbacks currently executing code in this image.  main() must not return
- * (freeing the image) while this is non-zero: the navmain probe returned
- * with a second callback running and the handheld dropped off USB. */
+ * (freeing the image) while this is non-zero. */
 static volatile int callbacks_running;
-/* Telemetry for the host: the page loop bumps loop_beat every frame and
- * records the step it is about to run, and the callback reports both in its
- * PONG payload.  If the UI task ever stalls, the bridge log shows where. */
+/* Telemetry: the page loop bumps loop_beat every frame and records the step
+ * it is about to run; the callback reports both in its PONG payload. */
 static volatile uint32_t loop_beat;
 static volatile int loop_step;
 #define STEP(n) (loop_step = (n))
-/* Seeded from the RTC at start so a still-running bridge never mistakes the
- * requests of a new boot for ones it already answered. */
-static uint16_t conversation_id = 1;
+static uint16_t conversation_id = 1; /* RTC-seeded per launch */
+/* Largest frame payload the page accepts.  (TI_NN_GetConnMaxPktSize is not
+ * in the 6.2.0.333 syscall map; calling it crashed the NavNet task.) */
+static const uint32_t max_packet = MAX_FRAME_PAYLOAD;
 
-/* ---- chat history ---- */
-#define HIST_LINES 120
-#define INPUT_CAP 200
-static char hist[HIST_LINES][COLS + 1];
-static uint8_t hist_kind[HIST_LINES]; /* 0 ai, 1 user, 2 system */
-static int hist_count;
-static int scroll_back;
-static char input[INPUT_CAP + 1];
-static int input_len;
-static int waiting;
-/* Thinking effort, cycled with the Var key and sent as a "#think:<level> "
- * prefix that the bridge strips (off = no reasoning). */
-static const char *const think_levels[] = {"off", "low", "high", "max"};
-static int think_level;
-static int qwerty = 1; /* enhanced typing on by default; Doc key switches */
-static uint32_t next_id = 2;
-static uint32_t waiting_since;
-static int dirty = 1;
+/* Host -> page: one complete message at a time.  The callback reassembles
+ * into rx_buf, sets rx_ready and waits until the page loop has consumed it,
+ * so the page never sees a buffer that is being written. */
+#define RX_CAP (96u * 1024u)
+static uint8_t *rx_buf;
+/* Frame buffer of the (single) active session; statics count against the
+ * loader's image size limit, so the large buffers come from the heap. */
+#define RX_FRAME_CAP (HEADER_SIZE + 2048u)
+static uint8_t *rx_frame;
+static volatile uint32_t rx_len, rx_id;
+static volatile int rx_opcode;
+static volatile int rx_ready;
+
+/* Page -> host: one slot per kind of message.  The page fills a free slot
+ * and sets pending; the callback sends it (fragmented when long). */
+enum { TX_REQUEST, TX_ACTION, TX_DUMP, TX_SLOTS };
+struct tx_slot {
+    volatile int pending;
+    int opcode;
+    uint32_t id;
+    uint32_t len;
+    const uint8_t *data;
+};
+static struct tx_slot tx[TX_SLOTS];
+
+/* What the page already has, reported in HELLO so the host only resends
+ * history and menus when needed. */
+static volatile int have_blocks;
+static volatile int have_session;
+static volatile int have_menu_version;
 
 static void put_u32(unsigned char *p, uint32_t v) {
     p[0] = v >> 24; p[1] = v >> 16; p[2] = v >> 8; p[3] = v;
@@ -154,6 +172,26 @@ static void put_u32(unsigned char *p, uint32_t v) {
 static uint32_t get_u32(const unsigned char *p) {
     return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
            ((uint32_t)p[2] << 8) | p[3];
+}
+
+static uint32_t get_u16(const unsigned char *p) {
+    return ((uint32_t)p[0] << 8) | p[1];
+}
+
+static int fmt_uint(char *out, uint32_t v) {
+    char d[12];
+    int k = 0, n = 0;
+    do { d[k++] = '0' + v % 10; v /= 10; } while (v);
+    while (k) out[n++] = d[--k];
+    out[n] = '\0';
+    return n;
+}
+
+static int fmt_kv(char *out, const char *key, uint32_t v) {
+    int n = 0;
+    while (*key) out[n++] = *key++;
+    n += fmt_uint(out + n, v);
+    return n;
 }
 
 /* ------------------------------------------------------------------ */
@@ -175,20 +213,64 @@ static int send_frame(nn_ch_t ch, int opcode, uint32_t request,
     return (int16_t)TI_NN_Write(ch, frame, HEADER_SIZE + len);
 }
 
-static void deliver(const unsigned char *data, uint32_t len, int error) {
-    if (in_ready) return; /* page has not consumed the previous one */
-    if (len > TEXT_CAP - 1) len = TEXT_CAP - 1;
-    memcpy(in_text, data, len);
-    in_text[len] = '\0';
-    in_len = len;
-    in_error = error;
-    in_ready = 1;
+/* Sends one message, as OP_FRAGMENT frames when it exceeds a frame. */
+static int send_message(nn_ch_t ch, int opcode, uint32_t id,
+                        const uint8_t *data, uint32_t len) {
+    if (len <= MAX_FRAME_PAYLOAD) return send_frame(ch, opcode, id, data, len);
+    unsigned char part[MAX_FRAME_PAYLOAD];
+    uint32_t chunk_max = MAX_FRAME_PAYLOAD - FRAGMENT_HEADER_SIZE;
+    for (uint32_t offset = 0; offset < len;) {
+        uint32_t chunk = len - offset < chunk_max ? len - offset : chunk_max;
+        part[0] = (unsigned char)opcode;
+        part[1] = 0;
+        put_u32(part + 2, len);
+        put_u32(part + 6, offset);
+        memcpy(part + FRAGMENT_HEADER_SIZE, data + offset, chunk);
+        int w = send_frame(ch, OP_FRAGMENT, id, part, FRAGMENT_HEADER_SIZE + chunk);
+        if (w < 0) return w;
+        offset += chunk;
+    }
+    return 1;
+}
+
+static int session_current(uint32_t gen) {
+    return !quitting && gen == session_gen;
+}
+
+/* Blocks until the page loop has consumed the previous message. */
+static int rx_wait_free(uint32_t gen) {
+    while (rx_ready) {
+        if (!session_current(gen)) return 0;
+        TCC_TASK_SLEEP(1);
+    }
+    return 1;
+}
+
+static void rx_post(int opcode, uint32_t id, uint32_t len) {
+    rx_opcode = opcode;
+    rx_id = id;
+    rx_len = len;
+    rx_ready = 1;
+}
+
+static int send_hello(nn_ch_t ch) {
+    char hello[96];
+    int n = 0;
+    n += fmt_kv(hello + n, "v=", PROTOCOL_VERSION);
+    n += fmt_kv(hello + n, ";w=", W);
+    n += fmt_kv(hello + n, ";h=", H);
+    n += fmt_kv(hello + n, ";bpp=", 4);
+    n += fmt_kv(hello + n, ";max=", max_packet);
+    n += fmt_kv(hello + n, ";n=", (uint32_t)have_blocks);
+    n += fmt_kv(hello + n, ";sid=", (uint32_t)have_session);
+    n += fmt_kv(hello + n, ";mv=", (uint32_t)have_menu_version);
+    return send_frame(ch, OP_HELLO, 1, hello, (uint32_t)n);
 }
 
 static void service_session(nn_ch_t ch) {
-    unsigned char frame[HEADER_SIZE + MAX_FRAME_PAYLOAD + 16];
+    unsigned char *frame = rx_frame;
     uint32_t frag_total = 0, frag_next = 0, frag_id = 0;
-    int frag_opcode = 0;
+    int frag_opcode = 0, frag_skip = 0;
 
     if (quitting) return;
     /* Newest connection wins: a new callback means the host reconnected,
@@ -199,19 +281,15 @@ static void service_session(nn_ch_t ch) {
     session_active = 1;
     active_ch = ch;
     link_up = 1;
-    dirty = 1;
     uint32_t last_rx = RTC_SECONDS, last_ping = last_rx;
-    send_frame(ch, OP_PING, 1, "PING", 4);
+    if (send_hello(ch) < 0) goto done;
 
-    while (!quitting && gen == session_gen) {
-        if (out_pending) {
-            int w = send_frame(ch, OP_REQUEST, out_id, out_text, out_len);
-            out_pending = 0;
-            if (w < 0) {
-                static const char msg[] = "send failed";
-                deliver((const unsigned char *)msg, sizeof(msg) - 1, 1);
-                break;
-            }
+    while (session_current(gen)) {
+        for (int i = 0; i < TX_SLOTS; ++i) {
+            if (!tx[i].pending) continue;
+            int w = send_message(ch, tx[i].opcode, tx[i].id, tx[i].data, tx[i].len);
+            tx[i].pending = 0;
+            if (w < 0) goto done;
         }
         uint32_t now = RTC_SECONDS;
         if (now - last_rx >= SESSION_DEAD_SECONDS) break;
@@ -220,10 +298,9 @@ static void service_session(nn_ch_t ch) {
             last_ping = now;
         }
         uint32_t received = 0;
-        /* The timeout argument behaves like seconds (100 blocked the whole
-         * session on 2026-09-29), so ask for 1: the loop then comes back at
-         * least once a second to send requests and keepalives. */
-        int status = (int16_t)TI_NN_Read(ch, 1, frame, sizeof(frame),
+        /* TI_NN_Read blocks until a frame arrives whatever timeout is
+         * passed; the host's keepalive is what paces this loop. */
+        int status = (int16_t)TI_NN_Read(ch, 1, frame, RX_FRAME_CAP,
                                          (uint32_t)&received);
         if (status < 0) {
             if (status == -257) break;
@@ -241,63 +318,49 @@ static void service_session(nn_ch_t ch) {
         if (length > received - HEADER_SIZE) length = received - HEADER_SIZE;
 
         if (opcode == OP_PING) {
-            char pong[40] = "PONG b=";
+            char pong[48] = "PONG b=";
             int n = 7;
-            uint32_t v = loop_beat;
-            char d[12];
-            int k = 0;
-            do { d[k++] = '0' + v % 10; v /= 10; } while (v);
-            while (k) pong[n++] = d[--k];
-            pong[n++] = ' '; pong[n++] = 's'; pong[n++] = '=';
-            v = (uint32_t)loop_step;
-            k = 0;
-            do { d[k++] = '0' + v % 10; v /= 10; } while (v);
-            while (k) pong[n++] = d[--k];
-            if (send_frame(ch, OP_PONG, request, pong, n) < 0) break;
-        } else if (opcode == OP_FRAGMENT && length >= FRAGMENT_HEADER_SIZE &&
-                   request == awaited_id) {
+            n += fmt_uint(pong + n, loop_beat);
+            n += fmt_kv(pong + n, " s=", (uint32_t)loop_step);
+            if (send_frame(ch, OP_PONG, request, pong, (uint32_t)n) < 0) break;
+        } else if (opcode == OP_PONG) {
+            /* liveness only */
+        } else if (opcode == OP_FRAGMENT) {
+            if (length < FRAGMENT_HEADER_SIZE) continue;
             int orig = payload[0];
             uint32_t total = get_u32(payload + 2);
             uint32_t offset = get_u32(payload + 6);
             uint32_t chunk = length - FRAGMENT_HEADER_SIZE;
             if (offset == 0) {
+                if (!rx_wait_free(gen)) break;
                 frag_total = total;
                 frag_next = 0;
                 frag_id = request;
                 frag_opcode = orig;
+                frag_skip = total > RX_CAP; /* too large: drop it whole */
             }
             if (request != frag_id || offset != frag_next || orig != frag_opcode)
                 continue;
-            /* Reassemble straight into in_text; the page only reads it
-             * after in_ready is set, and a new request is only sent once the
-             * previous answer was consumed. */
-            if (in_ready) continue;
-            if (frag_next < TEXT_CAP - 1) {
-                uint32_t room = TEXT_CAP - 1 - frag_next;
-                memcpy(in_text + frag_next, payload + FRAGMENT_HEADER_SIZE,
-                       chunk < room ? chunk : room);
-            }
+            if (!frag_skip && frag_next + chunk <= RX_CAP)
+                memcpy(rx_buf + frag_next, payload + FRAGMENT_HEADER_SIZE, chunk);
             frag_next += chunk;
             if (frag_next >= frag_total) {
-                uint32_t n = frag_total < TEXT_CAP - 1 ? frag_total : TEXT_CAP - 1;
-                in_text[n] = '\0';
-                in_len = n;
-                in_error = frag_opcode != OP_RESPONSE;
-                in_ready = 1;
+                if (!frag_skip) rx_post(frag_opcode, frag_id, frag_total);
                 frag_total = frag_next = 0;
             }
-        } else if ((opcode == OP_RESPONSE || opcode == OP_ERROR) &&
-                   request == awaited_id) {
-            deliver(payload, length, opcode == OP_ERROR);
+        } else {
+            if (!rx_wait_free(gen)) break;
+            memcpy(rx_buf, payload, length);
+            rx_post(opcode, request, length);
         }
     }
-    /* Returning closes this channel.  A request that was never sent must not
-     * be replayed by the next session. */
-    out_pending = 0;
+done:
+    /* Returning closes this channel.  Unsent messages must not be replayed
+     * by the next session. */
+    for (int i = 0; i < TX_SLOTS; ++i) tx[i].pending = 0;
     if (gen == session_gen) link_up = 0;
     active_ch = NULL;
     session_active = 0;
-    dirty = 1;
 }
 
 static void service_callback(nn_ch_t ch, void *data) {
@@ -308,70 +371,111 @@ static void service_callback(nn_ch_t ch, void *data) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Rendering                                                           */
+/* History blocks                                                      */
 /* ------------------------------------------------------------------ */
 
-static inline void px(int x, int y, uint16_t c) {
-    back[y * W + x] = c;
-}
+enum { KIND_AI, KIND_USER, KIND_INFO, KIND_COUNT };
+struct block {
+    uint8_t kind;  /* KIND_* */
+    uint8_t bpp;   /* 0 = local text line (data is a C string), else image */
+    uint8_t gap;   /* blank pixels above */
+    uint16_t w, h;
+    uint32_t id;
+    uint32_t bytes;
+    uint8_t *data;
+};
+#define MAX_BLOCKS 320
+#define BLOCK_BUDGET (3u * 1024u * 1024u)
+static struct block *blocks; /* MAX_BLOCKS entries, allocated in main() */
+static int nblocks;
+static uint32_t block_bytes;
+static int scroll_px; /* 0 = newest visible */
+static int dirty = 1;
+static uint16_t ink_lut[KIND_COUNT][16];
 
-static void fill_rect(int x, int y, int w, int h, uint16_t c) {
-    for (int yy = y; yy < y + h && yy < H; ++yy)
-        for (int xx = x; xx < x + w && xx < W; ++xx)
-            px(xx, yy, c);
-}
-
-static void draw_char(int x, int y, unsigned char ch, uint16_t fg) {
-    const char *glyph = MBCharSet8x6_definition[ch];
-    for (int col = 0; col < 6; ++col) {
-        unsigned bits = (unsigned char)glyph[col];
-        for (int row = 0; row < 8; ++row)
-            if (bits & (1u << row) && x + col < W && y + row < H)
-                px(x + col, y + row, fg);
+static void blocks_drop_first(int count) {
+    if (count > nblocks) count = nblocks;
+    for (int i = 0; i < count; ++i) {
+        block_bytes -= blocks[i].bytes;
+        free(blocks[i].data);
     }
+    memmove(blocks, blocks + count, sizeof(blocks[0]) * (size_t)(nblocks - count));
+    nblocks -= count;
+    have_blocks = nblocks;
 }
 
-static void draw_text(int x, int y, const char *s, uint16_t fg) {
-    for (; *s && x <= W - CW; ++s, x += CW) draw_char(x, y, (unsigned char)*s, fg);
+static void blocks_clear(void) {
+    blocks_drop_first(nblocks);
+    scroll_px = 0;
+    dirty = 1;
 }
 
-static void hist_add_line(const char *text, int len, int kind) {
-    if (hist_count == HIST_LINES) {
-        memmove(hist, hist + 1, sizeof(hist[0]) * (HIST_LINES - 1));
-        memmove(hist_kind, hist_kind + 1, HIST_LINES - 1);
-        hist_count--;
+static void blocks_remove_echo(uint32_t id) {
+    int out = 0;
+    for (int i = 0; i < nblocks; ++i) {
+        if (blocks[i].bpp == 0 && blocks[i].kind == KIND_USER && blocks[i].id == id) {
+            block_bytes -= blocks[i].bytes;
+            free(blocks[i].data);
+        } else {
+            blocks[out++] = blocks[i];
+        }
     }
-    if (len > COLS) len = COLS;
-    memcpy(hist[hist_count], text, len);
-    hist[hist_count][len] = '\0';
-    hist_kind[hist_count] = kind;
-    hist_count++;
+    nblocks = out;
 }
 
-/* Word-wrap `text` into history lines (prefix on the first line). */
-static void hist_add(const char *prefix, const char *text, int kind) {
+/* Takes ownership of `data`. */
+static void blocks_add(int kind, int bpp, int gap, int w, int h, uint32_t id,
+                       uint8_t *data, uint32_t bytes) {
+    while (nblocks >= MAX_BLOCKS || (nblocks > 0 && block_bytes + bytes > BLOCK_BUDGET))
+        blocks_drop_first(1);
+    struct block *b = &blocks[nblocks++];
+    b->kind = (uint8_t)kind;
+    b->bpp = (uint8_t)bpp;
+    b->gap = (uint8_t)gap;
+    b->w = (uint16_t)w;
+    b->h = (uint16_t)h;
+    b->id = id;
+    b->bytes = bytes;
+    b->data = data;
+    block_bytes += bytes;
+    have_blocks = nblocks;
+    scroll_px = 0;
+    dirty = 1;
+}
+
+static void text_add_line(const char *text, int len, int kind, uint32_t id, int gap) {
+    char *copy = malloc((size_t)len + 1);
+    if (!copy) return;
+    memcpy(copy, text, (size_t)len);
+    copy[len] = '\0';
+    blocks_add(kind, 0, gap, W, CH, id, (uint8_t *)copy, (uint32_t)len + 1);
+}
+
+/* Word-wraps ASCII `text` into local text lines (prefix on the first). */
+static void text_add(const char *prefix, const char *text, int kind, uint32_t id) {
     char line[COLS + 1];
-    int used = 0;
+    int used = 0, gap = 3;
     for (const char *p = prefix; *p && used < COLS; ++p) line[used++] = *p;
     const char *s = text;
     while (*s) {
         if (*s == '\n') {
-            hist_add_line(line, used, kind);
+            text_add_line(line, used, kind, id, gap);
+            gap = 0;
             used = 0;
             ++s;
             continue;
         }
         if (*s == '\r') { ++s; continue; }
-        const char *word = s;
         int wlen = 0;
-        while (word[wlen] && word[wlen] != ' ' && word[wlen] != '\n') ++wlen;
+        while (s[wlen] && s[wlen] != ' ' && s[wlen] != '\n') ++wlen;
         if (wlen == 0) { /* space */
             if (used < COLS && used > 0) line[used++] = ' ';
             ++s;
             continue;
         }
         if (used + wlen > COLS && used > 0) {
-            hist_add_line(line, used, kind);
+            text_add_line(line, used, kind, id, gap);
+            gap = 0;
             used = 0;
         }
         while (wlen > 0) {
@@ -383,48 +487,365 @@ static void hist_add(const char *prefix, const char *text, int kind) {
             s += take;
             wlen -= take;
             if (wlen > 0) {
-                hist_add_line(line, used, kind);
+                text_add_line(line, used, kind, id, gap);
+                gap = 0;
                 used = 0;
             }
         }
     }
-    if (used > 0 || !*text) hist_add_line(line, used, kind);
-    scroll_back = 0;
+    if (used > 0 || !*text) text_add_line(line, used, kind, id, gap);
+}
+
+static void info(const char *text) {
+    text_add("", text, KIND_INFO, 0);
+}
+
+static int packbits_decode(const uint8_t *src, uint32_t n, uint8_t *dst, uint32_t want) {
+    uint32_t i = 0, o = 0;
+    while (i < n && o < want) {
+        uint8_t c = src[i++];
+        if (c < 128) {
+            uint32_t k = (uint32_t)c + 1;
+            if (i + k > n || o + k > want) return 0;
+            memcpy(dst + o, src + i, k);
+            i += k;
+            o += k;
+        } else if (c > 128) {
+            uint32_t k = 257u - c;
+            if (i >= n || o + k > want) return 0;
+            memset(dst + o, src[i++], k);
+            o += k;
+        }
+    }
+    return o == want;
+}
+
+/* Decodes the image part shared by BLOCK and SCREEN payloads.  Returns a
+ * malloc'd buffer of packed rows, or NULL. */
+static uint8_t *image_decode(int bpp, int w, int h, int encoding,
+                             const uint8_t *data, uint32_t len, uint32_t *bytes) {
+    if ((bpp != 1 && bpp != 2 && bpp != 4) || w < 1 || w > W || h < 1) return NULL;
+    uint32_t row = ((uint32_t)w * (uint32_t)bpp + 7u) / 8u;
+    uint32_t want = row * (uint32_t)h;
+    if (want > BLOCK_BUDGET / 2) return NULL;
+    uint8_t *out = malloc(want);
+    if (!out) return NULL;
+    int ok;
+    if (encoding == 0) {
+        ok = len == want;
+        if (ok) memcpy(out, data, want);
+    } else {
+        ok = encoding == 1 && packbits_decode(data, len, out, want);
+    }
+    if (!ok) {
+        free(out);
+        return NULL;
+    }
+    *bytes = want;
+    return out;
+}
+
+/* ------------------------------------------------------------------ */
+/* Overlay screens (menus), defined by the host                        */
+/* ------------------------------------------------------------------ */
+
+enum { ACT_CLOSE, ACT_GOTO, ACT_INSERT, ACT_COMMAND, ACT_SEND, ACT_SEND_STAY };
+struct screen {
+    uint8_t id, bpp, nkeys;
+    uint16_t w, h;
+    uint8_t *image;
+    uint8_t *keys; /* nkeys entries: key, action, arg_len, arg bytes */
+    uint32_t keys_len;
+};
+#define MAX_SCREENS 40
+static struct screen screens[MAX_SCREENS];
+static int nscreens;
+static int overlay; /* screen id shown, 0 = none */
+
+static struct screen *screen_find(int id) {
+    for (int i = 0; i < nscreens; ++i)
+        if (screens[i].id == id) return &screens[i];
+    return NULL;
+}
+
+static void screens_clear(void) {
+    for (int i = 0; i < nscreens; ++i) {
+        free(screens[i].image);
+        free(screens[i].keys);
+    }
+    nscreens = 0;
+    overlay = 0;
+}
+
+static void screen_store(const uint8_t *p, uint32_t len) {
+    if (len < 10) return;
+    int id = p[0], flags = p[1], nkeys = p[2], bpp = p[3];
+    int w = (int)get_u16(p + 4), h = (int)get_u16(p + 6), encoding = p[8];
+    uint32_t pos = 10;
+    for (int i = 0; i < nkeys; ++i) {
+        if (pos + 3 > len) return;
+        pos += 3u + p[pos + 2];
+        if (pos > len) return;
+    }
+    uint32_t keys_len = pos - 10, bytes = 0;
+    if (id == 0 || h > H - VIEW_TOP) return;
+    uint8_t *image = image_decode(bpp, w, h, encoding, p + pos, len - pos, &bytes);
+    uint8_t *keys = malloc(keys_len ? keys_len : 1);
+    if (!image || !keys) {
+        free(image);
+        free(keys);
+        return;
+    }
+    memcpy(keys, p + 10, keys_len);
+    struct screen *s = screen_find(id);
+    if (s) {
+        free(s->image);
+        free(s->keys);
+    } else if (nscreens < MAX_SCREENS) {
+        s = &screens[nscreens++];
+    } else {
+        free(image);
+        free(keys);
+        return;
+    }
+    s->id = (uint8_t)id;
+    s->bpp = (uint8_t)bpp;
+    s->nkeys = (uint8_t)nkeys;
+    s->w = (uint16_t)w;
+    s->h = (uint16_t)h;
+    s->image = image;
+    s->keys = keys;
+    s->keys_len = keys_len;
+    if (flags & 1) overlay = id;
     dirty = 1;
 }
 
-#define HIST_TOP 16
-#define INPUT_TOP 204
-#define LEGEND_ROWS 4
-#define HIST_ROWS ((INPUT_TOP - HIST_TOP - 2) / CH - (qwerty ? LEGEND_ROWS : 0))
+/* ------------------------------------------------------------------ */
+/* Input line and page state                                           */
+/* ------------------------------------------------------------------ */
+
+#define INPUT_CAP 900
+static char input[INPUT_CAP + 1];
+static int input_len;
+static int waiting;
+static uint32_t waiting_since;
+static uint32_t awaited_id;
+static uint32_t next_id = 2;
+/* Thinking effort, cycled with the Var key and sent as a "#think:<level> "
+ * tag that the bridge strips (off = no reasoning). */
+static const char *const think_levels[] = {"off", "low", "high", "max"};
+static int think_level;
+/* Keyboard: 0 = qwerty with legend, 1 = qwerty, 2 = abc (key caps). */
+static int layout_mode;
+#define QWERTY (layout_mode != 2)
+#define LEGEND (layout_mode == 0)
+/* Pending quick command chosen from a menu, sent as "#cmd:<id> ". */
+static char cmd_id[28], cmd_label[14];
+static char session_label[24] = "";
+static int session_number;
+static int arrows_enabled; /* touchpad arrows scroll; off until verified */
+static uint8_t request_buf[INPUT_CAP + 64];
+static uint8_t action_buf[200];
+static uint8_t *dump_buf;
+
+static void input_append(char c) {
+    if (input_len >= INPUT_CAP) return;
+    input[input_len++] = c;
+    input[input_len] = '\0';
+    dirty = 1;
+}
+
+static void input_append_str(const char *s) {
+    while (*s) input_append(*s++);
+}
+
+static void tx_post(int slot, int opcode, uint32_t id, const uint8_t *data, uint32_t len) {
+    tx[slot].opcode = opcode;
+    tx[slot].id = id;
+    tx[slot].data = data;
+    tx[slot].len = len;
+    tx[slot].pending = 1;
+}
+
+static void send_action(const char *action) {
+    if (!link_up) {
+        info("(not connected to the bridge)");
+        return;
+    }
+    if (tx[TX_ACTION].pending) return;
+    size_t n = strlen(action);
+    if (n > sizeof(action_buf)) n = sizeof(action_buf);
+    memcpy(action_buf, action, n);
+    tx_post(TX_ACTION, OP_ACTION, next_id++, action_buf, (uint32_t)n);
+}
+
+static void submit(void) {
+    if (input_len <= 0 || waiting) return;
+    uint32_t id = next_id++;
+    char prefix[20] = "> ";
+    if (cmd_id[0]) {
+        int k = 0;
+        prefix[k++] = '[';
+        for (const char *c = cmd_label; *c && k < 16; ++c) prefix[k++] = *c;
+        prefix[k++] = ']';
+        prefix[k++] = ' ';
+        prefix[k] = '\0';
+    }
+    text_add(prefix, input, KIND_USER, id);
+    if (!link_up) {
+        info("(not connected to the bridge yet)");
+        return;
+    }
+    int n = 0;
+    const char *level = think_levels[think_level];
+    memcpy(request_buf + n, "#think:", 7);
+    n += 7;
+    while (*level) request_buf[n++] = (uint8_t)*level++;
+    request_buf[n++] = ' ';
+    if (cmd_id[0]) {
+        memcpy(request_buf + n, "#cmd:", 5);
+        n += 5;
+        for (const char *c = cmd_id; *c; ++c) request_buf[n++] = (uint8_t)*c;
+        request_buf[n++] = ' ';
+    }
+    memcpy(request_buf + n, input, (size_t)input_len);
+    n += input_len;
+    awaited_id = id;
+    waiting = 1;
+    waiting_since = RTC_SECONDS;
+    tx_post(TX_REQUEST, OP_REQUEST, id, request_buf, (uint32_t)n);
+    input_len = 0;
+    input[0] = '\0';
+    cmd_id[0] = '\0';
+    cmd_label[0] = '\0';
+    dirty = 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* Rendering                                                           */
+/* ------------------------------------------------------------------ */
+
+static void fill_rect(int x, int y, int w, int h, uint16_t c) {
+    if (x < 0) { w += x; x = 0; }
+    if (y < 0) { h += y; y = 0; }
+    for (int yy = y; yy < y + h && yy < H; ++yy)
+        for (int xx = x; xx < x + w && xx < W; ++xx)
+            back[yy * W + xx] = c;
+}
+
+static void draw_char_clip(int x, int y, unsigned char ch, uint16_t fg, int y0, int y1) {
+    const char *glyph = MBCharSet8x6_definition[ch];
+    for (int col = 0; col < 6; ++col) {
+        unsigned bits = (unsigned char)glyph[col];
+        if (x + col < 0 || x + col >= W) continue;
+        for (int row = 0; row < 8; ++row)
+            if ((bits & (1u << row)) && y + row >= y0 && y + row < y1)
+                back[(y + row) * W + x + col] = fg;
+    }
+}
+
+static void draw_text_clip(int x, int y, const char *s, uint16_t fg, int y0, int y1) {
+    for (; *s && x <= W - CW; ++s, x += CW)
+        draw_char_clip(x, y, (unsigned char)*s, fg, y0, y1);
+}
+
+static void draw_text(int x, int y, const char *s, uint16_t fg) {
+    draw_text_clip(x, y, s, fg, 0, H);
+}
+
+/* Draws rows [r0, r1) of packed image rows at screen (sx, sy). */
+static void draw_image(int sx, int sy, int w, int bpp, const uint8_t *data,
+                       int r0, int r1, const uint16_t *lut) {
+    uint32_t row_bytes = ((uint32_t)w * (uint32_t)bpp + 7u) / 8u;
+    unsigned mask = (1u << bpp) - 1u;
+    unsigned scale = bpp == 4 ? 1u : bpp == 2 ? 5u : 15u;
+    for (int r = r0; r < r1; ++r) {
+        int y = sy + r - r0;
+        if (y < 0 || y >= H) continue;
+        const uint8_t *row = data + (uint32_t)r * row_bytes;
+        uint16_t *out = back + y * W + sx;
+        for (int x = 0; x < w && sx + x < W; ++x) {
+            unsigned bit = (unsigned)x * (unsigned)bpp;
+            unsigned v = (row[bit >> 3] >> (8u - (unsigned)bpp - (bit & 7u))) & mask;
+            out[x] = lut[v * scale];
+        }
+    }
+}
+
+static int view_bottom(void) {
+    return INPUT_TOP - 3 - (LEGEND ? LEGEND_ROWS * CH + 1 : 0);
+}
+
+static int doc_height(void) {
+    int total = 0;
+    for (int i = 0; i < nblocks; ++i) total += blocks[i].gap + blocks[i].h;
+    return total;
+}
+
+static void render_history(void) {
+    int y0 = VIEW_TOP, y1 = view_bottom(), vh = y1 - y0;
+    int doc = doc_height();
+    int max_scroll = doc > vh ? doc - vh : 0;
+    if (scroll_px > max_scroll) scroll_px = max_scroll;
+    if (scroll_px < 0) scroll_px = 0;
+    int top = doc > vh ? doc - vh - scroll_px : 0;
+    int y = 0;
+    for (int i = 0; i < nblocks; ++i) {
+        const struct block *b = &blocks[i];
+        y += b->gap;
+        if (y + b->h > top && y < top + vh) {
+            int r0 = top > y ? top - y : 0;
+            int r1 = y + b->h > top + vh ? top + vh - y : b->h;
+            if (b->bpp == 0) {
+                uint16_t c = b->kind == KIND_USER ? C_USER
+                           : b->kind == KIND_INFO ? C_DIM : C_TEXT;
+                draw_text_clip(1, y0 + y - top, (const char *)b->data, c, y0, y1);
+            } else {
+                draw_image(0, y0 + y + r0 - top, b->w, b->bpp, b->data, r0, r1,
+                           ink_lut[b->kind < KIND_COUNT ? b->kind : KIND_AI]);
+            }
+        }
+        y += b->h;
+    }
+    if (max_scroll > 0) { /* scroll indicator */
+        int bar = vh * vh / doc;
+        if (bar < 8) bar = 8;
+        int pos = (vh - bar) * (max_scroll - scroll_px) / max_scroll;
+        fill_rect(W - 2, y0 + pos, 2, bar, C_DIM);
+    }
+}
 
 static void render(void) {
     fill_rect(0, 0, W, H, C_BG);
-    fill_rect(0, 0, W, 13, C_BAR);
-    draw_text(4, 3, "NspireAI", C_BAR_TEXT);
+    render_history();
+
+    fill_rect(0, 0, W, TITLE_H, C_BAR);
     {
-        char tag[16] = "think:";
-        int n = 6;
+        char left[32];
+        int n = 0;
+        if (session_number) {
+            left[n++] = 'S';
+            n += fmt_uint(left + n, (uint32_t)session_number);
+            left[n++] = ' ';
+        }
+        for (const char *t = session_label[0] ? session_label : "NspireAI";
+             *t && n < 24; ++t)
+            left[n++] = *t;
+        left[n] = '\0';
+        draw_text(4, 3, left, C_BAR_TEXT);
+        char tag[16] = "th:";
+        n = 3;
         for (const char *l = think_levels[think_level]; *l; ++l) tag[n++] = *l;
         tag[n] = '\0';
-        draw_text(64, 3, tag, think_level ? C_OK : C_DIM);
-        draw_text(136, 3, qwerty ? "kbd:qwerty" : "kbd:abc", C_BAR_TEXT);
+        draw_text(158, 3, tag, think_level ? C_OK : C_DIM);
+        draw_text(206, 3, QWERTY ? "qw" : "abc", C_BAR_TEXT);
     }
-    const char *state = link_up ? (waiting ? "thinking..." : "linked")
-                                : "waiting for bridge";
+    const char *state = link_up ? (waiting ? "thinking" : "linked") : "offline";
     uint16_t dot = link_up ? C_OK : C_WARN;
     fill_rect(W - 6 - CW * (int)strlen(state) - 10, 4, 6, 6, dot);
     draw_text(W - 4 - CW * (int)strlen(state), 3, state, C_BAR_TEXT);
 
-    int first = hist_count - HIST_ROWS - scroll_back;
-    if (first < 0) first = 0;
-    for (int r = 0; r < HIST_ROWS && first + r < hist_count; ++r) {
-        int i = first + r;
-        uint16_t c = hist_kind[i] == 1 ? C_USER : hist_kind[i] == 2 ? C_DIM : C_TEXT;
-        draw_text(1, HIST_TOP + r * CH, hist[i], c);
-    }
-
-    if (qwerty) {
+    if (LEGEND) {
         /* Key legend, laid out like the physical alpha block. */
         static const char *const legend[LEGEND_ROWS] = {
             "q  w  e  r  t  y  u  i  o",
@@ -439,30 +860,54 @@ static void render(void) {
     }
     fill_rect(0, INPUT_TOP - 2, W, 1, C_DIM);
     fill_rect(0, INPUT_TOP, W, 2 * CH + 4, C_INPUT_BG);
-    /* Show the tail of the input on two rows. */
-    char shown[2 * COLS + 1];
-    int cap = 2 * COLS - 3;
-    int start = input_len > cap ? input_len - cap : 0;
-    int n = 0;
-    shown[n++] = '>';
-    shown[n++] = ' ';
-    for (int i = start; i < input_len; ++i) shown[n++] = input[i];
-    shown[n++] = waiting ? ' ' : '_';
-    shown[n] = '\0';
-    char row0[COLS + 1];
-    int l0 = n < COLS ? n : COLS;
-    memcpy(row0, shown, l0);
-    row0[l0] = '\0';
-    draw_text(1, INPUT_TOP + 2, row0, C_TEXT);
-    if (n > COLS) draw_text(1, INPUT_TOP + 2 + CH, shown + COLS, C_TEXT);
+    {
+        /* Prompt (or the pending command), then the tail of the input. */
+        char shown[2 * COLS + 1];
+        int n = 0;
+        if (cmd_id[0]) {
+            shown[n++] = '[';
+            for (const char *c = cmd_label; *c; ++c) shown[n++] = *c;
+            shown[n++] = ']';
+        } else {
+            shown[n++] = '>';
+        }
+        shown[n++] = ' ';
+        int prefix = n;
+        int cap = 2 * COLS - prefix - 1;
+        int start = input_len > cap ? input_len - cap : 0;
+        for (int i = start; i < input_len; ++i) shown[n++] = input[i];
+        shown[n++] = '_';
+        shown[n] = '\0';
+        char row0[COLS + 1];
+        int l0 = n < COLS ? n : COLS;
+        memcpy(row0, shown, (size_t)l0);
+        row0[l0] = '\0';
+        draw_text(1, INPUT_TOP + 2, row0, C_TEXT);
+        if (cmd_id[0]) { /* colour the command chip */
+            char chip[20];
+            memcpy(chip, shown, (size_t)prefix);
+            chip[prefix] = '\0';
+            draw_text(1, INPUT_TOP + 2, chip, C_USER);
+        }
+        if (n > COLS) draw_text(1, INPUT_TOP + 2 + CH, shown + COLS, C_TEXT);
+    }
+    draw_text(1, H - CH, "menu cmds  cat chats  tab scroll  var think  doc kbd", C_DIM);
 
-    draw_text(1, H - CH, "tab/menu scroll  var think  doc keyboard  esc exit", C_DIM);
+    if (overlay) {
+        const struct screen *s = screen_find(overlay);
+        if (!s) {
+            overlay = 0;
+        } else {
+            int x = (W - s->w) / 2, y = VIEW_TOP + 1;
+            fill_rect(x - 2, y - 1, s->w + 4, s->h + 3, C_BAR);
+            draw_image(x, y, s->w, s->bpp, s->image, 0, s->h, ink_lut[KIND_AI]);
+        }
+    }
 }
 
 /* The LCD DMA reads RAM, not the data cache.  libndls clear_cache() also
  * invalidates the whole D-cache, which from a preemptible task can throw
- * away another task's writes made between its clean and invalidate steps;
- * cleaning (write back) is all the LCD needs. */
+ * away another task's writes; cleaning (write back) is all the LCD needs. */
 static void clean_dcache(void) {
     unsigned zero = 0;
     __asm volatile(
@@ -495,9 +940,34 @@ static void present(void) {
     LCD_BASE = (uint32_t)(uintptr_t)dst;
 }
 
+/* Framebuffer dump for the host: u16 width, u16 height, u8 format (1),
+ * then runs of { u8 count (1..255), u16 RGB565 big-endian }. */
+static uint32_t dump_encode(uint8_t *out) {
+    uint32_t n = 0;
+    out[n++] = W >> 8; out[n++] = W & 0xFF;
+    out[n++] = H >> 8; out[n++] = H & 0xFF;
+    out[n++] = 1;
+    const uint16_t *p = back, *end = back + W * H;
+    while (p < end) {
+        uint16_t v = *p;
+        unsigned run = 1;
+        while (p + run < end && run < 255 && p[run] == v) ++run;
+        out[n++] = (uint8_t)run;
+        out[n++] = (uint8_t)(v >> 8);
+        out[n++] = (uint8_t)v;
+        p += run;
+    }
+    return n;
+}
+
 /* ------------------------------------------------------------------ */
-/* Input                                                               */
+/* Keys                                                                */
 /* ------------------------------------------------------------------ */
+
+enum {
+    EV_ENTER = 0x100, EV_DEL, EV_ESC, EV_UP, EV_DOWN, EV_THINK, EV_LAYOUT,
+    EV_MENU, EV_CHATS, EV_ARROWS,
+};
 
 /* Two layouts.  "abc" is what the key caps say.  "qwerty" (enhanced typing)
  * maps the alpha block by physical position, 9 keys per row:
@@ -505,48 +975,68 @@ static void present(void) {
  *   pi H I J K L M N flag ->  a s d f g h j k l
  *   ,  O P Q R S T U      ->  z x c v b n m p      (return stays Enter)
  *      V W X Y Z          ->  , ? ! ' -
- * The Doc key switches; a legend on the page shows the active map.
- * A 0 means the key types nothing in that layout. */
-struct keymap { const t_key *key; char lower, upper, qlower, qupper; };
+ * `ctrl` is the character typed with Ctrl held (LaTeX and other symbols);
+ * a 0 means the key types nothing in that layout. */
+struct keymap { const t_key *key; char lower, upper, qlower, qupper, ctrl; };
 static const struct keymap chars[] = {
-    {&KEY_NSPIRE_EE, 0, 0, 'q', 'Q'},
-    {&KEY_NSPIRE_A, 'a', 'A', 'w', 'W'}, {&KEY_NSPIRE_B, 'b', 'B', 'e', 'E'},
-    {&KEY_NSPIRE_C, 'c', 'C', 'r', 'R'}, {&KEY_NSPIRE_D, 'd', 'D', 't', 'T'},
-    {&KEY_NSPIRE_E, 'e', 'E', 'y', 'Y'}, {&KEY_NSPIRE_F, 'f', 'F', 'u', 'U'},
-    {&KEY_NSPIRE_G, 'g', 'G', 'i', 'I'}, {&KEY_NSPIRE_QUESEXCL, '?', '!', 'o', 'O'},
-    {&KEY_NSPIRE_PI, 0, 0, 'a', 'A'},
-    {&KEY_NSPIRE_H, 'h', 'H', 's', 'S'}, {&KEY_NSPIRE_I, 'i', 'I', 'd', 'D'},
-    {&KEY_NSPIRE_J, 'j', 'J', 'f', 'F'}, {&KEY_NSPIRE_K, 'k', 'K', 'g', 'G'},
-    {&KEY_NSPIRE_L, 'l', 'L', 'h', 'H'}, {&KEY_NSPIRE_M, 'm', 'M', 'j', 'J'},
-    {&KEY_NSPIRE_N, 'n', 'N', 'k', 'K'}, {&KEY_NSPIRE_FLAG, 0, 0, 'l', 'L'},
-    {&KEY_NSPIRE_COMMA, ',', ',', 'z', 'Z'},
-    {&KEY_NSPIRE_O, 'o', 'O', 'x', 'X'}, {&KEY_NSPIRE_P, 'p', 'P', 'c', 'C'},
-    {&KEY_NSPIRE_Q, 'q', 'Q', 'v', 'V'}, {&KEY_NSPIRE_R, 'r', 'R', 'b', 'B'},
-    {&KEY_NSPIRE_S, 's', 'S', 'n', 'N'}, {&KEY_NSPIRE_T, 't', 'T', 'm', 'M'},
-    {&KEY_NSPIRE_U, 'u', 'U', 'p', 'P'},
-    {&KEY_NSPIRE_V, 'v', 'V', ',', ','}, {&KEY_NSPIRE_W, 'w', 'W', '?', '?'},
-    {&KEY_NSPIRE_X, 'x', 'X', '!', '!'}, {&KEY_NSPIRE_Y, 'y', 'Y', '\'', '"'},
-    {&KEY_NSPIRE_Z, 'z', 'Z', '-', '_'},
-    {&KEY_NSPIRE_0, '0', '0', '0', '0'}, {&KEY_NSPIRE_1, '1', '1', '1', '1'},
-    {&KEY_NSPIRE_2, '2', '2', '2', '2'}, {&KEY_NSPIRE_3, '3', '3', '3', '3'},
-    {&KEY_NSPIRE_4, '4', '4', '4', '4'}, {&KEY_NSPIRE_5, '5', '5', '5', '5'},
-    {&KEY_NSPIRE_6, '6', '6', '6', '6'}, {&KEY_NSPIRE_7, '7', '7', '7', '7'},
-    {&KEY_NSPIRE_8, '8', '8', '8', '8'}, {&KEY_NSPIRE_9, '9', '9', '9', '9'},
-    {&KEY_NSPIRE_SPACE, ' ', ' ', ' ', ' '}, {&KEY_NSPIRE_PERIOD, '.', '.', '.', '.'},
-    {&KEY_NSPIRE_PLUS, '+', '+', '+', '+'}, {&KEY_NSPIRE_MINUS, '-', '-', '-', '-'},
-    {&KEY_NSPIRE_NEGATIVE, '-', '-', '-', '-'}, {&KEY_NSPIRE_MULTIPLY, '*', '*', '*', '*'},
-    {&KEY_NSPIRE_DIVIDE, '/', '/', '/', '/'}, {&KEY_NSPIRE_EXP, '^', '^', '^', '^'},
-    {&KEY_NSPIRE_LP, '(', '(', '(', '('}, {&KEY_NSPIRE_RP, ')', ')', ')', ')'},
-    {&KEY_NSPIRE_EQU, '=', '=', '=', '='}, {&KEY_NSPIRE_COLON, ':', ':', ':', ':'},
-    {&KEY_NSPIRE_APOSTROPHE, '\'', '"', '\'', '"'}, {&KEY_NSPIRE_QUOTE, '"', '"', '"', '"'},
-    {&KEY_NSPIRE_LTHAN, '<', '<', '<', '<'}, {&KEY_NSPIRE_GTHAN, '>', '>', '>', '>'},
+    {&KEY_NSPIRE_EE, 0, 0, 'q', 'Q', 0},
+    {&KEY_NSPIRE_A, 'a', 'A', 'w', 'W', 0}, {&KEY_NSPIRE_B, 'b', 'B', 'e', 'E', 0},
+    {&KEY_NSPIRE_C, 'c', 'C', 'r', 'R', 0}, {&KEY_NSPIRE_D, 'd', 'D', 't', 'T', 0},
+    {&KEY_NSPIRE_E, 'e', 'E', 'y', 'Y', 0}, {&KEY_NSPIRE_F, 'f', 'F', 'u', 'U', 0},
+    {&KEY_NSPIRE_G, 'g', 'G', 'i', 'I', 0}, {&KEY_NSPIRE_QUESEXCL, '?', '!', 'o', 'O', 0},
+    {&KEY_NSPIRE_PI, 0, 0, 'a', 'A', 0},
+    {&KEY_NSPIRE_H, 'h', 'H', 's', 'S', 0}, {&KEY_NSPIRE_I, 'i', 'I', 'd', 'D', 0},
+    {&KEY_NSPIRE_J, 'j', 'J', 'f', 'F', 0}, {&KEY_NSPIRE_K, 'k', 'K', 'g', 'G', 0},
+    {&KEY_NSPIRE_L, 'l', 'L', 'h', 'H', 0}, {&KEY_NSPIRE_M, 'm', 'M', 'j', 'J', 0},
+    {&KEY_NSPIRE_N, 'n', 'N', 'k', 'K', 0}, {&KEY_NSPIRE_FLAG, 0, 0, 'l', 'L', 0},
+    {&KEY_NSPIRE_COMMA, ',', ',', 'z', 'Z', 0},
+    {&KEY_NSPIRE_O, 'o', 'O', 'x', 'X', 0}, {&KEY_NSPIRE_P, 'p', 'P', 'c', 'C', 0},
+    {&KEY_NSPIRE_Q, 'q', 'Q', 'v', 'V', 0}, {&KEY_NSPIRE_R, 'r', 'R', 'b', 'B', 0},
+    {&KEY_NSPIRE_S, 's', 'S', 'n', 'N', 0}, {&KEY_NSPIRE_T, 't', 'T', 'm', 'M', 0},
+    {&KEY_NSPIRE_U, 'u', 'U', 'p', 'P', 0},
+    {&KEY_NSPIRE_V, 'v', 'V', ',', ',', 0}, {&KEY_NSPIRE_W, 'w', 'W', '?', '?', 0},
+    {&KEY_NSPIRE_X, 'x', 'X', '!', '!', 0}, {&KEY_NSPIRE_Y, 'y', 'Y', '\'', '"', 0},
+    {&KEY_NSPIRE_Z, 'z', 'Z', '-', '_', 0},
+    {&KEY_NSPIRE_0, '0', '0', '0', '0', '%'}, {&KEY_NSPIRE_1, '1', '1', '1', '1', '!'},
+    {&KEY_NSPIRE_2, '2', '2', '2', '2', '@'}, {&KEY_NSPIRE_3, '3', '3', '3', '3', '#'},
+    {&KEY_NSPIRE_4, '4', '4', '4', '4', '<'}, {&KEY_NSPIRE_5, '5', '5', '5', '5', '>'},
+    {&KEY_NSPIRE_6, '6', '6', '6', '6', '\''}, {&KEY_NSPIRE_7, '7', '7', '7', '7', '['},
+    {&KEY_NSPIRE_8, '8', '8', '8', '8', ']'}, {&KEY_NSPIRE_9, '9', '9', '9', '9', '"'},
+    {&KEY_NSPIRE_SPACE, ' ', ' ', ' ', ' ', 0}, {&KEY_NSPIRE_PERIOD, '.', '.', '.', '.', ';'},
+    {&KEY_NSPIRE_PLUS, '+', '+', '+', '+', '|'}, {&KEY_NSPIRE_MINUS, '-', '-', '-', '-', '_'},
+    {&KEY_NSPIRE_NEGATIVE, '-', '-', '-', '-', '~'},
+    {&KEY_NSPIRE_MULTIPLY, '*', '*', '*', '*', '&'},
+    {&KEY_NSPIRE_DIVIDE, '/', '/', '/', '/', '\\'}, {&KEY_NSPIRE_EXP, '^', '^', '^', '^', '`'},
+    {&KEY_NSPIRE_LP, '(', '(', '(', '(', '{'}, {&KEY_NSPIRE_RP, ')', ')', ')', ')', '}'},
+    {&KEY_NSPIRE_EQU, '=', '=', '=', '=', '$'}, {&KEY_NSPIRE_COLON, ':', ':', ':', ':', ';'},
+    {&KEY_NSPIRE_APOSTROPHE, '\'', '"', '\'', '"', 0}, {&KEY_NSPIRE_QUOTE, '"', '"', '"', '"', 0},
+    {&KEY_NSPIRE_LTHAN, '<', '<', '<', '<', 0}, {&KEY_NSPIRE_GTHAN, '>', '>', '>', '>', 0},
 };
 #define NCHARS (int)(sizeof(chars) / sizeof(chars[0]))
 
-/* Arrow keys go through the touchpad (I2C) on CX II, so the page avoids
- * them: Tab scrolls back, Menu scrolls forward.  Everything here is a plain
- * key-matrix read. */
-enum { K_ENTER, K_DEL, K_ESC, K_UP, K_DOWN, K_THINK, K_LAYOUT, K_COUNT };
+/* Math keys type text; with Ctrl they type the LaTeX form. */
+struct strkey { const t_key *key; const char *text, *ctrl; int abc_only; };
+static const struct strkey strings[] = {
+    {&KEY_NSPIRE_SQU, "^2", "\\sqrt{", 0},
+    {&KEY_NSPIRE_eEXP, "e^", "\\ln(", 0},
+    {&KEY_NSPIRE_TENX, "10^", "\\log(", 0},
+    {&KEY_NSPIRE_FRAC, "\\frac{", "}{", 0},
+    {&KEY_NSPIRE_TRIG, "\\sin(", "\\cos(", 0},
+    {&KEY_NSPIRE_PI, "\\pi", "\\pi", 1},
+    {&KEY_NSPIRE_EE, "E", "E", 1},
+};
+#define NSTRINGS (int)(sizeof(strings) / sizeof(strings[0]))
+
+enum { K_ENTER, K_DEL, K_ESC, K_TAB, K_THINK, K_LAYOUT, K_MENU, K_CHATS, K_COUNT };
+static uint8_t prev_char[NCHARS];
+static uint8_t prev_string[NSTRINGS];
+static uint8_t prev_ctl[K_COUNT];
+static uint8_t prev_arrow;
+static int del_hold;
+
+/* Injected key events from the host (OP_INJECT), consumed like real keys. */
+static uint8_t inject_q[512];
+static int inject_head, inject_tail;
 
 static int matrix_any_pressed(void) {
     for (volatile uint32_t *r = (volatile uint32_t *)0x900E0010u;
@@ -554,88 +1044,295 @@ static int matrix_any_pressed(void) {
         if (*r) return 1;
     return 0;
 }
-static uint8_t prev_char[NCHARS];
-static uint8_t prev_ctl[K_COUNT];
-static int del_hold;
 
 static int ctl_down(int k) {
     switch (k) {
     case K_ENTER: return isKeyPressed(KEY_NSPIRE_ENTER) || isKeyPressed(KEY_NSPIRE_RET);
     case K_DEL: return isKeyPressed(KEY_NSPIRE_DEL);
     case K_ESC: return isKeyPressed(KEY_NSPIRE_ESC);
-    case K_UP: return isKeyPressed(KEY_NSPIRE_TAB);
-    case K_DOWN: return isKeyPressed(KEY_NSPIRE_MENU);
+    case K_TAB: return isKeyPressed(KEY_NSPIRE_TAB);
     case K_THINK: return isKeyPressed(KEY_NSPIRE_VAR);
     case K_LAYOUT: return isKeyPressed(KEY_NSPIRE_DOC);
+    case K_MENU: return isKeyPressed(KEY_NSPIRE_MENU);
+    case K_CHATS: return isKeyPressed(KEY_NSPIRE_CAT);
     }
     return 0;
 }
 
-static void submit(const char *text, int len) {
-    if (len <= 0 || waiting) return;
-    if (len > MAX_FRAME_PAYLOAD) len = MAX_FRAME_PAYLOAD;
-    char shown[INPUT_CAP + 1];
-    memcpy(shown, text, len);
-    shown[len] = '\0';
-    hist_add("> ", shown, 1);
-    if (!link_up) {
-        hist_add("", "(not connected to the bridge yet)", 2);
+static void overlay_key(int ch) {
+    const struct screen *s = screen_find(overlay);
+    if (!s) {
+        overlay = 0;
         return;
     }
-    char prefix[16] = "#think:";
-    int plen = 7;
-    for (const char *l = think_levels[think_level]; *l; ++l) prefix[plen++] = *l;
-    prefix[plen++] = ' ';
-    if (len > MAX_FRAME_PAYLOAD - plen) len = MAX_FRAME_PAYLOAD - plen;
-    memcpy(out_text, prefix, plen);
-    memcpy(out_text + plen, text, len);
-    out_len = plen + len;
-    out_id = next_id++;
-    awaited_id = out_id;
-    waiting = 1;
-    waiting_since = RTC_SECONDS;
-    out_pending = 1;
-    dirty = 1;
+    const uint8_t *k = s->keys;
+    for (int i = 0; i < s->nkeys; ++i, k += 3 + k[2]) {
+        if (k[0] != (uint8_t)ch) continue;
+        char arg[200];
+        int n = k[2] < sizeof(arg) - 1 ? k[2] : (int)sizeof(arg) - 1;
+        memcpy(arg, k + 3, (size_t)n);
+        arg[n] = '\0';
+        switch (k[1]) {
+        case ACT_CLOSE:
+            overlay = 0;
+            break;
+        case ACT_GOTO:
+            if (n >= 1 && screen_find((uint8_t)arg[0])) overlay = (uint8_t)arg[0];
+            break;
+        case ACT_INSERT:
+            input_append_str(arg);
+            overlay = 0;
+            break;
+        case ACT_COMMAND: {
+            char *bar = strchr(arg, '|');
+            if (bar) *bar = '\0';
+            strncpy(cmd_id, arg, sizeof(cmd_id) - 1);
+            cmd_id[sizeof(cmd_id) - 1] = '\0';
+            strncpy(cmd_label, bar ? bar + 1 : arg, sizeof(cmd_label) - 1);
+            cmd_label[sizeof(cmd_label) - 1] = '\0';
+            overlay = 0;
+            break;
+        }
+        case ACT_SEND:
+            send_action(arg);
+            overlay = 0;
+            break;
+        case ACT_SEND_STAY:
+            send_action(arg);
+            break;
+        }
+        dirty = 1;
+        return;
+    }
+}
+
+/* Returns 0 when the page should close. */
+static int handle_event(int ev) {
+    if (overlay) {
+        if (ev == EV_ESC || ev == EV_MENU) {
+            overlay = 0;
+            dirty = 1;
+        } else if (ev > 0 && ev < 0x100) {
+            overlay_key(ev >= 'A' && ev <= 'Z' ? ev + 32 : ev);
+        }
+        return 1;
+    }
+    if (ev > 0 && ev < 0x100) {
+        input_append((char)ev);
+        return 1;
+    }
+    switch (ev) {
+    case EV_ENTER:
+        submit();
+        break;
+    case EV_DEL:
+        if (input_len > 0) {
+            input[--input_len] = '\0';
+        } else {
+            cmd_id[0] = '\0';
+            cmd_label[0] = '\0';
+        }
+        dirty = 1;
+        break;
+    case EV_ESC:
+        return 0;
+    case EV_UP:
+        scroll_px += SCROLL_STEP;
+        dirty = 1;
+        break;
+    case EV_DOWN:
+        scroll_px -= SCROLL_STEP;
+        dirty = 1;
+        break;
+    case EV_THINK:
+        think_level = (think_level + 1) % 4;
+        dirty = 1;
+        break;
+    case EV_LAYOUT:
+        layout_mode = (layout_mode + 1) % 3;
+        dirty = 1;
+        break;
+    case EV_MENU:
+        if (screen_find(1)) overlay = 1;
+        else info(link_up ? "(menu not loaded yet)" : "(menu needs the bridge)");
+        dirty = 1;
+        break;
+    case EV_CHATS:
+        send_action("session.list");
+        break;
+    case EV_ARROWS:
+        arrows_enabled = !arrows_enabled;
+        info(arrows_enabled ? "(touchpad arrows on)" : "(touchpad arrows off)");
+        break;
+    }
+    return 1;
+}
+
+static int inject_event(uint8_t c) {
+    switch (c) {
+    case '\n': return EV_ENTER;
+    case 0x08: return EV_DEL;
+    case 0x1B: return EV_ESC;
+    case 0x0B: return EV_UP;
+    case 0x0C: return EV_DOWN;
+    case 0x0E: return EV_THINK;
+    case 0x0F: return EV_LAYOUT;
+    case 0x10: return EV_MENU;
+    case 0x11: return EV_CHATS;
+    case 0x12: return EV_ARROWS;
+    }
+    return c >= 32 && c < 127 ? c : 0;
 }
 
 /* Returns 0 when the user asked to quit. */
 static int poll_keys(void) {
+    int stay = 1;
+    while (inject_tail != inject_head) {
+        int ev = inject_event(inject_q[inject_tail]);
+        inject_tail = (inject_tail + 1) % (int)sizeof(inject_q);
+        if (ev && !handle_event(ev)) stay = 0;
+    }
+
     int shift = isKeyPressed(KEY_NSPIRE_SHIFT);
+    int ctrl = isKeyPressed(KEY_NSPIRE_CTRL);
+    for (int i = 0; i < NSTRINGS; ++i) {
+        int down = isKeyPressed(*strings[i].key) ? 1 : 0;
+        if (down && !prev_string[i] && !overlay && !(strings[i].abc_only && QWERTY))
+            input_append_str(ctrl ? strings[i].ctrl : strings[i].text);
+        prev_string[i] = (uint8_t)down;
+    }
     for (int i = 0; i < NCHARS; ++i) {
         int down = isKeyPressed(*chars[i].key) ? 1 : 0;
-        char c = qwerty ? (shift ? chars[i].qupper : chars[i].qlower)
+        char c = ctrl ? chars[i].ctrl
+               : QWERTY ? (shift ? chars[i].qupper : chars[i].qlower)
                         : (shift ? chars[i].upper : chars[i].lower);
-        if (down && !prev_char[i] && c && !waiting && input_len < INPUT_CAP) {
-            input[input_len++] = c;
-            input[input_len] = '\0';
-            dirty = 1;
-        }
-        prev_char[i] = down;
+        if (down && !prev_char[i] && c && !handle_event((unsigned char)c)) stay = 0;
+        prev_char[i] = (uint8_t)down;
     }
     for (int k = 0; k < K_COUNT; ++k) {
         int down = ctl_down(k);
         int pressed = down && !prev_ctl[k];
-        if (k == K_DEL) {
+        int ev = 0;
+        switch (k) {
+        case K_ENTER: ev = EV_ENTER; break;
+        case K_ESC: ev = EV_ESC; break;
+        case K_TAB: ev = shift ? EV_DOWN : EV_UP; break;
+        case K_THINK: ev = EV_THINK; break;
+        case K_LAYOUT: ev = EV_LAYOUT; break;
+        case K_MENU: ev = EV_MENU; break;
+        case K_CHATS: ev = EV_CHATS; break;
+        case K_DEL:
+            ev = EV_DEL;
             del_hold = down ? del_hold + 1 : 0;
-            if ((pressed || del_hold > 15) && input_len > 0 && !waiting) {
-                input[--input_len] = '\0';
-                dirty = 1;
-            }
-        } else if (pressed) {
-            if (k == K_ESC) { prev_ctl[k] = down; return 0; }
-            if (k == K_ENTER && input_len > 0) {
-                submit(input, input_len);
-                input_len = 0;
-                input[0] = '\0';
-            }
-            if (k == K_UP && scroll_back < hist_count - HIST_ROWS) { scroll_back++; dirty = 1; }
-            if (k == K_DOWN && scroll_back > 0) { scroll_back--; dirty = 1; }
-            if (k == K_THINK) { think_level = (think_level + 1) % 4; dirty = 1; }
-            if (k == K_LAYOUT) { qwerty = !qwerty; scroll_back = 0; dirty = 1; }
+            if (del_hold > 15) pressed = 1; /* auto-repeat */
+            break;
         }
-        prev_ctl[k] = down;
+        if (pressed && !handle_event(ev)) stay = 0;
+        prev_ctl[k] = (uint8_t)down;
     }
-    return 1;
+    if (arrows_enabled) {
+        touchpad_report_t report;
+        int arrow = 0;
+        if (touchpad_scan(&report) == 0 && report.pressed) arrow = (int)report.arrow;
+        if (arrow != prev_arrow) {
+            if (arrow == TPAD_ARROW_UP) handle_event(EV_UP);
+            if (arrow == TPAD_ARROW_DOWN) handle_event(EV_DOWN);
+        }
+        prev_arrow = (uint8_t)arrow;
+    }
+    return stay;
+}
+
+/* ------------------------------------------------------------------ */
+/* Messages from the host                                              */
+/* ------------------------------------------------------------------ */
+
+static void state_apply(const char *text, uint32_t len) {
+    uint32_t i = 0;
+    while (i < len) {
+        uint32_t k0 = i;
+        while (i < len && text[i] != '=' && text[i] != ';') ++i;
+        uint32_t klen = i - k0;
+        uint32_t v0 = i, vlen = 0;
+        if (i < len && text[i] == '=') {
+            v0 = ++i;
+            while (i < len && text[i] != ';') ++i;
+            vlen = i - v0;
+        }
+        if (i < len) ++i; /* ';' */
+        uint32_t number = 0;
+        for (uint32_t j = 0; j < vlen && text[v0 + j] >= '0' && text[v0 + j] <= '9'; ++j)
+            number = number * 10u + (uint32_t)(text[v0 + j] - '0');
+        if (klen == 1 && text[k0] == 's') {
+            session_number = (int)number;
+            have_session = (int)number;
+        } else if (klen == 1 && text[k0] == 't') {
+            uint32_t n = vlen < sizeof(session_label) - 1 ? vlen : sizeof(session_label) - 1;
+            for (uint32_t j = 0; j < n; ++j) {
+                unsigned char c = (unsigned char)text[v0 + j];
+                session_label[j] = (c >= 32 && c < 127) ? (char)c : '?';
+            }
+            session_label[n] = '\0';
+        } else if (klen == 2 && text[k0] == 'm' && text[k0 + 1] == 'v') {
+            if ((int)number != have_menu_version) screens_clear();
+            have_menu_version = (int)number;
+        }
+    }
+    dirty = 1;
+}
+
+static void handle_message(int opcode, uint32_t id, const uint8_t *p, uint32_t len) {
+    switch (opcode) {
+    case OP_RESPONSE:
+    case OP_ERROR:
+        if (id != awaited_id) break;
+        if (len) {
+            char text[1024];
+            uint32_t n = len < sizeof(text) - 1 ? len : sizeof(text) - 1;
+            memcpy(text, p, n);
+            text[n] = '\0';
+            text_add(opcode == OP_ERROR ? "! " : "", text,
+                     opcode == OP_ERROR ? KIND_INFO : KIND_AI, 0);
+        }
+        waiting = 0;
+        awaited_id = 0;
+        dirty = 1;
+        break;
+    case OP_BLOCK: {
+        if (len < 12) break;
+        int kind = p[0], bpp = p[1], encoding = p[6], flags = p[7];
+        int w = (int)get_u16(p + 2), h = (int)get_u16(p + 4);
+        uint32_t block_id = get_u32(p + 8), bytes = 0;
+        uint8_t *data = image_decode(bpp, w, h, encoding, p + 12, len - 12, &bytes);
+        if (!data) break;
+        if (kind >= KIND_COUNT) kind = KIND_AI;
+        if (kind == KIND_USER) blocks_remove_echo(block_id);
+        blocks_add(kind, bpp, (flags & 1) ? 0 : 5, w, h, block_id, data, bytes);
+        break;
+    }
+    case OP_SCREEN:
+        screen_store(p, len);
+        break;
+    case OP_STATE:
+        state_apply((const char *)p, len);
+        break;
+    case OP_CLEAR:
+        blocks_clear();
+        break;
+    case OP_INJECT:
+        for (uint32_t i = 0; i < len; ++i) {
+            int next = (inject_head + 1) % (int)sizeof(inject_q);
+            if (next == inject_tail) break;
+            inject_q[inject_head] = p[i];
+            inject_head = next;
+        }
+        break;
+    case OP_DUMP_REQ:
+        if (!dump_buf) dump_buf = malloc(3u * W * H + 8u);
+        if (dump_buf && !tx[TX_DUMP].pending)
+            tx_post(TX_DUMP, OP_DUMP, id, dump_buf, dump_encode(dump_buf));
+        break;
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -652,12 +1349,8 @@ static void main_log(const char *text, int value) {
     int n = 0;
     while (*text && n < 60) line[n++] = *text++;
     line[n++] = ' ';
-    unsigned u = value < 0 ? (unsigned)-value : (unsigned)value;
-    char digits[12];
-    int d = 0;
-    do { digits[d++] = '0' + u % 10; u /= 10; } while (u);
     if (value < 0) line[n++] = '-';
-    while (d) line[n++] = digits[--d];
+    n += fmt_uint(line + n, value < 0 ? (uint32_t)-value : (uint32_t)value);
     line[n++] = '\n';
     line[n] = '\0';
     FILE *f = fopen("/documents/nspire_ai_log.tns", "ab");
@@ -673,7 +1366,8 @@ static void main_log(const char *text, int value) {
 static int end_session(int started) {
     quitting = 1;
     session_gen++;
-    /* The host's 1 s keepalive makes the callback's blocking read return. */
+    rx_ready = 0; /* release a callback waiting for the page */
+    /* The host's keepalive makes the callback's blocking read return. */
     for (int i = 0; i < 100 && session_active; ++i) TCC_TASK_SLEEP(1);
     nn_ch_t ch = active_ch;
     if (session_active && ch) {
@@ -690,15 +1384,35 @@ static int end_session(int started) {
     return !callbacks_running && !session_active;
 }
 
+static void lut_init(void) {
+    static const uint8_t ink[KIND_COUNT][3] = {
+        {20, 20, 20}, {20, 70, 170}, {110, 110, 110},
+    };
+    for (int k = 0; k < KIND_COUNT; ++k)
+        for (int v = 0; v < 16; ++v) {
+            int r = ink[k][0] + (250 - ink[k][0]) * v / 15;
+            int g = ink[k][1] + (250 - ink[k][1]) * v / 15;
+            int b = ink[k][2] + (250 - ink[k][2]) * v / 15;
+            ink_lut[k][v] = RGB(r, g, b);
+        }
+}
+
 int main(void) {
     if (nl_osid() != CX2_CAS_6_2_0_333_OSID) { main_log("wrong os", (int)nl_osid()); return 1; }
     back = malloc(W * H * 2);
-    if (!back) { main_log("out of memory", 0); return 1; }
+    rx_buf = malloc(RX_CAP);
+    rx_frame = malloc(RX_FRAME_CAP);
+    blocks = malloc(sizeof(struct block) * MAX_BLOCKS);
+    if (!back || !rx_buf || !rx_frame || !blocks) {
+        main_log("out of memory", 0);
+        free(back);
+        free(rx_buf);
+        free(rx_frame);
+        free(blocks);
+        return 1;
+    }
     hww = lcd_type() == SCR_240x320_565;
     fb = (uint16_t *)(uintptr_t)LCD_BASE;
-    /* The OS re-enables the cursor overlay on every hourglass tick, so
-     * toggling its enable bit flickers.  Clipping the whole image and
-     * parking it off screen hides it whatever the OS does. */
     uint32_t saved_cursor_xy = LCD_CURSOR_XY, saved_cursor_clip = LCD_CURSOR_CLIP;
     uint8_t *scan_raw = NULL;
     if (!hww) { /* portrait mapping measured on a landscape-mode unit only */
@@ -709,6 +1423,7 @@ int main(void) {
             memset(scan[0], 0xFF, 2 * W * H * 2);
         }
     }
+    lut_init();
     uint32_t boot = RTC_SECONDS;
     conversation_id = (uint16_t)(boot | 1u);
     next_id = (boot & 0xFFFFu) << 12 | 2u;
@@ -717,23 +1432,17 @@ int main(void) {
      * stack need them.  The keypad IRQ stays masked so no key presses are
      * queued for the frozen OS browser to replay after the page closes. */
     int saved_irq = TCT_Local_Control_Interrupts(0);
-#ifndef PAGE_KEEP_KEYPAD_IRQ
     int keypad_irq_was_enabled = (IRQ_ENABLE & IRQ_KEYPAD) != 0;
     if (keypad_irq_was_enabled) IRQ_DISABLE = IRQ_KEYPAD;
-#endif
 
-    hist_add("", "NspireAI - type a question and press enter.", 2);
+    info("NspireAI - type a question and press enter.");
     int started = -1;
     uint32_t start_tried = 0;
     int was_linked = 0;
     wait_keys_released(); /* the Enter that opened the document */
     for (int i = 0; i < NCHARS; ++i) prev_char[i] = 1;
+    for (int i = 0; i < NSTRINGS; ++i) prev_string[i] = 1;
     for (int i = 0; i < K_COUNT; ++i) prev_ctl[i] = 1;
-#ifdef PAGE_AUTOTEST
-    /* Sends a prompt by itself once linked, acknowledges the response
-     * length (proof in the bridge log), then leaves. */
-    int autotest_stage = 0, autotest_frames = 0, autotest_done_at = -1;
-#endif
 
     for (;;) {
         loop_beat++;
@@ -741,72 +1450,43 @@ int main(void) {
         if (started < 0 && RTC_SECONDS - start_tried >= 2) {
             started = (int16_t)TI_NN_StartService(SERVICE_ID, NULL, service_callback);
             if (start_tried == 0 || started >= 0)
-                hist_add("", started < 0 ? "NavNet service busy; retrying..."
-                                         : "Waiting for the bridge...", 2);
+                info(started < 0 ? "NavNet service busy; retrying..."
+                                 : "Waiting for the bridge...");
             start_tried = RTC_SECONDS;
         }
         STEP(2);
         if (link_up != was_linked) {
             was_linked = link_up;
-            hist_add("", was_linked ? "Connected to the bridge."
-                                    : "Bridge disconnected; waiting...", 2);
+            info(was_linked ? "Connected to the bridge."
+                            : "Bridge disconnected; waiting...");
             if (!was_linked) waiting = 0;
+            dirty = 1;
         }
         if (waiting && RTC_SECONDS - waiting_since >= ANSWER_TIMEOUT_SECONDS) {
             waiting = 0;
             awaited_id = 0;
-            hist_add("! ", "no answer from the bridge; try again", 2);
+            text_add("! ", "no answer from the bridge; try again", KIND_INFO, 0);
         }
         STEP(3);
-        if (in_ready) {
-            int was_error = in_error;
-            hist_add(was_error ? "! " : "", in_text, was_error ? 2 : 0);
-            in_ready = 0;
-            waiting = 0;
-#ifdef PAGE_AUTOTEST
-            if (autotest_stage == 1 && !was_error) {
-                char ack[48] = "autotest got ";
-                int n = 13, v = (int)in_len;
-                char digits[12];
-                int d = 0;
-                do { digits[d++] = '0' + v % 10; v /= 10; } while (v);
-                while (d) ack[n++] = digits[--d];
-                ack[n] = '\0';
-                submit(ack, n);
-                autotest_stage = 2;
-            } else if (autotest_stage == 2) {
-                autotest_stage = 3;
-                autotest_done_at = autotest_frames;
-            }
-#endif
+        if (rx_ready) {
+            handle_message(rx_opcode, rx_id, rx_buf, rx_len);
+            rx_ready = 0;
         }
-
         STEP(4);
         int stay = poll_keys();
         STEP(5);
-#ifdef PAGE_AUTOTEST
-        ++autotest_frames;
-        if (autotest_stage == 0 && link_up) {
-            static const char hello[] = "autotest hello from the page";
-            submit(hello, sizeof(hello) - 1);
-            autotest_stage = 1;
-        }
-        if (autotest_frames > 90 * 33) stay = 0;
-        if (autotest_done_at >= 0 && autotest_frames - autotest_done_at > 60) stay = 0;
-#endif
         if (!stay) break;
         if (dirty) {
             dirty = 0;
             STEP(6);
             render();
         }
-        /* Copy every frame: the OS still repaints the LCD now and then (once
-         * at open, at least), and a page that only presents on change stays
-         * hidden after that. */
+        /* Present every frame and keep the LCD on the page's buffer: the OS
+         * still touches the LCD registers now and then. */
         STEP(7);
         present();
         if (scan[0] && LCD_BASE != (uint32_t)(uintptr_t)scan[scan_front])
-            LCD_BASE = (uint32_t)(uintptr_t)scan[scan_front]; /* OS took it back */
+            LCD_BASE = (uint32_t)(uintptr_t)scan[scan_front];
         LCD_CURSOR_CLIP = 0x3F3Fu;
         LCD_CURSOR_XY = 0x03FF03FFu;
         STEP(8);
@@ -819,17 +1499,22 @@ int main(void) {
     LCD_CURSOR_XY = saved_cursor_xy;
     int session_gone = end_session(started);
     wait_keys_released(); /* do not leave Esc for the OS browser */
-#ifndef PAGE_KEEP_KEYPAD_IRQ
     if (keypad_irq_was_enabled) IRQ_ENABLE = IRQ_KEYPAD;
-#endif
     TCT_Local_Control_Interrupts(saved_irq);
     if (!session_gone) {
-        /* A callback is still inside this image: keep the image alive rather
-         * than free code that is running.  Leaks once, never crashes. */
+        /* A callback is still inside this image: keep the image and its
+         * buffers alive rather than free memory that is in use.  Leaks
+         * once, never crashes. */
         main_log("session still active at exit; staying resident", 0);
         nl_set_resident();
         return 0;
     }
+    blocks_clear();
+    screens_clear();
+    free(dump_buf);
+    free(blocks);
+    free(rx_frame);
+    free(rx_buf);
     free(back);
     free(scan_raw);
     return 0;

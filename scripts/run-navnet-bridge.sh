@@ -125,15 +125,30 @@ if [[ "${NSPIRE_SKIP_USB_GATE:-0}" != "1" ]]; then
   # one-shot check made a perfectly present E022 look like a missing cable and
   # forced users into needless unplug/replug cycles.  Wait briefly on the host
   # for the same device; this is read-only and never resets USB hardware.
+  # The calculator may be plugged into any port, hub or dock, and may be
+  # plugged in (or woken up) after the bridge was started: wait for it
+  # instead of giving up.  NSPIRE_USB_WAIT_SECONDS bounds the wait (0, the
+  # default, waits until the handheld appears); the probe is read-only.
   USB_STATE=""
   USB_STATE_STATUS=1
-  USB_WAIT_ATTEMPTS="${NSPIRE_USB_GATE_ATTEMPTS:-20}"
-  USB_WAIT_DELAY="${NSPIRE_USB_GATE_DELAY:-0.25}"
-  for _ in $(seq 1 "$USB_WAIT_ATTEMPTS"); do
+  USB_WAIT_SECONDS="${NSPIRE_USB_WAIT_SECONDS:-0}"
+  USB_WAIT_DELAY="${NSPIRE_USB_GATE_DELAY:-0.5}"
+  USB_WAIT_STARTED="$(date +%s)"
+  USB_WAIT_ANNOUNCED=0
+  while :; do
     USB_STATE_STATUS=0
     USB_STATE="$($ROOT/scripts/check-nspire-usb-state.sh 2>&1)" || USB_STATE_STATUS=$?
     if [[ "$USB_STATE_STATUS" -eq 0 ]] && grep -q '^STATE=CX2_USB_CANDIDATE ' <<<"$USB_STATE"; then
       break
+    fi
+    USB_WAITED=$(( $(date +%s) - USB_WAIT_STARTED ))
+    if [[ "$USB_WAIT_SECONDS" -gt 0 && "$USB_WAITED" -ge "$USB_WAIT_SECONDS" ]]; then
+      break
+    fi
+    if [[ "$USB_WAITED" -ge 3 && "$USB_WAIT_ANNOUNCED" -eq 0 ]]; then
+      printf '%s\n' "$USB_STATE" >&2
+      echo "waiting for a TI-Nspire CX II on USB (any port, hub or dock)..." >&2
+      USB_WAIT_ANNOUNCED=1
     fi
     sleep "$USB_WAIT_DELAY"
   done

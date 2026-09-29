@@ -23,9 +23,30 @@ class Transport(Protocol):
     def write(self, name: str, data: bytes) -> None: ...
 
 
+ECHO_DEMO = """\
+## 二次方程 demo
+方程 $ax^2+bx+c=0$ 的解为
+
+$$x=\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}$$
+
+- 判别式 $\\Delta=b^2-4ac$
+- **积分** $\\int_0^1 x^2\\,dx=\\frac{1}{3}$，求和 $\\sum_{k=1}^{n}k=\\frac{n(n+1)}{2}$
+
+English text wraps too, and `inline code` stays monospaced.
+"""
+
+
 class EchoBackend:
     def answer(self, prompt: str) -> str:
         return f"Mac received: {prompt}"
+
+    def complete(self, messages: list[dict], effort: Optional[str] = None) -> str:
+        """Stateless form used by the page host; "demo" returns rich sample text."""
+        last = messages[-1]["content"] if messages else ""
+        if last.strip().lower() == "demo":
+            return ECHO_DEMO
+        turns = sum(1 for m in messages if m["role"] == "user")
+        return f"Echo (turn {turns}, think {effort or 'default'}): {last}"
 
     def reset(self) -> None:
         pass
@@ -110,15 +131,29 @@ class ChatCompletionsBackend:
     def reset(self) -> None:
         self.messages.clear()
 
+    @staticmethod
+    def _effort_kwargs(effort: Optional[str]) -> dict:
+        if effort == "off":
+            return {"extra_body": {"thinking": {"type": "disabled"}}}
+        if effort in ("low", "high", "max"):
+            return {"reasoning_effort": effort,
+                    "extra_body": {"thinking": {"type": "enabled"}}}
+        return {}
+
+    def complete(self, messages: list[dict], effort: Optional[str] = None) -> str:
+        """Stateless completion: the caller (page host) owns the history."""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            max_tokens=int(os.environ.get("NSPIREAI_MAX_TOKENS", "1500")),
+            **self._effort_kwargs(effort),
+        )
+        return (response.choices[0].message.content or "").strip()
+
     def answer(self, prompt: str, effort: Optional[str] = None) -> str:
         """`effort` is off/low/high/max from the calculator page (None = model default)."""
         self.messages.append({"role": "user", "content": prompt})
-        kwargs: dict = {}
-        if effort == "off":
-            kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
-        elif effort in ("low", "high", "max"):
-            kwargs["reasoning_effort"] = effort
-            kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
+        kwargs = self._effort_kwargs(effort)
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
