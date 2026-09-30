@@ -3910,3 +3910,19 @@ lowest free id (delete them all and the next one is S1). An answer that
 arrives after its chat was deleted is dropped with a note instead of landing
 in a new chat that reuses the number. Verified on the handheld: Cat → Delete
 current on S14 showed `S1 New chat`. Host tests: 366 pass.
+
+## 2026-09-30: English UI, no system prompt
+
+At the user's request every menu, screen and note is English only, and the
+model gets no system prompt (DeepSeek's defaults apply; `NSPIREAI_SYSTEM_PROMPT`
+adds one). The renderer already accepts the `\(...\)` and `\[...\]` math
+delimiters the model writes by default, so nothing had to be asked of it. The
+date that "latest" searches need moved from the prompt into the `web_search`
+tool description. Verified on the handheld: Menu and Chats screens in
+English; "what is the derivative of x^3 sin x?" answered in English with boxed
+typeset results.
+
+Also seen: after a bridge restart the helper got no NODE event for minutes
+while USB showed the handheld; killing the detached `RemoteNavnetServer` that
+an earlier helper had left behind, then starting the bridge again, brought the
+node back within 20 s.

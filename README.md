@@ -48,7 +48,9 @@
 > cd ~/Documents/GitHub/NspireAI && ./scripts/run-navnet-bridge.sh deepseek
 > ```
 >
-> Then open `nspire_ai` on the calculator.
+> Then open `nspire_ai` on the calculator. The model gets no system prompt
+> (DeepSeek's own defaults apply; the page renders the Markdown and LaTeX it
+> writes); set `NSPIREAI_SYSTEM_PROMPT` in `~/.config/nspireai/env` to add one.
 >
 > | Key | Action |
 > | --- | --- |

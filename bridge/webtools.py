@@ -144,6 +144,18 @@ TOOL_SPECS: list[dict] = [
 ]
 
 
+def tool_specs(today: Optional[str] = None) -> list[dict]:
+    """``TOOL_SPECS`` with today's date in the search tool, so that "latest"
+    and "this year" mean the right thing without a system prompt."""
+    import copy
+    import time
+
+    specs = copy.deepcopy(TOOL_SPECS)
+    stamp = today if today is not None else time.strftime("%Y-%m-%d")
+    specs[0]["function"]["description"] += f" Today is {stamp}."
+    return specs
+
+
 class WebError(Exception):
     """A search or a page could not be delivered; the message is short and safe to show."""
 

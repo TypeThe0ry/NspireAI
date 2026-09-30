@@ -186,6 +186,7 @@ class ToolLoopTests(unittest.TestCase):
         self.assertEqual(first["reasoning_effort"], "high")
         self.assertEqual([tool["function"]["name"] for tool in first["tools"]],
                          ["web_search", "open_url"])
+        self.assertIn("Today is 20", first["tools"][0]["function"]["description"])
         self.assertEqual(second["messages"][:2], self.QUESTION)
         turn = second["messages"][2]
         self.assertEqual(turn["role"], "assistant")

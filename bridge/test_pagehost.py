@@ -367,8 +367,8 @@ class WebTests(unittest.TestCase):
                                         imagecodec.KIND_ASSISTANT])
         stored = self.host.store.active().messages
         self.assertIn("example.com", stored[-1]["content"])
-        system = self.host._context(self.host.store.active().id, None, "x")[0]["content"]
-        self.assertIn("web_search", system)
+        # No system prompt: the conversation starts with the user's turn.
+        self.assertEqual(self.host._context(self.host.store.active().id, None, "x")[0]["role"], "user")
 
     def test_the_menu_switches_it_off_and_the_choice_is_kept(self):
         version = self.host.menu_version
@@ -380,8 +380,6 @@ class WebTests(unittest.TestCase):
         self.host.on_request(10, b"#think:off \x1fsearch ti nspire")
         self.assertEqual(self.host.web.calls, [])
         self.assertEqual(self.kinds(), [imagecodec.KIND_USER, imagecodec.KIND_ASSISTANT])
-        system = self.host._context(self.host.store.active().id, None, "x")[0]["content"]
-        self.assertNotIn("web_search", system)
 
         again = PageHost(lambda *frame: None, EchoBackend(), home=Path(self.home.name))
         again.web = FakeWeb()

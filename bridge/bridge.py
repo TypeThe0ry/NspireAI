@@ -172,13 +172,14 @@ class ChatCompletionsBackend:
             response = self.client.chat.completions.create(messages=messages, **options)
             return (response.choices[0].message.content or "").strip()
 
-        from .webtools import TOOL_SPECS
+        from .webtools import tool_specs
 
+        specs = tool_specs()
         conversation = list(messages)
         for round_number in range(MAX_TOOL_ROUNDS + 1):
             last = round_number == MAX_TOOL_ROUNDS
             response = self.client.chat.completions.create(
-                messages=conversation, tools=TOOL_SPECS,
+                messages=conversation, tools=specs,
                 tool_choice="none" if last else "auto", **options)
             message = response.choices[0].message
             calls = [] if last else list(getattr(message, "tool_calls", None) or [])
