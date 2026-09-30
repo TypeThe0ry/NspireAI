@@ -34,10 +34,29 @@ if ! mkdir "$LOCK_DIR" 2>/dev/null; then
     if [[ "$owner" =~ ^[0-9]+$ ]] && [[ "$owner_alive" -eq 0 ]]; then
       rm -f "$LOCK_DIR/pid"
       rmdir "$LOCK_DIR" 2>/dev/null || true
+    elif [[ "$owner_alive" -eq 1 && "${NSPIREAI_NO_TAKEOVER:-0}" != "1" ]]; then
+      # One user, one handheld: a new start replaces the bridge that runs
+      # (for example one left in the background), including the helper and
+      # the detached NavNet server a helper can leave behind.
+      echo "stopping the bridge that owns the USB session (pid $owner)" >&2
+      kill "$owner" 2>/dev/null || true
+      pkill -f 'bridge\.navnet_bridge' 2>/dev/null || true
+      pkill -f 'NspireNavnetHelper' 2>/dev/null || true
+      pkill -f 'com\.ti\.eps\.navnet\.server\.RemoteNavnetServer' 2>/dev/null || true
+      for _ in $(seq 1 30); do
+        [[ -d "$LOCK_DIR" ]] || break
+        if ! kill -0 "$owner" 2>/dev/null; then
+          rm -f "$LOCK_DIR/pid"
+          rmdir "$LOCK_DIR" 2>/dev/null || true
+          break
+        fi
+        sleep 0.5
+      done
+      sleep 6   # let the TI runtime settle before the next helper
     fi
   fi
   if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-    echo "another NavNet bridge already owns the USB session (lock: $LOCK_DIR)" >&2
+    echo "another NavNet bridge already owns the USB session (lock: $LOCK_DIR); set NSPIREAI_NO_TAKEOVER=1 to keep it" >&2
     exit 75
   fi
 fi
