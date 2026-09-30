@@ -3466,7 +3466,7 @@ def render_menu(title: str, items: Sequence[tuple[str, str]], cfg: Optional[Rend
 
 CANDIDATES_PER_PAGE = 9     # chosen with the keys 1-9
 _CANDIDATE_GAP = 9
-_CANDIDATE_ARROWS = 14      # room kept at the right edge for "<" and ">"
+_CANDIDATE_ARROWS = 20      # room kept at the right edge for "<" and ">"
 
 
 def _candidate_chains(safe: RenderConfig) -> tuple[_Chain, _Chain]:
@@ -3535,11 +3535,13 @@ def render_candidates(texts: Sequence[str], cfg: Optional[RenderConfig] = None, 
                 canvas.text(cursor, baseline, run, face, INK, 0, height)
                 cursor += face.length(run)
             cursor += _CANDIDATE_GAP
+        # More pages: "<" and ">" at the right edge, as large as the text so
+        # that they can be seen on the calculator.
         arrows = ("<" if previous else " ") + (">" if following else " ")
         if arrows.strip():
-            cursor = float(safe.width - margin - digit.length(arrows))
-            for face, run in digit.runs(arrows):
-                canvas.text(cursor, baseline, run, face, GRAY_TEXT, 0, height)
+            cursor = float(safe.width - margin - chain.length(arrows))
+            for face, run in chain.runs(arrows):
+                canvas.text(cursor, baseline, run, face, INK, 0, height)
                 cursor += face.length(run)
         return canvas.paint(height)
 
