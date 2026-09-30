@@ -282,6 +282,7 @@ class PageHost:
         self._ime_chain = ("", "", "")      # letters, text, letters expected next
         self.web = self._load_web()         # bridge/webtools.py, None = unavailable
         self.settings = self._load_settings()
+        self._backend_tools = bool(getattr(backend, "supports_tools", False))
         self.menu_version = self._menu_version()
 
     # ----- helpers -------------------------------------------------------
@@ -596,9 +597,11 @@ class PageHost:
                     # The user switched chats while the model was thinking.
                     self.send_info(f"The answer was saved in chat {session.id}.")
             self._send(OP_RESPONSE, b"", request_id)
-            if self._menu_version() != self.menu_version:
+            tools = bool(getattr(self.backend, "supports_tools", False))
+            if tools != self._backend_tools:
                 # The backend became ready (an API key appeared): the menu
                 # gains its web switch.
+                self._backend_tools = tools
                 self.menu_version = self._menu_version()
                 self._screens = None
                 self.send_screens()
