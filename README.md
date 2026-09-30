@@ -67,6 +67,10 @@
 > | menu, 7 | web search on/off |
 > | ctrl + key | LaTeX symbols: `( )` → `{ }`, `÷` → `\`, `−` → `_`, `=` → `$` … |
 >
+> **After a reset** the handheld comes back without Ndless:
+> `scripts/ndless-activate.sh` reinstalls it with remote keys (no page may be
+> open while it runs), then open `nspire_ai` again.
+>
 > **Develop**: build with `scripts/build-marker-probe.sh`; redeploy and
 > reopen the page unattended with `scripts/page-cycle.sh [echo|deepseek]`;
 > drive and inspect the page with `scripts/pagectl.py` (`type`, `dump`,
