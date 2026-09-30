@@ -74,6 +74,14 @@ public final class NspireNavnetHelper {
      * a key press on the page reaches the host). */
     private static final long CLIENT_KEEPALIVE_MS = Long.parseLong(System.getenv().getOrDefault(
             "NSPIRE_CLIENT_KEEPALIVE_MS", "250"));
+    /* While the page is idle the keepalive slows down: the handheld stopped
+     * answering after about two hours of 4 Hz keepalives (and one hour in an
+     * earlier session), which points at the number of packets rather than
+     * the time.  Anything the page sends besides PING/PONG counts as use. */
+    private static final long CLIENT_IDLE_KEEPALIVE_MS = Long.parseLong(System.getenv().getOrDefault(
+            "NSPIRE_CLIENT_IDLE_KEEPALIVE_MS", "2000"));
+    private static final long CLIENT_ACTIVE_WINDOW_MS = 60000L;
+    private static volatile long lastActivityMillis;
     private static final long readTimeout = Long.parseLong(System.getenv().getOrDefault(
             "NSPIRE_NAVNET_READ_TIMEOUT", "1"));
     private static final long CLIENT_DEAD_MS = 30000L;
@@ -303,7 +311,10 @@ public final class NspireNavnetHelper {
                     transientRetries = 0;
                     int length = received.getValue();
                     if (length > 0) {
-                        if (connection == handle) lastRxMillis = System.currentTimeMillis();
+                        if (connection == handle) {
+                            lastRxMillis = System.currentTimeMillis();
+                            if (length >= 6 && buffer[5] != 1 && buffer[5] != 2) lastActivityMillis = lastRxMillis;
+                        }
                         if (length >= 6 && buffer[0] == 'N' && buffer[1] == 'S' && buffer[2] == 'A'
                                 && buffer[3] == 'I' && buffer[5] == OP_BYE) {
                             /* The page is closing.  Go quiet here, at once:
@@ -502,7 +513,8 @@ public final class NspireNavnetHelper {
                         if (connection == current) connection = null;
                         try { NavNet.disconnect(current); } catch (RuntimeException ignored) { }
                     } else if (lastRxMillis == 0L ? now - lastPingMillis >= CLIENT_REPING_MS
-                            : now - lastPingMillis >= CLIENT_KEEPALIVE_MS) {
+                            : now - lastPingMillis >= (now - lastActivityMillis < CLIENT_ACTIVE_WINDOW_MS
+                                    ? CLIENT_KEEPALIVE_MS : CLIENT_IDLE_KEEPALIVE_MS)) {
                         /* Before the first answer: knock now and then so a
                          * page opened later gets a callback.  Only then:
                          * a keepalive that also paces the calculator's read

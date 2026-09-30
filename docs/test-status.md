@@ -4047,3 +4047,28 @@ Verified: page build `2a103639…` plus the new helper: 1 open + 8
 close/reopen cycles, 2 takeovers, and 3 closes in the middle of the HELLO
 transfer each followed by a reopen: all fine. Total since the delayed start:
 20/20 opens.
+
+## 2026-10-01 02:00: the handheld stops after about two hours open
+
+Soak test: page open and idle from 23:54, heartbeat logged every minute. At
+02:00:30 (2 h 06 min, 246,426 page frames) the page stopped answering
+without a BYE; host writes then failed with -2, a fresh bridge saw no NavNet
+node at all and a screen capture timed out: the handheld side is dead, not
+the host. An earlier session died about an hour after the bridge had
+reconnected.
+
+Ruled out: automatic standby (the CX II offers at most 30 minutes; default
+3). Suspected: the number of packets. The idle link carried a 4 Hz keepalive
+and its answers (~60,000 packets in two hours; about half that in the
+one-hour case), which TI's NavNet on the handheld is not used to.
+
+Mitigation (host only, untested on the handheld yet): the keepalive stays at
+250 ms while the page was used in the last 60 s (anything besides PING/PONG
+from the page) and slows to 2 s otherwise (`NSPIRE_CLIENT_IDLE_KEEPALIVE_MS`),
+8 times fewer packets while idle. The first key after a long pause can take
+up to 2 s to reach the host.
+
+Next test (needs the user to reset the handheld first): run the link at
+`NSPIRE_CLIENT_KEEPALIVE_MS=20 NSPIRE_CLIENT_IDLE_KEEPALIVE_MS=20`, about 12
+times the packet rate. A failure after about 10 minutes would confirm the
+packet count; if it again takes about two hours, time is the cause.
