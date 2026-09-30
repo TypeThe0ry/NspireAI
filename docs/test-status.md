@@ -4007,3 +4007,22 @@ Test-procedure lesson: a remote key sent while the page is open is queued by
 the OS and replayed when the page closes (an Enter reopened the page 3 s
 after every Esc).  Remote keys are now only sent after `status` reports the
 page closed.
+
+Later the same night (all verified on the handheld with injected keys and
+page dumps, echo backend):
+
+- `~/.config/nspireai/env` had a whole setup command pasted into it; the
+  launcher executed it and the bridge did not start. The file is now parsed
+  as KEY=VALUE lines, a malformed line is reported without its value, and
+  without a DeepSeek key the bridge starts anyway: each question gets a note
+  on the calculator saying what is missing (not stored in the chat), and the
+  env file is re-read on every question so a fixed key works without a
+  restart.
+- Bridge takeover: a new helper that started while the old TI server was
+  still exiting never saw the handheld; the launcher now waits for both to be
+  gone. 4/4 takeovers then reconnected the open page.
+- Menu 6 switches Chinese input (checked: title bar `zh`, candidates for
+  `zhegehanshudejizhishiduoshao` = 这个函数的极值是多少, full-width comma
+  after Chinese, candidate page 2 with visible `<>` arrows, Esc drops the
+  letters).
+- `scripts/ndless-activate.sh` reinstalls Ndless after a reset.
