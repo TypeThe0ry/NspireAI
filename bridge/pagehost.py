@@ -399,11 +399,11 @@ class PageHost:
         for index, category in enumerate(categories):
             root.append((str(index + 1), category.display, ACT_GOTO,
                          bytes([SCREEN_CATEGORY_BASE + 10 * index])))
+        # The page toggles Chinese input itself when it sees this argument.
+        root.append(("6", "Chinese input on/off", ACT_INSERT, b"<ime>"))
         if self.web is not None and getattr(self.backend, "supports_tools", False):
             state = "on" if self.web_enabled else "off"
             root.append(("7", f"Web search: {state}", ACT_SEND, b"web.toggle"))
-        # The page toggles Chinese input itself when it sees this argument.
-        root.append(("6", "Chinese input on/off", ACT_INSERT, b"<ime>"))
         root.append(("8", "Chats", ACT_SEND_STAY, b"session.list"))
         root.append(("9", "Help", ACT_GOTO, bytes([SCREEN_HELP])))
         screens.append(self._screen(SCREEN_ROOT, "Menu", root, "number = choose · esc = close"))
