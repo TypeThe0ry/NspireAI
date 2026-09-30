@@ -4026,3 +4026,24 @@ page dumps, echo backend):
   after Chinese, candidate page 2 with visible `<>` arrows, Esc drops the
   letters).
 - `scripts/ndless-activate.sh` reinstalls Ndless after a reset.
+
+Review of the night's changes (subagent, read-only) and what was done:
+
+- The helper now reacts to BYE in its reader thread (the bridge's IDLE
+  command could wait behind queued SEND lines), writes nothing more on a
+  dropped connection, refuses SEND until a page has spoken on the current
+  connection (frames would otherwise pile up for a page not listening), and
+  counts only the current connection's data as a sign of life.
+- The launcher's takeover only stops a lock owner that really is
+  `run-navnet-bridge.sh`, and matches the helper and TI server by their
+  command lines (an editor open on `NspireNavnetHelper.java` was a match).
+- The page publishes a send slot with a compiler barrier before `pending`.
+- Not changed: `end_session` still closes the channel from the page loop
+  when the host has been silent for 1 s at exit (only when the host hangs
+  without closing; the alternative, never unregistering the service, would
+  block every later page).
+
+Verified: page build `2a103639…` plus the new helper: 1 open + 8
+close/reopen cycles, 2 takeovers, and 3 closes in the middle of the HELLO
+transfer each followed by a reopen: all fine. Total since the delayed start:
+20/20 opens.

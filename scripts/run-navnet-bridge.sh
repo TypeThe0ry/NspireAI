@@ -37,6 +37,9 @@ CUSTOM_USB_HELPER="${NSPIRE_USB_HELPER:-}"
 HELPER_BIN="${CUSTOM_USB_HELPER:-$ROOT/bridge/nspire-helper/target/debug/nspireai-usb-helper}"
 JAVA_HELPER="${NSPIRE_NAVNET_JAVA_HELPER:-$ROOT/bridge/nspire-navnet-helper/build}"
 LOCK_DIR="${NSPIRE_BRIDGE_LOCK_DIR:-${TMPDIR:-/tmp}/nspireai-navnet-bridge.lock}"
+# The Java helper and the TI NavNet server, as their command lines read.
+HELPER_PROCESS='bin/java .*NspireNavnetHelper --stdio'
+TI_SERVER_PROCESS='bin/java .*com\.ti\.eps\.navnet\.server\.RemoteNavnetServer'
 
 # USB ownership is exclusive. Keep the whole NavNet entrypoint single-instance
 # so a second click cannot start another helper while the first one still owns
@@ -55,15 +58,18 @@ if ! mkdir "$LOCK_DIR" 2>/dev/null; then
     if [[ "$owner" =~ ^[0-9]+$ ]] && [[ "$owner_alive" -eq 0 ]]; then
       rm -f "$LOCK_DIR/pid"
       rmdir "$LOCK_DIR" 2>/dev/null || true
-    elif [[ "$owner_alive" -eq 1 && "${NSPIREAI_NO_TAKEOVER:-0}" != "1" ]]; then
+    elif [[ "$owner_alive" -eq 1 && "${NSPIREAI_NO_TAKEOVER:-0}" != "1" ]] &&
+         ps -p "$owner" -o command= 2>/dev/null | grep -q 'run-navnet-bridge\.sh'; then
       # One user, one handheld: a new start replaces the bridge that runs
       # (for example one left in the background), including the helper and
       # the detached NavNet server a helper can leave behind.
       echo "stopping the bridge that owns the USB session (pid $owner)" >&2
       kill "$owner" 2>/dev/null || true
-      pkill -f 'bridge\.navnet_bridge' 2>/dev/null || true
-      pkill -f 'NspireNavnetHelper' 2>/dev/null || true
-      pkill -f 'com\.ti\.eps\.navnet\.server\.RemoteNavnetServer' 2>/dev/null || true
+      # Anchored to the processes' own command lines, so that an editor or
+      # a compiler with one of these names in its arguments is left alone.
+      pkill -f -- '-m bridge\.navnet_bridge( |$)' 2>/dev/null || true
+      pkill -f "$HELPER_PROCESS" 2>/dev/null || true
+      pkill -f "$TI_SERVER_PROCESS" 2>/dev/null || true
       for _ in $(seq 1 30); do
         [[ -d "$LOCK_DIR" ]] || break
         if ! kill -0 "$owner" 2>/dev/null; then
@@ -77,8 +83,8 @@ if ! mkdir "$LOCK_DIR" 2>/dev/null; then
       # starts, or it attaches to a dying server and never sees the
       # handheld.
       for _ in $(seq 1 20); do
-        pgrep -f 'NspireNavnetHelper|com\.ti\.eps\.navnet\.server\.RemoteNavnetServer' >/dev/null || break
-        pkill -9 -f 'NspireNavnetHelper|com\.ti\.eps\.navnet\.server\.RemoteNavnetServer' 2>/dev/null || true
+        pgrep -f "$HELPER_PROCESS|$TI_SERVER_PROCESS" >/dev/null || break
+        pkill -9 -f "$HELPER_PROCESS|$TI_SERVER_PROCESS" 2>/dev/null || true
         sleep 0.5
       done
       sleep 8   # let the TI runtime settle before the next helper

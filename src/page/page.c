@@ -160,6 +160,9 @@ static volatile int rx_ready;
  * and sets pending; the callback sends it (fragmented when long). */
 /* Sent in this order: a pick goes out before the request for what remains. */
 enum { TX_REQUEST, TX_ACTION, TX_DUMP, TX_PREVIEW, TX_PICK, TX_IME, TX_SLOTS };
+/* The callback task outranks the page loop and reads a slot as soon as
+ * `pending` is set: the other fields must be written first. */
+#define PUBLISH_BARRIER() __asm volatile("" ::: "memory")
 struct tx_slot {
     volatile int pending;
     int opcode;
@@ -850,6 +853,7 @@ static void ime_pick(int k) {
         tx[TX_PICK].id = ime_rev;
         tx[TX_PICK].data = pick_buf;
         tx[TX_PICK].len = (uint32_t)n;
+        PUBLISH_BARRIER();
         tx[TX_PICK].pending = 1;
     }
     input_insert(cand[k].text, cand[k].len);
@@ -879,6 +883,7 @@ static void tx_post(int slot, int opcode, uint32_t id, const uint8_t *data, uint
     tx[slot].id = id;
     tx[slot].data = data;
     tx[slot].len = len;
+    PUBLISH_BARRIER();
     tx[slot].pending = 1;
 }
 

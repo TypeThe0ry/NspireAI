@@ -200,8 +200,29 @@ public final class NspireNavnetHelper {
                 + "; handle invalid; waiting for callback");
     }
 
+    private static final int OP_BYE = 23;
+    private static final long PAGE_CLOSE_QUIET_MS = 3000L;
+
+    /* Drop the connection and send nothing for `quiet` ms; afterwards knock
+     * slowly (lastRxMillis = 0) until a page answers. */
+    private static void goQuiet(long quiet) {
+        ConnectionHandle closing;
+        synchronized (IO_LOCK) {
+            quietUntilMillis = System.currentTimeMillis() + Math.max(0L, quiet);
+            closing = connection;
+            connection = null;
+            lastRxMillis = 0L;
+        }
+        if (closing != null) {
+            try { NavNet.disconnect(closing); } catch (RuntimeException ignored) { }
+        }
+        emit("IDLE " + quiet + " ms");
+    }
+
     private static int write(ConnectionHandle handle, byte[] data) {
         synchronized (IO_LOCK) {
+            /* A handle dropped by goQuiet (or replaced) takes nothing more. */
+            if (connection != handle && connection != null) return -1;
             int status = NavNet.write(handle, data, data.length);
             if (status < 0) {
                 if (status == ERR_INVALID_CONNECTION) {
@@ -282,7 +303,14 @@ public final class NspireNavnetHelper {
                     transientRetries = 0;
                     int length = received.getValue();
                     if (length > 0) {
-                        lastRxMillis = System.currentTimeMillis();
+                        if (connection == handle) lastRxMillis = System.currentTimeMillis();
+                        if (length >= 6 && buffer[0] == 'N' && buffer[1] == 'S' && buffer[2] == 'A'
+                                && buffer[3] == 'I' && buffer[5] == OP_BYE) {
+                            /* The page is closing.  Go quiet here, at once:
+                             * an IDLE from the bridge would queue behind any
+                             * SEND lines still waiting on stdin. */
+                            goQuiet(PAGE_CLOSE_QUIET_MS);
+                        }
                         emit("RX " + hex(buffer, Math.min(length, buffer.length)));
                     }
                 }
@@ -482,7 +510,7 @@ public final class NspireNavnetHelper {
                          * piled up and flooded the page when it opened,
                          * starving its screen task until the handheld
                          * froze.) */
-                        write(current, ping);
+                        if (connection == current) write(current, ping); /* not after goQuiet */
                         lastPingMillis = now;
                     }
                 }
@@ -671,24 +699,21 @@ public final class NspireNavnetHelper {
                 line = line.trim();
                 if (line.equals("QUIT")) break;
                 if (line.startsWith("IDLE ")) {
-                    /* The page is closing: drop the connection, send nothing
-                     * for a while, then knock slowly (lastRxMillis = 0). */
-                    long quiet = 3000L;
+                    long quiet = PAGE_CLOSE_QUIET_MS;
                     try { quiet = Long.parseLong(line.substring(5).trim()); } catch (NumberFormatException ignored) { }
-                    quietUntilMillis = System.currentTimeMillis() + Math.max(0L, quiet);
-                    ConnectionHandle closing = connection;
-                    connection = null;
-                    lastRxMillis = 0L;
-                    if (closing != null) {
-                        try { NavNet.disconnect(closing); } catch (RuntimeException ignored) { }
-                    }
-                    emit("IDLE " + quiet + " ms");
+                    if (connection != null) goQuiet(quiet); /* the reader may have done it already */
                     continue;
                 }
                 if (!line.startsWith("SEND ")) continue;
                 ConnectionHandle handle = connection;
                 if (handle == null) {
                     emit("ERR not connected");
+                    continue;
+                }
+                if (clientServiceId > 0 && lastRxMillis == 0L) {
+                    /* No page has spoken on this connection yet: frames sent
+                     * now would pile up for a page that is not listening. */
+                    emit("ERR no page yet");
                     continue;
                 }
                 try {

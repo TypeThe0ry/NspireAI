@@ -318,7 +318,7 @@ def read_env_file(path: Path) -> dict[str, str]:
     executed; quoted values keep their spaces, other values must have none."""
     values: dict[str, str] = {}
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError:
         return values
     for line in lines:
