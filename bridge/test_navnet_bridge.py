@@ -250,5 +250,18 @@ class PageDispatchTests(unittest.TestCase):
                                       ("ime", 3, b"\x00nih")])
 
 
+class PageCloseTests(unittest.TestCase):
+    def test_bye_makes_the_helper_go_quiet(self):
+        from bridge.navnet_bridge import OP_BYE, PAGE_CLOSE_QUIET_MS
+
+        bridge, _backend, _sent = make_bridge()
+        commands: list[str] = []
+        bridge.helper_command = commands.append
+        bridge.page_conversation = 7
+        bridge.handle(OP_BYE, 0, 7, b"BYE")
+        self.assertEqual(commands, [f"IDLE {PAGE_CLOSE_QUIET_MS}"])
+        self.assertIsNone(bridge.page_conversation)
+
+
 if __name__ == "__main__":
     unittest.main()

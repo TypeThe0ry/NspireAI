@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import threading
+import time
 import zlib
 from dataclasses import dataclass
 from pathlib import Path
@@ -46,6 +47,7 @@ MENU_WIDTH = 312
 MENU_HEIGHT = 220
 SESSIONS_PER_PAGE = 7
 HISTORY_TURNS = 6           # messages replayed when the page (re)opens a session
+HELLO_SETTLE_SECONDS = float(os.environ.get("NSPIREAI_HELLO_SETTLE", "1.0"))
 PREVIEW_MAX_H = 72          # PREVIEW_MAX_H in src/page/page.c
 IME_CANDIDATES = 60         # looked up per composition; shown nine to a page at most
 IME_TEXT_BYTES = 47         # IME_TEXT_CAP - 1 in src/page/page.c
@@ -64,7 +66,7 @@ HELP_PAGES = [
 - **menu** quick commands · **cat** chats
 - **var** thinking effort: off, low, high, max
 - **doc** keyboard: qwerty + legend, qwerty, abc
-- **ctrl+space** Chinese: type pinyin, **1-9** or
+- **ctrl+space** or **menu 6** Chinese: pinyin, **1-9** or
   **space** pick, arrows = more, enter = letters
 - **menu 7** web search on/off
 
@@ -390,7 +392,7 @@ class PageHost:
 
     def build_screens(self) -> list[bytes]:
         screens: list[bytes] = []
-        categories = self.commands.categories[:6]
+        categories = self.commands.categories[:5]   # 6-9 are fixed entries
         root: list[tuple[str, str, int, bytes]] = []
         for index, category in enumerate(categories):
             root.append((str(index + 1), category.display, ACT_GOTO,
@@ -398,6 +400,8 @@ class PageHost:
         if self.web is not None and getattr(self.backend, "supports_tools", False):
             state = "on" if self.web_enabled else "off"
             root.append(("7", f"Web search: {state}", ACT_SEND, b"web.toggle"))
+        # The page toggles Chinese input itself when it sees this argument.
+        root.append(("6", "Chinese input on/off", ACT_INSERT, b"<ime>"))
         root.append(("8", "Chats", ACT_SEND_STAY, b"session.list"))
         root.append(("9", "Help", ACT_GOTO, bytes([SCREEN_HELP])))
         screens.append(self._screen(SCREEN_ROOT, "Menu", root, "number = choose · esc = close"))
@@ -479,6 +483,9 @@ class PageHost:
             # the session as soon as STATE arrives, so after a link that
             # dropped half-way its HELLO would claim data it never received.
             self.send_state()
+        # Give a page that has just opened a moment before the bulk of it.
+        time.sleep(HELLO_SETTLE_SECONDS)
+        with self.lock:
             self.send_screens()
             self.send_history()
 

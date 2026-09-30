@@ -209,6 +209,17 @@ class DictionaryTests(unittest.TestCase):
             found = self.ime.candidates(letters)
             self.assertEqual((found[0].text, found[0].consumed), (expected, len(letters)), letters)
 
+    def test_math_words_and_sentence_particles(self):
+        for letters, expected in {
+            "zhegehanshudejizhishiduoshao": "这个函数的极值是多少",
+            "yiyuanerci": "一元二次",
+            "mingtianxiayuma": "明天下雨吗",
+            "nizaiganshenmene": "你在干什么呢",
+        }.items():
+            self.assertEqual(self.ime.candidates(letters)[0].text, expected, letters)
+        # Only at the end: "ma" inside a sentence keeps its own reading.
+        self.assertNotIn("吗", self.ime.candidates("mashang")[0].text)
+
     def test_first_characters(self):
         for letters, expected in {"ni": "你", "jie": "解", "shu": "数", "de": "的"}.items():
             self.assertEqual(self.ime.candidates(letters)[0].text, expected, letters)

@@ -56,6 +56,7 @@
 #define OP_IME_REQ 20  /* page -> host: u8 candidate page, then pinyin letters */
 #define OP_IME 21      /* host -> page: candidates and their bar image */
 #define OP_IME_PICK 22 /* page -> host: "letters<TAB>text<TAB>letters left" (learning) */
+#define OP_BYE 23      /* page -> host: the page is closing; send nothing for a while */
 
 /* ---- CX II CAS 6.2.0.333 private ABI (Ndless IDC map + disassembly) ---- */
 typedef void (*tcc_task_sleep_t)(unsigned ticks);
@@ -82,6 +83,7 @@ extern unsigned int nl_osid(void); /* Ndless ext syscall, not in SDK headers */
  * when nothing has come back for a while. */
 #define IDLE_PING_SECONDS 5
 #define SESSION_DEAD_SECONDS 20
+#define START_DELAY_FRAMES 50 /* ~1.5 s before the NavNet service is registered */
 #define ANSWER_TIMEOUT_SECONDS 240 /* > the bridge's API timeout, thinking included */
 
 /* ---- display ---- */
@@ -125,9 +127,8 @@ static volatile int quitting;
 static volatile int session_active;
 static volatile uint32_t session_gen; /* newest callback wins */
 static volatile nn_ch_t active_ch;    /* lets the page end a session on exit */
-/* RTC second of the last frame received.  The callback cannot watch its own
- * liveness while it is blocked in TI_NN_Read, so the page loop does and
- * disconnects a channel that has gone silent. */
+/* RTC second of the last frame received; read and written by the callback
+ * task only. */
 static volatile uint32_t session_last_rx;
 /* Callbacks currently executing code in this image.  main() must not return
  * (freeing the image) while this is non-zero. */
@@ -262,8 +263,10 @@ static void rx_post(int opcode, uint32_t id, uint32_t len) {
     rx_ready = 1;
 }
 
+static volatile int start_attempts, start_result;
+
 static int send_hello(nn_ch_t ch) {
-    char hello[96];
+    char hello[128];
     int n = 0;
     n += fmt_kv(hello + n, "v=", PROTOCOL_VERSION);
     n += fmt_kv(hello + n, ";w=", W);
@@ -273,6 +276,9 @@ static int send_hello(nn_ch_t ch) {
     n += fmt_kv(hello + n, ";n=", (uint32_t)have_blocks);
     n += fmt_kv(hello + n, ";sid=", (uint32_t)have_session);
     n += fmt_kv(hello + n, ";mv=", (uint32_t)have_menu_version);
+    /* How the service registration went: attempts, last result (+1000). */
+    n += fmt_kv(hello + n, ";st=", (uint32_t)start_attempts);
+    n += fmt_kv(hello + n, ";sr=", (uint32_t)(start_result + 1000));
     return send_frame(ch, OP_HELLO, 1, hello, (uint32_t)n);
 }
 
@@ -285,14 +291,10 @@ static void service_session(nn_ch_t ch) {
     /* Newest connection wins: a new callback means the host reconnected,
      * so any older session is stale.  Ask it to leave, then take over. */
     uint32_t gen = ++session_gen;
-    for (int i = 0; i < 40 && session_active; ++i) TCC_TASK_SLEEP(5);
-    if (session_active) {
-        /* The old session is blocked in TI_NN_Read on a channel the host
-         * abandoned without closing; closing it here makes the read fail. */
-        nn_ch_t old = active_ch;
-        if (old) TI_NN_Disconnect(old);
-        for (int i = 0; i < 60 && session_active; ++i) TCC_TASK_SLEEP(5);
-    }
+    /* Only wait: closing a channel that another task is reading froze the
+     * handheld.  When the host goes away its side closes and the old
+     * session's read fails by itself. */
+    for (int i = 0; i < 100 && session_active; ++i) TCC_TASK_SLEEP(5);
     if (session_active || gen != session_gen) return;
     session_active = 1;
     active_ch = ch;
@@ -399,6 +401,11 @@ static void service_session(nn_ch_t ch) {
         }
     }
 done:
+    /* Closing: tell the host to go quiet.  A packet that arrives while this
+     * image unregisters its service and is freed, or while the next copy
+     * loads, can be dispatched to a callback that no longer exists; the
+     * host's keepalive did exactly that and rebooted the handheld. */
+    if (quitting) send_frame(ch, OP_BYE, 0, "BYE", 3);
     /* Returning closes this channel.  Unsent messages must not be replayed
      * by the next session. */
     for (int i = 0; i < TX_SLOTS; ++i) tx[i].pending = 0;
@@ -1351,6 +1358,8 @@ static int ctl_down(int k) {
     return 0;
 }
 
+static int handle_event(int ev);
+
 static void overlay_key(int ch) {
     const struct screen *s = screen_find(overlay);
     if (!s) {
@@ -1372,8 +1381,12 @@ static void overlay_key(int ch) {
             if (n >= 1 && screen_find((uint8_t)arg[0])) overlay = (uint8_t)arg[0];
             break;
         case ACT_INSERT:
-            input_append_str(arg);
             overlay = 0;
+            if (strcmp(arg, "<ime>") == 0) { /* the menu's Chinese switch */
+                handle_event(EV_IME);
+                break;
+            }
+            input_append_str(arg);
             break;
         case ACT_COMMAND: {
             char *bar = strchr(arg, '|');
@@ -1581,6 +1594,8 @@ static int poll_keys(void) {
     }
     for (int i = 0; i < NCHARS; ++i) {
         int down = isKeyPressed(*chars[i].key) ? 1 : 0;
+        /* ctrl+space switches Chinese / English (K_IME); it types nothing. */
+        if (ctrl && chars[i].key == &KEY_NSPIRE_SPACE) down = 0;
         char c = ctrl ? chars[i].ctrl
                : QWERTY ? (shift ? chars[i].qupper : chars[i].qlower)
                         : (shift ? chars[i].upper : chars[i].lower);
@@ -1807,7 +1822,8 @@ static int end_session(int started) {
     quitting = 1;
     session_gen++;
     rx_ready = 0; /* release a callback waiting for the page */
-    /* The host's keepalive makes the callback's blocking read return. */
+    /* The host's keepalive makes the callback's blocking read return; the
+     * callback then says BYE and leaves. */
     for (int i = 0; i < 100 && session_active; ++i) TCC_TASK_SLEEP(1);
     nn_ch_t ch = active_ch;
     if (session_active && ch) {
@@ -1887,8 +1903,14 @@ int main(void) {
     for (;;) {
         loop_beat++;
         STEP(1);
-        if (started < 0 && RTC_SECONDS - start_tried >= 2) {
+        /* Register the service only once the page has run for a moment:
+         * while the OS is still busy opening the document, a burst of host
+         * traffic froze the handheld. */
+        if (started < 0 && loop_beat >= START_DELAY_FRAMES &&
+            RTC_SECONDS - start_tried >= 2) {
             started = (int16_t)TI_NN_StartService(SERVICE_ID, NULL, service_callback);
+            start_attempts++;
+            start_result = started;
             if (start_tried == 0 || started >= 0)
                 info(started < 0 ? "NavNet service busy; retrying..."
                                  : "Waiting for the bridge...");
@@ -1902,12 +1924,11 @@ int main(void) {
             if (!was_linked) waiting = 0;
             dirty = 1;
         }
-        if (link_up && RTC_SECONDS - session_last_rx >= SESSION_DEAD_SECONDS) {
-            /* The host went silent while the callback sits in TI_NN_Read. */
-            nn_ch_t ch = active_ch;
-            session_last_rx = RTC_SECONDS;
-            if (ch) TI_NN_Disconnect(ch);
-        }
+        /* No watchdog here: the page loop must never close a channel the
+         * callback task is using.  (One did, when a second boundary fell
+         * between its two reads -- RTC_SECONDS, then the callback's newer
+         * session_last_rx -- so the unsigned difference wrapped and a busy
+         * link looked dead.  NavNet then froze the handheld.) */
         if (waiting && RTC_SECONDS - waiting_since >= ANSWER_TIMEOUT_SECONDS) {
             waiting = 0;
             awaited_id = 0;

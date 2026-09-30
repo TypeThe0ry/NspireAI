@@ -65,6 +65,8 @@ public final class NspireNavnetHelper {
      * its own after 5 s idle, so a live session never stays silent long. */
     private static volatile long lastRxMillis;
     private static volatile long clientConnectedMillis;
+    /* After the page says BYE: no connection and no packet before this time. */
+    private static volatile long quietUntilMillis;
     private static final long CLIENT_REPING_MS = 3000L;
     /* The calculator's TI_NN_Read also blocks until data arrives, and its
      * session loop can only send (requests, acks) after a read returns, so
@@ -433,7 +435,8 @@ public final class NspireNavnetHelper {
             while (!stopping) {
                 ConnectionHandle current = connection;
                 long now = System.currentTimeMillis();
-                if (current == null && clientNode != null && now - lastConnectMillis >= 1000L) {
+                if (current == null && clientNode != null && now - lastConnectMillis >= 1000L
+                        && now >= quietUntilMillis) {
                     lastConnectMillis = now;
                     ConnectionHandle handle = new ConnectionHandle();
                     int status = NavNet.connect(clientNode, clientServiceId, handle);
@@ -667,6 +670,21 @@ public final class NspireNavnetHelper {
             while (!stopping && (line = input.readLine()) != null) {
                 line = line.trim();
                 if (line.equals("QUIT")) break;
+                if (line.startsWith("IDLE ")) {
+                    /* The page is closing: drop the connection, send nothing
+                     * for a while, then knock slowly (lastRxMillis = 0). */
+                    long quiet = 3000L;
+                    try { quiet = Long.parseLong(line.substring(5).trim()); } catch (NumberFormatException ignored) { }
+                    quietUntilMillis = System.currentTimeMillis() + Math.max(0L, quiet);
+                    ConnectionHandle closing = connection;
+                    connection = null;
+                    lastRxMillis = 0L;
+                    if (closing != null) {
+                        try { NavNet.disconnect(closing); } catch (RuntimeException ignored) { }
+                    }
+                    emit("IDLE " + quiet + " ms");
+                    continue;
+                }
                 if (!line.startsWith("SEND ")) continue;
                 ConnectionHandle handle = connection;
                 if (handle == null) {

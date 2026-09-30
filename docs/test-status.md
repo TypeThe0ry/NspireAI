@@ -3972,3 +3972,38 @@ it ("Ndless successfully installed!") and then open the page.
 
 Page build `4d5abdc4e2d80b6869a51bf2af821f884518a58eb970c791974059d8e8c9fde5`
 (50,224 of 60,000 bytes).
+
+## 2026-09-30 (night): freezes when the page opens
+
+The handheld froze (or rebooted by itself) in roughly a third of page opens,
+always within the first seconds, while the bridge sent the HELLO reply (state,
+10 menu screens, history: 35-40 messages, ~150 KB).  What was ruled out, each
+with a test:
+
+| Hypothesis | Test | Result |
+| --- | --- | --- |
+| The data itself (a menu, the history) | the exact HELLO reply, replayed through `page.c` natively under ASan/UBSan | clean |
+| The new root menu | 5 bridge restarts each with the old and the new menu, page kept open (full reply each time) | 10/10 fine |
+| A regression in today's page code | the long-stable build `6b4e17a3` of 2026-09-29, reopened | froze on the first reopen |
+| The page loop closing the callback's channel (unsigned RTC race) | removed | still froze |
+| A stale service registration of the previous page copy | `TI_NN_StartService` attempts and result reported in HELLO | always 1 attempt, result 1 |
+
+Two things did change the outcome:
+
+- The page now says BYE when it closes (sent by the callback that owns the
+  channel) and the helper then drops the connection and stays silent for 3 s
+  (`IDLE 3000`), so no packet arrives while the old copy unregisters its
+  service and frees its image.
+- The page registers its NavNet service only after ~1.5 s (50 frames) of
+  running, and the bridge waits 1 s after HELLO before the bulk of the reply
+  (`NSPIREAI_HELLO_SETTLE`).  Before, a page opened while the bridge was
+  connected got the whole reply while the OS was still opening the document.
+
+With both: first open plus 10 close/reopen cycles (10 s apart, no remote key
+queued while the page was open), 11/11 fine; the previous rate would give
+that by chance with probability below 1 %.
+
+Test-procedure lesson: a remote key sent while the page is open is queued by
+the OS and replayed when the page closes (an Enter reopened the page 3 s
+after every Esc).  Remote keys are now only sent after `status` reports the
+page closed.

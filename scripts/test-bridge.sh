@@ -7,4 +7,4 @@ if [[ -z "${PYTHON:-}" && -x "$ROOT/bridge/.venv/bin/python" ]]; then
 fi
 PYTHON="${PYTHON:-python3}"
 # Every bridge/test_*.py, so that a new test file is never left out.
-(cd "$ROOT" && "$PYTHON" -m unittest discover -v -s bridge -t . -p 'test_*.py')
+(cd "$ROOT" && NSPIREAI_HELLO_SETTLE=0 "$PYTHON" -m unittest discover -v -s bridge -t . -p 'test_*.py')

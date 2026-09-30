@@ -34,7 +34,7 @@ from typing import Iterable, Optional
 
 log = logging.getLogger(__name__)
 
-INDEX_VERSION = 2
+INDEX_VERSION = 3
 MAX_LETTERS = 40            # COMP_CAP in src/page/page.c
 MAX_WORD_CHARS = 8
 MAX_TEXT_BYTES = 47         # IME_TEXT_CAP - 1 in src/page/page.c
@@ -55,7 +55,14 @@ DOMAIN_WORDS = tuple("""
 三角形 椭圆 抛物线 双曲线 面积 体积 周长 半径 直径 斜率 截距 坐标 证明 定理 公式
 计算 求解 求值 解释 步骤 答案 怎么解 怎么算 怎么做 物理 化学 速度 加速度 能量 功率
 电压 电流 电阻 质量 密度 摩尔 化学方程式 翻译 总结 代码
+极值 极大值 极小值 最值 最大值 最小值 零点 驻点 拐点 渐近线 切线 法线 单调 递增 递减
+收敛 发散 连续 可导 原函数 换元 分部积分 一元二次 二元一次 一元一次 方程式 根的判别式
+判别式 韦达定理 勾股定理 余弦定理 正弦定理 排列 组合 二项式 概率论 期望值 置信区间
 """.split())
+
+# Sentence-final particles: at the end of the input these beat the nouns
+# that share their spelling (xiayu ma: 下雨吗, not 下雨马).
+FINAL_PARTICLES = {"ma": "吗", "ne": "呢", "ba": "吧", "a": "啊", "le": "了", "ya": "呀"}
 
 
 @dataclass(frozen=True)
@@ -295,6 +302,9 @@ class PinyinIME:
                 if picks:
                     word = max(picks, key=picks.get)
                     frequency = entries[0][1] + 1
+                elif end == size and start > 0 and letters[start:end] in FINAL_PARTICLES:
+                    word = FINAL_PARTICLES[letters[start:end]]
+                    frequency = max(entry[1] for entry in entries)
                 else:
                     word, frequency = entries[0]
                 # One unit of cost per word on top of its rarity, so that

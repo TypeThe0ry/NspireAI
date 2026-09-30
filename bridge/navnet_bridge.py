@@ -23,6 +23,7 @@ from typing import Optional
 from .bridge import make_backend, split_think_prefix
 from .protocol import (
     OP_ACTION,
+    OP_BYE,
     OP_DUMP,
     OP_DUMP_REQ,
     OP_HELLO,
@@ -37,6 +38,7 @@ from .protocol import (
 )
 
 OP_PING, OP_PONG = 1, 2
+PAGE_CLOSE_QUIET_MS = 3000
 OP_REQUEST, OP_RESPONSE, OP_ERROR = 3, 4, 5
 OP_CANCEL, OP_NEW = 6, 7
 OP_FRAGMENT = 8
@@ -90,6 +92,17 @@ class NavNetBridge:
             self.process.stdin.write("SEND " + frame.hex() + "\n")
             self.process.stdin.flush()
 
+    def helper_command(self, line: str) -> None:
+        """A control line for the Java helper (see NspireNavnetHelper)."""
+        if not hasattr(self, "send_lock"):
+            self.send_lock = threading.Lock()
+        process = getattr(self, "process", None)
+        if process is None or process.stdin is None:
+            return
+        with self.send_lock:
+            process.stdin.write(line + "\n")
+            process.stdin.flush()
+
     def send_message(self, opcode: int, request_id: int, conversation_id: int, payload: bytes) -> None:
         # One logical message at a time: the page reassembles fragments in a
         # single buffer, so frames of two messages must never interleave
@@ -140,7 +153,8 @@ class NavNetBridge:
                             self.telemetry_logged = now
                         self.telemetry_at = now
                     elif opcode not in (OP_PING, OP_FRAGMENT):
-                        print(f"RX opcode={opcode} request={request_id} conversation={conversation_id} bytes={len(payload)}", flush=True)
+                        extra = f" {payload.decode('ascii', 'replace')}" if opcode == 9 else ""
+                        print(f"RX opcode={opcode} request={request_id} conversation={conversation_id} bytes={len(payload)}{extra}", flush=True)
                     self.handle_frame(frame)
                 except Exception as exc:
                     print(f"navnet frame error: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
@@ -209,6 +223,15 @@ class NavNetBridge:
             self.send_message(OP_PONG, request_id, conversation_id, b"PONG")
             return
         if opcode == OP_PONG:
+            return
+        if opcode == OP_BYE:
+            # The page is closing.  Anything sent while it unregisters its
+            # service and frees its image can reach a stale callback and
+            # reboot the handheld, so the helper drops the connection and
+            # stays silent, then knocks slowly until a page answers again.
+            print("page closed (BYE); link quiet for 3 s", flush=True)
+            self.page_conversation = None
+            self.helper_command(f"IDLE {PAGE_CLOSE_QUIET_MS}")
             return
         if opcode == OP_HELLO:
             self.page_conversation = conversation_id
