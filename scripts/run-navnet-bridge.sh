@@ -73,7 +73,15 @@ if ! mkdir "$LOCK_DIR" 2>/dev/null; then
         fi
         sleep 0.5
       done
-      sleep 6   # let the TI runtime settle before the next helper
+      # The helper and the TI server must be gone before the next helper
+      # starts, or it attaches to a dying server and never sees the
+      # handheld.
+      for _ in $(seq 1 20); do
+        pgrep -f 'NspireNavnetHelper|com\.ti\.eps\.navnet\.server\.RemoteNavnetServer' >/dev/null || break
+        pkill -9 -f 'NspireNavnetHelper|com\.ti\.eps\.navnet\.server\.RemoteNavnetServer' 2>/dev/null || true
+        sleep 0.5
+      done
+      sleep 8   # let the TI runtime settle before the next helper
     fi
   fi
   if ! mkdir "$LOCK_DIR" 2>/dev/null; then
