@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -304,9 +305,100 @@ DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-pro"
 
 
+class SetupNeeded(RuntimeError):
+    """The backend cannot answer until the user fixes the configuration;
+    the message (Markdown) says how.  It is shown, never stored as an answer."""
+
+
+ENV_LINE = re.compile(r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+
+
+def read_env_file(path: Path) -> dict[str, str]:
+    """KEY=VALUE lines, parsed like scripts/run-navnet-bridge.sh does: never
+    executed; quoted values keep their spaces, other values must have none."""
+    values: dict[str, str] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return values
+    for line in lines:
+        line = line.strip()
+        match = ENV_LINE.match(line)
+        if not match or line.startswith("#"):
+            continue
+        key, value = match.group(1), match.group(2)
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        elif any(char.isspace() for char in value):
+            continue
+        values[key] = value
+    return values
+
+
+def env_file_path() -> Path:
+    return Path(os.environ.get("NSPIREAI_ENV", str(Path.home() / ".config" / "nspireai" / "env")))
+
+
+class SetupNeededBackend:
+    """Stands in while the backend cannot be built (a missing API key).
+
+    Every question first re-reads the env file; once it holds what was
+    missing, the real backend is built and answers from then on.  Until
+    then the calculator is told what is missing (SetupNeeded), instead of
+    waiting for a bridge that never started."""
+
+    def __init__(self, message: str, key: str = "", build=None):
+        self.message = message
+        self.key = key
+        self.build = build
+        self.real = None
+        print(f"backend not configured: {message}", file=sys.stderr, flush=True)
+
+    @property
+    def supports_tools(self) -> bool:
+        return getattr(self.real, "supports_tools", False)
+
+    def _ready(self):
+        if self.real is None and self.key and self.build is not None:
+            value = read_env_file(env_file_path()).get(self.key, "").strip()
+            if value:
+                os.environ[self.key] = value
+                self.real = self.build()
+                print(f"{self.key} found; backend ready", file=sys.stderr, flush=True)
+        return self.real
+
+    def answer(self, prompt: str) -> str:
+        real = self._ready()
+        return real.answer(prompt) if real is not None else self.message
+
+    def complete(self, messages: list[dict], effort: Optional[str] = None, tools=None,
+                 progress=None) -> str:
+        real = self._ready()
+        if real is None:
+            raise SetupNeeded(self.message)
+        if tools is not None:
+            return real.complete(messages, effort=effort, tools=tools, progress=progress)
+        return real.complete(messages, effort=effort)
+
+    def reset(self) -> None:
+        if self.real is not None:
+            self.real.reset()
+
+
+DEEPSEEK_KEY_MISSING = (
+    "**DeepSeek is not set up on the computer.** `DEEPSEEK_API_KEY` is missing "
+    "from `~/.config/nspireai/env` (or that line is malformed). Run this in a "
+    "terminal, then ask again (no restart needed):\n\n"
+    "```\nprintf 'DEEPSEEK_API_KEY=%s\\n' 'YOUR-KEY' > ~/.config/nspireai/env\n```"
+)
+
+
 def make_backend(name: str, model: str, api_key: Optional[str], base_url: Optional[str], timeout: float):
     if name == "echo":
         return EchoBackend()
+    if name == "deepseek" and not os.environ.get("DEEPSEEK_API_KEY", "").strip():
+        return SetupNeededBackend(DEEPSEEK_KEY_MISSING, "DEEPSEEK_API_KEY",
+                                  lambda: make_backend(name, model, api_key, base_url, timeout))
     if name == "deepseek":
         return ChatCompletionsBackend(
             model=os.environ.get("DEEPSEEK_MODEL", DEEPSEEK_DEFAULT_MODEL),

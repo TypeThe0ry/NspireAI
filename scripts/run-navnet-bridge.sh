@@ -4,11 +4,32 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # API keys live outside the repo: ~/.config/nspireai/env (KEY=value lines).
 NSPIREAI_ENV="${NSPIREAI_ENV:-$HOME/.config/nspireai/env}"
+# The file is read as KEY=VALUE lines, never executed: a command pasted into
+# it must not run, and a malformed line is reported (without its value).
+load_env_file() {
+  local line number=0 key value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    number=$((number + 1))
+    line="${line%$'\r'}"
+    [[ -z "${line//[[:space:]]/}" || "$line" =~ ^[[:space:]]*# ]] && continue
+    line="${line#export }"
+    if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+      key="${BASH_REMATCH[1]}"
+      value="${BASH_REMATCH[2]}"
+      if [[ "$value" =~ ^\"(.*)\"$ || "$value" =~ ^\'(.*)\'$ ]]; then
+        value="${BASH_REMATCH[1]}"
+      elif [[ "$value" =~ [[:space:]] ]]; then
+        echo "$1 line $number: the value of $key contains spaces (was a whole command pasted?); line skipped" >&2
+        continue
+      fi
+      export "$key=$value"
+    else
+      echo "$1 line $number: not KEY=VALUE; line skipped" >&2
+    fi
+  done <"$1"
+}
 if [[ -f "$NSPIREAI_ENV" ]]; then
-  set -a
-  # shellcheck disable=SC1090
-  . "$NSPIREAI_ENV"
-  set +a
+  load_env_file "$NSPIREAI_ENV"
 fi
 BACKEND="${1:-${NSPIRE_AI_BACKEND:-echo}}"
 PYTHON_BIN="${PYTHON_BIN:-$ROOT/bridge/.venv/bin/python}"
@@ -78,8 +99,9 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
   exit 2
 fi
 if [[ "$BACKEND" == "deepseek" && -z "${DEEPSEEK_API_KEY:-}" ]]; then
-  echo "DEEPSEEK_API_KEY is required for the DeepSeek backend" >&2
-  exit 2
+  # Start anyway: the calculator then explains what is missing instead of
+  # waiting for a bridge that never came.
+  echo "warning: DEEPSEEK_API_KEY is not set (see $NSPIREAI_ENV); the calculator will be told how to fix it" >&2
 fi
 if [[ "$BACKEND" == "openai" && -z "${OPENAI_API_KEY:-}" ]]; then
   echo "OPENAI_API_KEY is required for the OpenAI backend" >&2

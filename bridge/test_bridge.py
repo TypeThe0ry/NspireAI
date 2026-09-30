@@ -229,5 +229,51 @@ class ToolLoopTests(unittest.TestCase):
         self.assertIn("Echo", EchoBackend().complete([{"role": "user", "content": "search x"}]))
 
 
+class SetupTests(unittest.TestCase):
+    def test_a_missing_deepseek_key_is_explained_not_fatal(self):
+        import os
+        from unittest import mock
+        from bridge.bridge import SetupNeededBackend, make_backend
+
+        with mock.patch.dict(os.environ, {"DEEPSEEK_API_KEY": ""}):
+            backend = make_backend("deepseek", "m", None, None, 5.0)
+        self.assertIsInstance(backend, SetupNeededBackend)
+        from bridge.bridge import SetupNeeded
+        with self.assertRaises(SetupNeeded) as raised:
+            backend.complete([{"role": "user", "content": "hi"}], effort="low")
+        self.assertIn("DEEPSEEK_API_KEY", str(raised.exception))
+        self.assertIn("~/.config/nspireai/env", str(raised.exception))
+
+    def test_the_key_is_picked_up_without_a_restart(self):
+        import os, tempfile
+        from pathlib import Path
+        from unittest import mock
+        from bridge.bridge import SetupNeeded, SetupNeededBackend
+
+        with tempfile.TemporaryDirectory() as directory:
+            env = Path(directory) / "env"
+            env.write_text("DEEPSEEK_API_KEY=abc -p ~/x && printf y\n")   # a pasted command
+            built = []
+
+            class Real:
+                supports_tools = True
+
+                def complete(self, messages, effort=None):
+                    return "real answer"
+
+            with mock.patch.dict(os.environ, {"NSPIREAI_ENV": str(env), "DEEPSEEK_API_KEY": ""}):
+                backend = SetupNeededBackend("missing", "DEEPSEEK_API_KEY",
+                                             lambda: built.append(1) or Real())
+                with self.assertRaises(SetupNeeded):
+                    backend.complete([{"role": "user", "content": "hi"}])
+                self.assertFalse(backend.supports_tools)
+                env.write_text("# comment\nexport DEEPSEEK_API_KEY='sk-good'\n")
+                self.assertEqual(backend.complete([{"role": "user", "content": "hi"}]), "real answer")
+                self.assertEqual(os.environ["DEEPSEEK_API_KEY"], "sk-good")
+                self.assertTrue(backend.supports_tools)
+                backend.complete([{"role": "user", "content": "again"}])
+                self.assertEqual(built, [1])
+
+
 if __name__ == "__main__":
     unittest.main()

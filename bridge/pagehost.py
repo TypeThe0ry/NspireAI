@@ -19,6 +19,7 @@ from typing import Callable, Optional
 
 import re
 
+from .bridge import SetupNeeded
 from .protocol import (
     OP_BLOCK,
     OP_CLEAR,
@@ -567,6 +568,12 @@ class PageHost:
 
         try:
             answer = self._complete(messages, effort, tools, progress)
+        except SetupNeeded as exc:
+            # Shown in full, but not part of the conversation.
+            with self.lock:
+                self.send_image(KIND_INFO, self.render.render_markdown(str(exc), self.cfg), request_id)
+                self._send(OP_RESPONSE, b"", request_id)
+            return
         except Exception as exc:
             log.exception("backend failed")
             reason = f"{type(exc).__name__}: {exc}"
@@ -589,6 +596,12 @@ class PageHost:
                     # The user switched chats while the model was thinking.
                     self.send_info(f"The answer was saved in chat {session.id}.")
             self._send(OP_RESPONSE, b"", request_id)
+            if self._menu_version() != self.menu_version:
+                # The backend became ready (an API key appeared): the menu
+                # gains its web switch.
+                self.menu_version = self._menu_version()
+                self._screens = None
+                self.send_screens()
             self.send_state()  # the first message sets the session title
 
     def _context(self, session_id: int, command: Optional[str], text: str) -> list[dict]:

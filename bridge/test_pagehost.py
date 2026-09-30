@@ -155,6 +155,19 @@ class PageHostTests(unittest.TestCase):
         self.assertNotIn(imagecodec.KIND_ASSISTANT, blocks)
         self.assertIn(OP_RESPONSE, self.opcodes())
 
+    def test_setup_problems_are_shown_not_stored(self):
+        from bridge.bridge import SetupNeededBackend
+
+        self.host.on_hello(7, b"v=2;n=0;sid=0;mv=0")
+        self.host.backend = SetupNeededBackend("set the key")
+        self.sent.clear()
+        self.host.on_request(9, b"#think:off \x1fhello")
+        kinds = [imagecodec.decode_block(f[3])[0] for f in self.sent if f[0] == OP_BLOCK]
+        self.assertEqual(kinds[-1], imagecodec.KIND_INFO)
+        self.assertIn(OP_RESPONSE, self.opcodes())
+        roles = [m["role"] for m in self.host.store.active().messages]
+        self.assertEqual(roles, ["user"])
+
     def test_request_renders_user_turn_answer_and_completes(self):
         self.host.on_hello(7, b"v=2;n=0;sid=0;mv=0")
         self.sent.clear()
