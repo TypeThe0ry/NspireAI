@@ -586,12 +586,21 @@ class PageHost:
             self._send(OP_ERROR, reason.encode("ascii", "replace")[:200], request_id)
             return
         with self.lock:
-            self.store.append(session.id, "assistant", answer)
-            if self.store.active().id == session.id:
-                self.send_image(KIND_AI, self.render.render_markdown(answer, self.cfg), request_id)
+            try:
+                current = self.store.get(session.id)
+            except KeyError:
+                current = None
+            if current is None or current.created != session.created:
+                # Deleted while the model was thinking; the same number may
+                # already belong to a new chat, which must not get the answer.
+                self.send_info("That chat was deleted; its answer was dropped.")
             else:
-                # The user switched chats while the model was thinking.
-                self.send_info(f"The answer was saved in chat {session.id}.")
+                self.store.append(session.id, "assistant", answer)
+                if self.store.active().id == session.id:
+                    self.send_image(KIND_AI, self.render.render_markdown(answer, self.cfg), request_id)
+                else:
+                    # The user switched chats while the model was thinking.
+                    self.send_info(f"The answer was saved in chat {session.id}.")
             self._send(OP_RESPONSE, b"", request_id)
             self.send_state()  # the first message sets the session title
 

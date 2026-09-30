@@ -2,8 +2,8 @@
 
 Conversation history lives on the host, never on the calculator::
 
-    <home>/sessions/index.json    active session id, ordering, next free id
-    <home>/sessions/<id>.json     one session
+    <home>/sessions/index.json    active session id and ordering
+    <home>/sessions/<id>.json     one session; a new session takes the lowest free id
 
 ``<home>`` is ``$NSPIREAI_HOME`` and defaults to ``~/.config/nspireai``.  Every
 write goes to a temporary file in the same directory and is moved into place
@@ -306,6 +306,15 @@ class SessionStore:
             raise KeyError(session_id)
         return self.directory / f"{session_id}.json"
 
+    def _free_id(self) -> int:
+        """The lowest id with no file: the numbers on the calculator stay small
+        after chats are deleted (delete them all and the next one is 1)."""
+        used = set(self._session_ids())
+        candidate = 1
+        while candidate in used:
+            candidate += 1
+        return candidate
+
     def _session_ids(self) -> list[int]:
         try:
             names = [entry.name for entry in self.directory.iterdir()]
@@ -373,8 +382,8 @@ class SessionStore:
         })
 
     def _create(self, index: dict, title: Optional[str]) -> Session:
-        session_id = index["next_id"]
-        index["next_id"] = session_id + 1
+        session_id = self._free_id()
+        index["next_id"] = max(index["next_id"], session_id + 1)  # kept for older readers
         stamp = self._now()
         cleaned = " ".join(str(title).split()) if title is not None else ""
         session = Session(

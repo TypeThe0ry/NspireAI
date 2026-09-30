@@ -3901,3 +3901,12 @@ Known limits: the sentence guess is a unigram model, so a long input may
 need to be entered in pieces (the pieces are then learned as a phrase); web
 pages that need JavaScript, a login or a PDF reader cannot be read, and
 pages are fetched directly (no proxy support).
+
+## 2026-09-30: chat numbers start over
+
+Reported by the user: after deleting chats the title bar kept counting up
+(S14, S15, ...), because ids were never reused. A new chat now takes the
+lowest free id (delete them all and the next one is S1). An answer that
+arrives after its chat was deleted is dropped with a note instead of landing
+in a new chat that reuses the number. Verified on the handheld: Cat → Delete
+current on S14 showed `S1 New chat`. Host tests: 366 pass.

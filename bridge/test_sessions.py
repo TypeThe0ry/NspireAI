@@ -69,22 +69,26 @@ class SessionStoreTests(StoreTestCase):
         self.assertEqual(second.title, "Homework")
         self.assertEqual(self.store.active().id, 2)
 
-    def test_ids_are_never_reused(self):
+    def test_the_lowest_free_id_is_reused(self):
         for _ in range(3):
             self.store.create()
-        self.store.delete(3)
-        self.assertEqual(self.store.create().id, 4)
-        self.store.delete(4)
         self.store.delete(2)
+        self.assertEqual(self.store.create().id, 2)   # the gap is filled first
+        self.assertEqual(self.store.create().id, 4)
+        for session_id in (4, 3, 2):
+            self.store.delete(session_id)
         self.store.delete(1)          # the store creates a fresh session here
-        self.assertEqual([summary.id for summary in self.store.list()], [5])
-        self.assertEqual(SessionStore(self.home).create().id, 6)
+        self.assertEqual([summary.id for summary in self.store.list()], [1])
+        self.assertEqual(SessionStore(self.home).create().id, 2)
 
-    def test_ids_survive_a_lost_index(self):
+    def test_ids_come_from_the_files_not_the_index(self):
         for _ in range(3):
             self.store.create()
         (self.home / "sessions" / "index.json").unlink()
         self.assertEqual(SessionStore(self.home).create().id, 4)
+        # A stale index cannot hand out an id that is still on disk.
+        (self.home / "sessions" / "index.json").write_text('{"version": 1, "active": 1, "next_id": 2, "order": [1]}')
+        self.assertEqual(SessionStore(self.home).create().id, 5)
 
     def test_select(self):
         first = self.store.create()
@@ -201,7 +205,7 @@ class SessionStoreTests(StoreTestCase):
         session = self.store.create()
         self.store.append(session.id, "user", "hello")
         fresh = self.store.delete(session.id)
-        self.assertEqual(fresh.id, session.id + 1)
+        self.assertEqual(fresh.id, 1)   # the numbering starts over
         self.assertEqual(fresh.messages, [])
         self.assertEqual(self.store.active().id, fresh.id)
         self.assertEqual(len(self.store.list()), 1)
@@ -276,8 +280,8 @@ class SessionStoreTests(StoreTestCase):
         self.assertEqual(store.active().id, first.id)
         with self.assertRaises(KeyError):
             store.get(second.id)
-        # Ids of unreadable files are not handed out again.
-        self.assertEqual(store.create().id, 10)
+        # Ids of unreadable files are not handed out again (3 is the first free one).
+        self.assertEqual(store.create().id, 3)
 
     def test_corrupted_index_is_rebuilt(self):
         first = self.store.create()

@@ -135,6 +135,26 @@ class PageHostTests(unittest.TestCase):
         self.assertNotIn(imagecodec.KIND_ASSISTANT, [b[0] for b in blocks[1:]])
         self.assertIn(OP_RESPONSE, self.opcodes())
 
+    def test_answer_for_a_deleted_chat_is_dropped(self):
+        self.host.on_hello(7, b"v=2;n=0;sid=0;mv=0")
+        first = self.host.store.active()
+
+        class Deleting:
+            def complete(inner, messages, effort=None):
+                # The user deletes the chat meanwhile; the fresh chat that the
+                # store creates gets the same number.
+                self.host.on_action(f"session.delete {first.id}".encode())
+                self.assertEqual(self.host.store.active().id, first.id)
+                return "late answer"
+
+        self.host.backend = Deleting()
+        self.sent.clear()
+        self.host.on_request(9, b"#think:off \x1fquestion")
+        self.assertEqual(self.host.store.active().messages, [])
+        blocks = [imagecodec.decode_block(f[3])[0] for f in self.sent if f[0] == OP_BLOCK]
+        self.assertNotIn(imagecodec.KIND_ASSISTANT, blocks)
+        self.assertIn(OP_RESPONSE, self.opcodes())
+
     def test_request_renders_user_turn_answer_and_completes(self):
         self.host.on_hello(7, b"v=2;n=0;sid=0;mv=0")
         self.sent.clear()
