@@ -3926,3 +3926,49 @@ Also seen: after a bridge restart the helper got no NODE event for minutes
 while USB showed the handheld; killing the detached `RemoteNavnetServer` that
 an earlier helper had left behind, then starting the bridge again, brought the
 node back within 20 s.
+
+## 2026-09-30 (evening): freeze on opening after a long idle bridge; answers read from the top
+
+Autonomous test round (remote keys, page dumps, bridge log).
+
+**Freeze.** The handheld froze solid about 0.1 s after the page opened (one
+`PONG b=4`, then nothing; Esc dead; reset needed). The bridge had been running
+for 30 minutes with the page closed. The helper's client loop sent a PING
+every 250 ms even before the page had ever answered (the "knock every 3 s"
+condition was `||`-ed with the keepalive condition) and reconnected every
+30 s: about 7,000 PINGs over 200 connections went towards a service nobody
+had registered. When the page registered it, the queued pings arrived as a
+flood; the service callback, which outranks the page loop, read and answered
+them without ever sleeping, so the page loop (screen, keys) starved.
+Offline replay under ASan/UBSan of the exact HELLO reply built from the
+user's sessions was clean, which ruled out the data itself.
+
+Fixes:
+- Helper: before the first answer it only knocks every 3 s; the 250 ms
+  keepalive starts once the page has answered.
+- Page: at most one PONG per page frame; a read that returns nothing or a
+  foreign frame sleeps a tick; after 16 frames without the page loop running
+  the callback yields; with a session running and one waiting to take over,
+  further callbacks return at once.
+- Bridge log: a page heartbeat line every 10 s and one line per message
+  sent, so a stall is visible in the log. `status` reports the page as open
+  only while it has been heard from in the last 15 s (it said `true` for a
+  page silent for 5 hours).
+
+Verified: the fixed bridge idled 5 minutes with the page closed (10
+reconnects), then the page opened remotely and ran at 33 frames/s while the
+bridge sent 20 messages (67 KB). A 5,000-ping flood in the offline replay now
+costs one PONG and the page loop gets a turn every 16 frames.
+
+**Reading long answers.** The view jumped to the end of a new answer. The
+first strip of a new answer is now anchored at the top of the view; scrolling
+or a new question releases it. Verified: "explain the chain rule with two
+examples" showed its heading first; three scroll steps moved down a screen.
+
+**Recovery without the user.** After a reset the handheld comes back without
+Ndless. Remote keys (Browse, arrows as separate arguments, Enter on
+`ndless/ndless_installer_4.5.5-6.2.0-6.4.0`, then any letter key) reinstall
+it ("Ndless successfully installed!") and then open the page.
+
+Page build `4d5abdc4e2d80b6869a51bf2af821f884518a58eb970c791974059d8e8c9fde5`
+(50,224 of 60,000 bytes).

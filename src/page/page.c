@@ -300,6 +300,8 @@ static void service_session(nn_ch_t ch) {
     link_up = 1;
     uint32_t last_ping = session_last_rx;
     int frag_open = 0;
+    uint32_t beat_seen = loop_beat, pong_beat = loop_beat - 1;
+    int frames_since_beat = 0;
     if (send_hello(ch) < 0) goto done;
 
     while (session_current(gen)) {
@@ -320,14 +322,27 @@ static void service_session(nn_ch_t ch) {
          * passed; the host's keepalive is what paces this loop. */
         int status = (int16_t)TI_NN_Read(ch, 1, frame, RX_FRAME_CAP,
                                          (uint32_t)&received);
+        /* This task outranks the page loop: give the loop a turn whenever it
+         * has not run for a while, so the screen and Esc never starve. */
+        if (loop_beat == beat_seen) {
+            if (++frames_since_beat >= 16) {
+                TCC_TASK_SLEEP(1);
+                frames_since_beat = 0;
+            }
+        } else {
+            beat_seen = loop_beat;
+            frames_since_beat = 0;
+        }
         if (status < 0) {
             if (status == -257) break;
             TCC_TASK_SLEEP(2); /* never spin in the OS NavNet context */
             continue;
         }
         if (received < HEADER_SIZE || memcmp(frame, "NSAI", 4) != 0 ||
-            frame[4] != 1)
+            frame[4] != 1) {
+            TCC_TASK_SLEEP(1); /* an empty or foreign read: do not spin */
             continue;
+        }
         session_last_rx = RTC_SECONDS;
         int opcode = frame[5];
         uint32_t request = get_u32(frame + 6);
@@ -336,6 +351,10 @@ static void service_session(nn_ch_t ch) {
         if (length > received - HEADER_SIZE) length = received - HEADER_SIZE;
 
         if (opcode == OP_PING) {
+            /* At most one answer per page frame: a burst of pings that
+             * queued up before the page opened needs no answer each. */
+            if (loop_beat == pong_beat) continue;
+            pong_beat = loop_beat;
             char pong[48] = "PONG b=";
             int n = 7;
             n += fmt_uint(pong + n, loop_beat);
@@ -394,9 +413,11 @@ static void service_callback(nn_ch_t ch, void *data) {
     /* The counter guards the image against being freed under a callback, so
      * its updates must not be lost to a concurrent callback. */
     int mask = TCT_Local_Control_Interrupts(-1);
-    callbacks_running++;
+    int others = callbacks_running++;
     TCT_Local_Control_Interrupts(mask);
-    service_session(ch);
+    /* One session and at most one waiting to take over: connections that
+     * piled up while no page was listening must not all queue up here. */
+    if (others < 2) service_session(ch);
     mask = TCT_Local_Control_Interrupts(-1);
     callbacks_running--;
     TCT_Local_Control_Interrupts(mask);
@@ -422,6 +443,9 @@ static struct block *blocks; /* MAX_BLOCKS entries, allocated in main() */
 static int nblocks;
 static uint32_t block_bytes;
 static int scroll_px; /* 0 = newest visible */
+/* The first block of the newest answer: its top stays at the top of the
+ * view, so a long answer is read from its beginning.  -1 = follow the end. */
+static int anchor = -1;
 static int dirty = 1;
 static uint16_t ink_lut[KIND_COUNT][16];
 
@@ -434,6 +458,7 @@ static void blocks_drop_first(int count) {
     memmove(blocks, blocks + count, sizeof(blocks[0]) * (size_t)(nblocks - count));
     nblocks -= count;
     have_blocks = nblocks;
+    anchor = anchor >= count ? anchor - count : -1;
 }
 
 static void blocks_clear(void) {
@@ -472,6 +497,7 @@ static void blocks_add(int kind, int bpp, int gap, int w, int h, uint32_t id,
     block_bytes += bytes;
     have_blocks = nblocks;
     scroll_px = 0;
+    if (kind == KIND_USER) anchor = -1; /* a new question: follow the end */
     dirty = 1;
 }
 
@@ -986,6 +1012,11 @@ static void render_history(void) {
     int max_scroll = doc > vh ? doc - vh : 0;
     if (scroll_px > max_scroll) scroll_px = max_scroll;
     if (scroll_px < 0) scroll_px = 0;
+    if (anchor >= 0 && anchor < nblocks && doc > vh) {
+        int at = 0;
+        for (int i = 0; i < anchor; ++i) at += blocks[i].gap + blocks[i].h;
+        scroll_px = at < doc - vh ? doc - vh - at : 0;
+    }
     int top = doc > vh ? doc - vh - scroll_px : 0;
     int y = 0;
     for (int i = 0; i < nblocks; ++i) {
@@ -1477,10 +1508,12 @@ static int handle_event(int ev) {
     case EV_ESC:
         return 0;
     case EV_UP:
+        anchor = -1; /* the user scrolls from where the view is */
         scroll_px += SCROLL_STEP;
         dirty = 1;
         break;
     case EV_DOWN:
+        anchor = -1;
         scroll_px -= SCROLL_STEP;
         dirty = 1;
         break;
@@ -1660,6 +1693,8 @@ static void handle_message(int opcode, uint32_t id, const uint8_t *p, uint32_t l
         if (kind >= KIND_COUNT) kind = KIND_AI;
         if (kind == KIND_USER) blocks_remove_echo(block_id);
         blocks_add(kind, bpp, (flags & 1) ? 0 : 5, w, h, block_id, data, bytes);
+        if (kind == KIND_AI && !(flags & 1)) anchor = nblocks - 1;
+        else if (kind == KIND_USER) anchor = -1;
         break;
     }
     case OP_SCREEN:

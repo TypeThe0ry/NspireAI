@@ -470,12 +470,15 @@ public final class NspireNavnetHelper {
                         emit("CLIENT silent for " + (now - heard) + " ms; reconnecting");
                         if (connection == current) connection = null;
                         try { NavNet.disconnect(current); } catch (RuntimeException ignored) { }
-                    } else if ((lastRxMillis == 0L && now - lastPingMillis >= CLIENT_REPING_MS)
-                            || now - lastPingMillis >= CLIENT_KEEPALIVE_MS) {
-                        /* Before the first answer: keep knocking so a page
-                         * opened later gets a callback.  After it: a
-                         * keepalive that also paces the calculator's read
-                         * loop. */
+                    } else if (lastRxMillis == 0L ? now - lastPingMillis >= CLIENT_REPING_MS
+                            : now - lastPingMillis >= CLIENT_KEEPALIVE_MS) {
+                        /* Before the first answer: knock now and then so a
+                         * page opened later gets a callback.  Only then:
+                         * a keepalive that also paces the calculator's read
+                         * loop.  (Keepalives sent while no page listened
+                         * piled up and flooded the page when it opened,
+                         * starving its screen task until the handheld
+                         * froze.) */
                         write(current, ping);
                         lastPingMillis = now;
                     }

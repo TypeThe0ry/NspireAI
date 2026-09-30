@@ -97,8 +97,14 @@ class NavNetBridge:
         if not hasattr(self, "message_lock"):
             self.message_lock = threading.Lock()
         with self.message_lock:
+            started = time.monotonic()
+            count = 0
             for frame in fragment(opcode, request_id, conversation_id, payload):
                 self.send(frame)
+                count += 1
+            if opcode not in (OP_PING, OP_PONG):
+                print(f"TX opcode={opcode} request={request_id} bytes={len(payload)} frames={count} "
+                      f"ms={(time.monotonic() - started) * 1000:.0f}", flush=True)
 
     def run(self) -> int:
         if self.process.stdout is None:
@@ -126,7 +132,13 @@ class NavNetBridge:
                         # arrives with every keepalive, so keep only the
                         # latest (shown by the control "status" command).
                         self.telemetry = payload.decode("ascii", "replace")
-                        self.telemetry_at = time.monotonic()
+                        now = time.monotonic()
+                        # A heartbeat line every 10 s shows in the log when
+                        # the page loop stopped, if it ever does.
+                        if now - getattr(self, "telemetry_logged", 0.0) >= 10.0:
+                            print(f"page {self.telemetry}", flush=True)
+                            self.telemetry_logged = now
+                        self.telemetry_at = now
                     elif opcode not in (OP_PING, OP_FRAGMENT):
                         print(f"RX opcode={opcode} request={request_id} conversation={conversation_id} bytes={len(payload)}", flush=True)
                     self.handle_frame(frame)
@@ -331,7 +343,8 @@ class NavNetBridge:
         if command == "status":
             age = time.monotonic() - self.telemetry_at if self.telemetry_at else None
             return {"ok": True, "telemetry": self.telemetry, "telemetry_age": age,
-                    "page": self.page_conversation is not None,
+                    # Open means heard from recently, not "said HELLO once".
+                    "page": self.page_conversation is not None and age is not None and age < 15.0,
                     "page_host": self.page_host is not None,
                     "page_host_error": self.page_host_error}
         if command == "inject":
