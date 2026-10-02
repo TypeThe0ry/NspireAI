@@ -2,7 +2,9 @@
 
 Chat with an LLM from a TI-Nspire CX II. Yes, really.
 
-> **Verification boundary:** The host-side bridge, UI implementation, protocol, and automated tests are documented here. The latest physical record is more limited: the production UI opens, but the Enter-arm path has not yet produced a trusted calculator application channel, calculator-originated `RX`, or a same-page response. Treat the physical USB/NavNet and model round-trip as **unverified** until [`docs/test-status.md`](docs/test-status.md) records a new result.
+> Parts of this project were written with AI coding
+>
+> assistants. 
 
 The calculator has a 320×240 screen, no network and about as much free RAM as
 a 1998 flip phone, so it doesn't do any of the thinking. It's a terminal: you
@@ -90,18 +92,18 @@ For OpenAI use `OPENAI_API_KEY` and `OPENAI_MODEL`.
 
 ### Keys
 
-| Key | What it does |
-| --- | --- |
-| enter / del / esc | arm/send / erase / close the page (physical send path pending verification) |
-| ↑ ↓ | scroll the chat |
-| ← → | move the cursor |
-| menu | quick commands (7 toggles web search) |
-| cat | switch, create or delete chats |
-| var | thinking effort |
-| doc | keyboard layout |
-| ctrl + space (or scratchpad) | Chinese input on/off |
-| letters, then 1–9 / space | pick a candidate (space = first); arrows page; enter keeps the letters; esc drops them |
-| ctrl + key | LaTeX symbols: `( )` → `{ }`, `÷` → `\`, `−` → `_`, `=` → `$` … |
+| Key                          | What it does                                                                           |
+| ---------------------------- | -------------------------------------------------------------------------------------- |
+| enter / del / esc            | arm/send / erase / close the page (physical send path pending verification)            |
+| ↑ ↓                        | scroll the chat                                                                        |
+| ← →                        | move the cursor                                                                        |
+| menu                         | quick commands (7 toggles web search)                                                  |
+| cat                          | switch, create or delete chats                                                         |
+| var                          | thinking effort                                                                        |
+| doc                          | keyboard layout                                                                        |
+| ctrl + space (or scratchpad) | Chinese input on/off                                                                   |
+| letters, then 1–9 / space   | pick a candidate (space = first); arrows page; enter keeps the letters; esc drops them |
+| ctrl + key                   | LaTeX symbols:`( )` → `{ }`, `÷` → `\`, `−` → `_`, `=` → `$` …  |
 
 ### If the calculator resets
 
