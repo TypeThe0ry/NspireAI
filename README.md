@@ -2,6 +2,8 @@
 
 Chat with an LLM from a TI-Nspire CX II. Yes, really.
 
+> **Verification boundary:** The host-side bridge, UI implementation, protocol, and automated tests are documented here. The latest physical record is more limited: the production UI opens, but the Enter-arm path has not yet produced a trusted calculator application channel, calculator-originated `RX`, or a same-page response. Treat the physical USB/NavNet and model round-trip as **unverified** until [`docs/test-status.md`](docs/test-status.md) records a new result.
+
 The calculator has a 320×240 screen, no network and about as much free RAM as
 a 1998 flip phone, so it doesn't do any of the thinking. It's a terminal: you
 type, it sends the keys over USB to a computer, and the computer talks to the
@@ -11,9 +13,9 @@ a brain lives on the host.
 
 ## What you get
 
-- **Chat** with DeepSeek, OpenAI, or a built-in echo backend for testing.
+- **Chat implementation** for DeepSeek, OpenAI, or a built-in echo backend for host-side testing.
   A key on the calculator (Var) switches the thinking effort: off, low, high, max.
-- **Properly typeset answers.** Math, code and Chinese come out rendered, not
+- **Answer rendering.** The host can render math, code and Chinese into image blocks; physical calculator receipt still requires the page-open round trip.
   as a wall of `\frac{...}`.
 - **A real input line**: cursor, arrow keys, and a live preview of what you're
   typing. Math in plain input is picked up automatically.
@@ -22,13 +24,12 @@ a brain lives on the host.
 - **Chinese input.** A pinyin IME with a candidate bar. Full sentences,
   abbreviations (`zg` → 中国) and half-typed syllables work, and it learns what
   you pick. Toggle with Ctrl+Space.
-- **Web access.** The model can search and read pages, and shows you what it
-  looked up. Menu → 7 turns it off (or set `NSPIREAI_WEB=0`).
-- **Sessions that stick around**, stored in `~/.config/nspireai/sessions/`.
+- **Web access.** The bridge can offer search and page-reading tools to the model, and can show what it looked up. Menu → 7 turns it off (or set `NSPIREAI_WEB=0`).
+- **Persistent sessions** in the host bridge, stored in `~/.config/nspireai/sessions/`.
   Switch with the Cat key.
 - **Quick commands** in a two-level menu. Edit `bridge/commands.default.json`
   or drop your own in `~/.config/nspireai/commands.json`.
-- Plug it into any USB port, hub or dock. The bridge waits for it to show up.
+- The bridge includes USB discovery and retry logic for a calculator connected through a port, hub or dock. Successful discovery is not proof that the page has an application channel.
 
 ## How it fits together
 
@@ -54,10 +55,11 @@ A few things that took longer to get right than I'd like to admit:
 - While the page is open the calculator's file service is paused, so deploy
   only after closing it.
 
-This was all verified on a **CX II CAS running OS 6.2.0.333**. Other versions
-are untested; I wouldn't bet on them.
+The implementation has been developed and exercised against a **CX II CAS running OS 6.2.0.333**. That device/version is the target test platform; it does not mean that the complete USB/NavNet or model round trip has passed. Other versions are untested. See [`docs/test-status.md`](docs/test-status.md) for the dated evidence.
 
 ## Running it
+
+The commands below describe the intended development route. A successful build, upload, `READY`, or USB descriptor does not prove a working page-open transport. Check [`docs/test-status.md`](docs/test-status.md) before treating a physical run as complete.
 
 You need a Mac or Linux machine, Java, Python 3 and a CX II with
 [Ndless](https://ndless.me) installed.
@@ -90,7 +92,7 @@ For OpenAI use `OPENAI_API_KEY` and `OPENAI_MODEL`.
 
 | Key | What it does |
 | --- | --- |
-| enter / del / esc | send / erase / close the page |
+| enter / del / esc | arm/send / erase / close the page (physical send path pending verification) |
 | ↑ ↓ | scroll the chat |
 | ← → | move the cursor |
 | menu | quick commands (7 toggles web search) |
@@ -132,6 +134,8 @@ More detail lives in `docs/`:
 - One calculator at a time; there's no device picker.
 - The USB interface is exclusive. Don't run the bridge, N-Link and the helper
   scripts at the same time.
+- A calculator USB descriptor or host `READY` state is not a `CONNECTED` application channel. The latest physical test has no trusted calculator-originated `RX` or same-page response.
+- Do not describe the model as having completed a calculator round trip until the echo path succeeds on the open page; model API checks and host tests are separate evidence.
 
 ## License
 
