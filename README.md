@@ -1,332 +1,139 @@
 # NspireAI
 
-> **2026-09-29 — working on the handheld** (`docs/test-status.md`). The
-> calculator is a thin terminal; the bridge host renders and remembers.
->
-> **What it does**
-> - Chat with an LLM from the calculator (DeepSeek `deepseek-v4-pro`, OpenAI,
->   or an echo backend), with a thinking-effort switch (Var key).
-> - Answers are typeset: Markdown, LaTeX math and Chinese are rendered on the
->   host into grayscale image blocks and shown on the page.
-> - The input line has a cursor (arrow keys) and a live typeset preview of
->   what is being typed; math in plain input is detected automatically.
-> - Enhanced typing: a QWERTY-by-position layout with an on-screen legend
->   (Doc key cycles qwerty + legend, qwerty, abc). Ctrl gives LaTeX symbols.
-> - Quick commands in a two-level menu (Menu key), defined in
->   `bridge/commands.default.json` and `~/.config/nspireai/commands.json`.
-> - Persistent multi-session chats with context (Cat key), stored under
->   `~/.config/nspireai/sessions/`.
-> - Chinese input: a pinyin input method with a candidate bar (Ctrl+Space).
->   The dictionary lives on the host (`bridge/ime.py`, built from `jieba` and
->   `pypinyin`); whole sentences, abbreviations (`zg` → 中国) and unfinished
->   syllables work, and what you pick is learned.
-> - Internet access: the model can search the web and read pages
->   (`bridge/webtools.py`) and shows what it looks up. Menu → 7 switches it
->   off and on; `NSPIREAI_WEB=0` disables it.
-> - The calculator is found on any USB port, hub or dock, and the bridge
->   waits for it to appear.
->
-> **How it works** (each piece verified on the CX II CAS 6.2.0.333)
-> - `src/page/page.c` runs in `main()`: IRQs re-enabled, the OS UI task paced
->   with Nucleus `TCC_Task_Sleep`, so USB/NavNet keep running while the OS
->   browser is frozen.
-> - The calculator registers NavNet service `0x5001`; the host's Java helper
->   connects to it, speaks first and sends a 250 ms keepalive. The session
->   runs inside the calculator's service callback.
-> - The page scans out of its own double-buffered SDRAM framebuffer in the
->   panel's portrait order and hides the hardware cursor.
-> - Protocol 2 (`bridge/protocol.py`, `bridge/imagecodec.py`,
->   `bridge/pagehost.py`): image blocks, overlay screens with key tables,
->   actions, state, previews, plus key injection and framebuffer dumps for
->   unattended tests.
-> - While the page is open the calculator's file service pauses: deploy
->   after closing the page (`scripts/page-cycle.sh` does it remotely).
->
-> **Run it** (needs `~/.config/nspireai/env` with `DEEPSEEK_API_KEY=...`):
->
-> ```sh
-> cd ~/Documents/GitHub/NspireAI && ./scripts/run-navnet-bridge.sh deepseek
-> ```
->
-> Starting it again replaces a bridge that is already running (set
-> `NSPIREAI_NO_TAKEOVER=1` to refuse instead). Then open `nspire_ai` on the
-> calculator. The model gets no system prompt
-> (DeepSeek's own defaults apply; the page renders the Markdown and LaTeX it
-> writes); set `NSPIREAI_SYSTEM_PROMPT` in `~/.config/nspireai/env` to add one.
->
-> | Key | Action |
-> | --- | --- |
-> | enter / del / esc | send / erase / close the page |
-> | arrows | scroll the chat (up, down), move the cursor (left, right) |
-> | menu | quick commands |
-> | cat | chats: switch, new, delete |
-> | var | thinking effort: off, low, high, max |
-> | doc | keyboard layout |
-> | ctrl + space, or scratchpad | Chinese input on/off (`zh` / `en` in the title bar) |
-> | letters, then 1-9 or space | pick a candidate (space = the first); arrows = more candidates; enter = keep the letters; esc = drop them |
-> | menu, 7 | web search on/off |
-> | ctrl + key | LaTeX symbols: `( )` → `{ }`, `÷` → `\`, `−` → `_`, `=` → `$` … |
->
-> **After a reset** the handheld comes back without Ndless:
-> `scripts/ndless-activate.sh` reinstalls it with remote keys (no page may be
-> open while it runs), then open `nspire_ai` again.
->
-> **Develop**: build with `scripts/build-marker-probe.sh`; redeploy and
-> reopen the page unattended with `scripts/page-cycle.sh [echo|deepseek]`;
-> drive and inspect the page with `scripts/pagectl.py` (`type`, `dump`,
-> `status`); host tests with `scripts/test-bridge.sh`.
+Chat with an LLM from a TI-Nspire CX II. Yes, really.
 
-> **Do not run the IRQ-scope 0922 handheld build**: the user reported a freeze
-> followed by a crash. Its SHA256 is
-> `ce92ae85e1d60cf9c3d4fea08ff1e897d35e13718cafd0ce23080fddd9e13c6c`.
-> IRQ toggling has been reverted in source. This is not a USB fix; no working
-> replacement is currently verified.
+The calculator has a 320×240 screen, no network and about as much free RAM as
+a 1998 flip phone, so it doesn't do any of the thinking. It's a terminal: you
+type, it sends the keys over USB to a computer, and the computer talks to the
+model, typesets the answer (Markdown, LaTeX, Chinese) into little grayscale
+images and sends them back to be drawn. Everything that needs memory or
+a brain lives on the host.
 
-> 2026-09-24: the user reported a whole-device freeze after opening the NGC
-> AI program and manually reset the calculator. The default replacement build
-> is now timer-neutral and starts with NavNet idle; the first Enter edge arms
-> the experimental transport. Do not reopen an older freezing package.
+## What you get
 
-> 2026-09-22: the user rejected and requested removal of the legacy Lua path
-> after it froze on the handheld. Its sources, artifacts and build/deploy
-> scripts have been removed locally. Continue on `src/program/main.c` and
-> `nspire_ai.tns`; `make` builds that program. Older Lua instructions below
-> are obsolete. Standalone USB operation is still unresolved: Ndless masks
-> interrupts during execution, and exiting the program restored host NODE 1.
-> Neither READY nor NODE 1 proves the required same-page request/response loop.
+- **Chat** with DeepSeek, OpenAI, or a built-in echo backend for testing.
+  A key on the calculator (Var) switches the thinking effort: off, low, high, max.
+- **Properly typeset answers.** Math, code and Chinese come out rendered, not
+  as a wall of `\frac{...}`.
+- **A real input line**: cursor, arrow keys, and a live preview of what you're
+  typing. Math in plain input is picked up automatically.
+- **Typing that doesn't hurt.** A QWERTY-by-position layout with an on-screen
+  legend (Doc cycles through layouts), and Ctrl for LaTeX symbols.
+- **Chinese input.** A pinyin IME with a candidate bar. Full sentences,
+  abbreviations (`zg` → 中国) and half-typed syllables work, and it learns what
+  you pick. Toggle with Ctrl+Space.
+- **Web access.** The model can search and read pages, and shows you what it
+  looked up. Menu → 7 turns it off (or set `NSPIREAI_WEB=0`).
+- **Sessions that stick around**, stored in `~/.config/nspireai/sessions/`.
+  Switch with the Cat key.
+- **Quick commands** in a two-level menu. Edit `bridge/commands.default.json`
+  or drop your own in `~/.config/nspireai/commands.json`.
+- Plug it into any USB port, hub or dock. The bridge waits for it to show up.
 
-TI-Nspire CX II AI terminal implemented as a standalone Ndless program and a
-persistent Mac NavNet bridge. The live chat path keeps one program page open,
-sends with Enter, and never uploads request/response documents.
-
-## Architecture
+## How it fits together
 
 ```text
-nspire_ai.tns (standalone Ndless SDL program + Enter)
-    ↕ in-memory NSAI frames over project-private NavNet service 0x5001
-Mac NavNet helper (TI Java host service registration)
-    ↕ one persistent CX II USB/NNSE session
-navnet_bridge.py (echo or OpenAI Responses API)
+calculator (Ndless program)  <--USB / NavNet service 0x5001-->  host helper (Java)
+                                                                      |
+                                                              Python bridge
+                                            (LLM, renderer, IME, sessions, web tools)
 ```
 
-The service number is `0x5001`, a project-private NavNet service exposed by the
-calculator and the Mac helper. The TI Java host accepted `startService(0x5001)`
-in a direct probe; its `0x8001` custom-service probe returned `-281`. Keeping
-NSAI off built-in `0x4051` avoids sharing TI's Message service with the OS. The
-calculator program keeps all chat state in memory, polls with a short timeout,
-and never touches a TI document.
+A few things that took longer to get right than I'd like to admit:
 
-The old Lua page and extension have been removed. Live chat does not use
-request/response document transfers.
+- The program in `src/page/page.c` runs from `main()` with interrupts back on
+  and the OS UI task paced by hand, so USB keeps working while the stock
+  OS browser is frozen.
+- The calculator registers its own NavNet service. The host helper connects,
+  speaks first and sends a keepalive every 250 ms.
+- The page draws into its own double-buffered framebuffer, in the panel's
+  odd portrait scan order.
+- The wire format ("protocol 2", `bridge/protocol.py`) carries image blocks,
+  overlay screens, key tables, previews, and also key injection and
+  framebuffer dumps so tests can run without a human at the keyboard.
+- While the page is open the calculator's file service is paused, so deploy
+  only after closing it.
 
-## Ndless-only runtime route
+This was all verified on a **CX II CAS running OS 6.2.0.333**. Other versions
+are untested; I wouldn't bet on them.
 
-The TI Lua/D2Editor resident-page experiment has been retired and removed from
-the device and active build/deploy paths. It is not an alternative runtime and
-must not be uploaded. The only supported route is the standalone Ndless
-package under `src/program/`; a package is uploadable only when its successful
-manifest and physical safety gate pass. The known USB-wedging SHA remains
-quarantined until the Ndless scheduler/USB ownership issue is fixed.
+## Running it
 
-## Current verification status
-
-| Requirement | Current evidence |
-| --- | --- |
-| Standalone Ndless UI and Enter handler | ARM/Ndless Docker build produces `dist/nspire_ai.tns` |
-| Persistent Mac helper | TI Java NavNet `startService(0x5001)` is the default; raw `libnspire-rs` remains experimental |
-| Binary protocol, IDs, cancellation, dedupe | Python unit tests pass |
-| Echo backend | Unit-tested; physical round trip still pending |
-| OpenAI backend | Official SDK installed and code path present; live API needs `OPENAI_API_KEY` |
-| Page-open USB round trip | **Not yet claimed** until `nspire_ai.tns` returns request/response while its UI remains open |
-| Unplug/replug, long text, repeated sends | **Not yet claimed**; run after the first physical echo succeeds |
-
-“Build passed” and “uploaded” are not treated as proof of the physical USB
-round trip.
-
-## Build
-
-Fetch the pinned upstream repositories and build N-Link once:
+You need a Mac or Linux machine, Java, Python 3 and a CX II with
+[Ndless](https://ndless.me) installed.
 
 ```sh
+# one-time setup
 ./scripts/bootstrap-upstreams.sh
 ./scripts/build-n-link.sh
 ./scripts/setup-bridge-python.sh
-```
 
-Build the standalone Ndless program:
+# API key (never goes on the calculator)
+mkdir -p ~/.config/nspireai
+echo 'DEEPSEEK_API_KEY=sk-...' > ~/.config/nspireai/env
 
-```sh
+# build and deploy the calculator program
 make program-docker
 ./scripts/build-nspire-navnet-helper.sh
+./scripts/deploy-program-nspire.sh      # page must be closed
+
+# start the bridge, then open nspire_ai on the calculator
+./scripts/run-navnet-bridge.sh deepseek   # or: openai, echo
 ```
 
-The deferred calculator-side NavNet bootstrap candidate is offline-only until
-its physical behavior is reviewed:
+Starting the bridge again replaces one that's already running (set
+`NSPIREAI_NO_TAKEOVER=1` to make it refuse instead). The model gets no system
+prompt by default; set `NSPIREAI_SYSTEM_PROMPT` in the env file to add one.
+For OpenAI use `OPENAI_API_KEY` and `OPENAI_MODEL`.
 
-```sh
-make program-docker-ngc-menu-local-service
-```
+### Keys
 
-It sets `NSPIRE_NGC_MENU_LOCAL_SERVICE=TRUE`, which calls `StartService` only
-after a Menu arm. Uploading that candidate requires the explicit
-`NSPIRE_ALLOW_NGC_MENU_LOCAL_SERVICE_UPLOAD=1` gate and is not implied by a
-successful build.
+| Key | What it does |
+| --- | --- |
+| enter / del / esc | send / erase / close the page |
+| ↑ ↓ | scroll the chat |
+| ← → | move the cursor |
+| menu | quick commands (7 toggles web search) |
+| cat | switch, create or delete chats |
+| var | thinking effort |
+| doc | keyboard layout |
+| ctrl + space (or scratchpad) | Chinese input on/off |
+| letters, then 1–9 / space | pick a candidate (space = first); arrows page; enter keeps the letters; esc drops them |
+| ctrl + key | LaTeX symbols: `( )` → `{ }`, `÷` → `\`, `−` → `_`, `=` → `$` … |
 
-Run all protocol/backend tests:
+### If the calculator resets
 
-```sh
-PYTHONPATH=. bridge/.venv/bin/python -m unittest \
-  bridge.test_protocol bridge.test_bridge bridge.test_navnet_bridge
-```
+It comes back without Ndless. `scripts/ndless-activate.sh` reinstalls it using
+remote keys (no page may be open), then open `nspire_ai` again.
 
-Verify the TI Java helper also exits without leaving its detached RMI server:
+## Hacking on it
 
-```sh
-./scripts/test-nspire-java-helper-lifecycle.sh
-```
+- Host tests: `scripts/test-bridge.sh`
+- Redeploy and reopen the page unattended: `scripts/page-cycle.sh [echo|deepseek]`
+- Drive and inspect a live page: `scripts/pagectl.py` (`type`, `dump`, `status`)
+- Check the USB state before touching the hardware: `scripts/check-nspire-usb-state.sh`
 
-Verify the complete Python bridge entrypoint also reaches the Java service and
-cleans up its helper/RMI children on SIGTERM:
+More detail lives in `docs/`:
 
-```sh
-./scripts/test-navnet-bridge-lifecycle.sh
-```
+- [`docs/test-status.md`](docs/test-status.md): what has actually been verified on real hardware, in order
+- [`docs/navnet-transport.md`](docs/navnet-transport.md): the transport design
+- [`docs/navnet-crash-investigation.md`](docs/navnet-crash-investigation.md): the freezes, and what fixed them
+- [`docs/upstream-versions.md`](docs/upstream-versions.md): pinned upstream repos and licenses
 
-Check the physical USB gate before touching the calculator (the deploy script
-also enforces this gate automatically):
+## Things to know
 
-```sh
-./scripts/check-nspire-usb-state.sh
-```
+- **Be careful with old builds.** Earlier iterations froze or crashed the
+  handheld. The IRQ-scope build from 2026-09-22 (SHA256
+  `ce92ae85e1d60cf9c3d4fea08ff1e897d35e13718cafd0ce23080fddd9e13c6c`) is
+  one to never upload. Stick to what the current scripts build.
+- The old Lua version is gone for good; it froze the device.
+- Frames are capped at 224 bytes (NavNet's service limit is 254, minus our
+  header). Longer messages are split and reassembled, up to 64 KiB.
+- One calculator at a time; there's no device picker.
+- The USB interface is exclusive. Don't run the bridge, N-Link and the helper
+  scripts at the same time.
 
-Exit status `0` means a normal CX II USB candidate was found; status `1` means
-no usable TI-Nspire interface is present (including a `TPS DMC Family` USB
-controller belonging to a dock); the deploy script refuses every non-zero
-state.
+## License
 
-The standalone page deliberately waits 2 seconds before its first NavNet node
-enumeration, retries failed enumeration every 3 seconds, and retries a dropped
-channel every 2 seconds. These delays reduce pressure on a USB/host stack that
-is still settling after the document opens; they do not replace the physical
-same-page round-trip test.
-
-The checked upstream revisions and licenses are recorded in
-[`docs/upstream-versions.md`](docs/upstream-versions.md). The live transport
-design and remaining hardware gates are in
-[`docs/navnet-transport.md`](docs/navnet-transport.md).
-
-## Deploy
-
-Close the persistent bridge before deployment because N-Link and the helper
-cannot claim the same USB interface simultaneously:
-
-```sh
-./scripts/deploy-program-nspire.sh
-```
-
-The current runtime artifact is `dist/nspire_ai.tns`. Upload it to the
-calculator root; do not deploy the removed Lua artifacts.
-
-It does not upgrade the calculator OS or reinstall Ndless.
-
-Close the running program before uploading. Reopen `nspire_ai.tns` only when
-the current physical test calls for it; USB operation is not yet validated.
-
-## Run the persistent echo bridge
-
-Start the bridge before opening the calculator page:
-
-```sh
-./scripts/run-navnet-bridge.sh echo
-# Experimental raw transport: NSPIRE_NAVNET_TRANSPORT=raw ./scripts/run-navnet-bridge.sh echo
-```
-
-The NavNet entrypoint takes an exclusive lock for the entire USB session. A
-second launch exits with status `75` before starting Java, the raw helper, or
-any RMI child. Stop the first entrypoint cleanly before running diagnostics;
-do not start `nspireai-usb-helper`, `run-nspire-java-helper.sh`, or N-Link
-while the bridge is active, since TI's USB interface is exclusive.
-
-Before starting, the entrypoint also requires the read-only USB gate to see a
-CX II handheld (`0x0451:0xE022`). If only the TS4 dock controller is visible,
-it exits with status `69` and starts no helper. The lifecycle test bypasses this
-physical gate explicitly with `NSPIRE_SKIP_USB_GATE=1`.
-
-Expected Mac startup output:
-
-```text
-navnet bridge starting: service=0x5001; waiting for helper and calculator
-helper: READY service=0x5001
-helper: NODE 1
-```
-
-After the bridge prints `helper: READY service=0x5001`, open `nspire_ai.tns`
-on the calculator. The page starts USB-idle and does not enumerate NavNet by
-itself. Type `Hello` and press Enter once to arm transport; press Enter again
-to send after the status reports a connected bridge. The expected answer in
-the same program page is:
-
-```text
-Mac received: Hello
-```
-
-No request/response document should appear and the TI page must stay open.
-
-If the first attempt reports `USB held`, leave the page open and fix the host
-side first; do not keep pressing Enter. The page deliberately stops calling
-the synchronous TI NavNet syscalls after the first error. A later Enter edge
-is the only retry. This prevents the repeated enumeration loop that can leave
-macOS seeing only the TS4 `0xACE1` dock controller until a physical replug.
-
-## Run the real model backend
-
-The model call runs only on the Mac. Keep the API key in the environment; do
-not put it in a TNS file, source file, or log.
-
-```sh
-mkdir -p ~/.config/nspireai
-printf 'DEEPSEEK_API_KEY=sk-...\n' > ~/.config/nspireai/env   # read by run-navnet-bridge.sh
-./scripts/run-navnet-bridge.sh deepseek                      # DEEPSEEK_MODEL defaults to deepseek-chat
-```
-
-Or with OpenAI:
-
-```sh
-export OPENAI_API_KEY='...'
-export OPENAI_MODEL='gpt-5'
-./scripts/run-navnet-bridge.sh openai
-```
-
-`OPENAI_BASE_URL` and `OPENAI_TIMEOUT_SECONDS` are optional. The implementation
-uses the official Python SDK and the Responses API. Conversation history is
-kept on the Mac and is reset by the page’s “New conversation” action. Requests
-carry a request ID and conversation ID; duplicates and late canceled responses
-are ignored. Model output is displayed as text and is never executed.
-
-## Physical acceptance checklist
-
-Do not mark the transport complete until all of these are observed on the same
-CX II:
-
-1. Keep `nspire_ai.tns` open; receive bootstrap PONG and echo `Hello` in that page.
-2. Send several requests with Enter without reopening the document.
-3. Verify the editor remains responsive while waiting.
-4. Verify cancel/new-conversation prevents an old response replacing new state.
-5. Send multiline and long UTF-8 text within the currently documented frame
-   limit.
-6. Unplug/replug USB and verify recovery or record the exact reconnect limit.
-7. Start the OpenAI backend with a real key and verify a real model response.
-
-## Scope and known limits
-
-* The current runtime is a standalone Ndless SDL program. It does not depend on
-  TI document pages or response-file transfers. The old Lua/D2Editor path has
-  been removed at the user's request.
-* Each NSAI payload is capped at 224 bytes. TI's NavNet service API documents
-  a 254-byte service payload ceiling; reserving room for the 16-byte NSAI
-  header keeps each frame below that ceiling. Larger questions and model
-  responses are split and reassembled in memory (up to 64 KiB per logical
-  message); this still needs physical long-text testing.
-* Formula rendering and Chinese font/input behavior are separate device tests.
-* The helper currently targets the attached CX II directly; multiple devices
-  are not selected interactively.
+GPL-3.0, see [`LICENSE`](LICENSE). Upstream projects keep their own licenses, listed in
+`docs/upstream-versions.md`.
